@@ -6,6 +6,32 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.1.3 — tab bar placement, and a shorter fade
+
+Measured off the Figma frame rather than estimated.
+
+- **The bar sits 20px from the bottom and 20px from each side.** A flat inset,
+  deliberately *not* `safe-area-inset-bottom`. That inset is 34pt on this device
+  and is sized for content running edge to edge; adding it on top of a gutter
+  pushed the bar ~54px up, which is what made it look like it was floating too
+  high. A floating pill only has to clear the home indicator, which occupies
+  about the bottom 13pt, so 20px clears it with room to spare.
+
+- **The fade is 159px, bottom-anchored** — the exact height of the blur rect in
+  the frame — where it had been 260px and washed out most of the log card.
+
+- **The blur itself is much lighter**: three compounding layers reaching ~6px,
+  down from four reaching ~25px. The Figma effect is a progressive blur of
+  0 → 4, and the depth there comes from the gradient fill layered over it, not
+  from the radius. Heavy blur reads as frosted glass; this reads as content
+  receding. The veil ramps harder to compensate for the shorter band.
+
+`--nav-inset`, `--nav-height` and `--nav-fade` are now shared custom properties,
+so the screen's bottom padding and the toast's offset track the bar instead of
+each hard-coding their own copy of the arithmetic.
+
+---
+
 ## v1.1.2 — Inclusive Sans, and the type scale
 
 ### The family

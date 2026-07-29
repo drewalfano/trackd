@@ -207,6 +207,24 @@
   }
 }
 
+@layer base {
+  :root {
+    /**
+     * The floating bar sits 20px off the bottom of the screen, and 20px in from
+     * each side — a flat inset, deliberately not `safe-area-inset-bottom`.
+     *
+     * That inset is 34pt here and is sized for content running edge to edge.
+     * Adding it on top pushes the bar visibly high. A floating pill only has to
+     * clear the home indicator, which occupies roughly the bottom 13pt, so 20px
+     * clears it with room to spare.
+     */
+    --nav-inset: 20px;
+    --nav-height: 68px;
+    /* Figma: the blur rect is 402 x 159, bottom-anchored. */
+    --nav-fade: 159px;
+  }
+}
+
 @layer components {
   /* ------------------------------------------------------------- structure */
 
@@ -222,7 +240,7 @@
     margin-inline: auto;
     padding-inline: 20px;
     padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
-    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--nav-height) + var(--nav-inset) + 30px);
   }
 
   /* Grouped card. Surface plus a 1px outline; the outline is what separates it
@@ -495,7 +513,7 @@
     position: fixed;
     inset-inline: 0;
     bottom: 0;
-    height: 260px;
+    height: var(--nav-fade);
     z-index: 30;
     pointer-events: none;
   }
@@ -509,10 +527,10 @@
   .tabbar-fade > .fade-veil {
     background: linear-gradient(
       to top,
-      color-mix(in srgb, var(--color-canvas) 88%, transparent) 0%,
-      color-mix(in srgb, var(--color-canvas) 74%, transparent) 18%,
-      color-mix(in srgb, var(--color-canvas) 46%, transparent) 42%,
-      color-mix(in srgb, var(--color-canvas) 18%, transparent) 66%,
+      color-mix(in srgb, var(--color-canvas) 92%, transparent) 0%,
+      color-mix(in srgb, var(--color-canvas) 80%, transparent) 22%,
+      color-mix(in srgb, var(--color-canvas) 52%, transparent) 48%,
+      color-mix(in srgb, var(--color-canvas) 20%, transparent) 72%,
       transparent 100%
     );
   }
@@ -537,7 +555,7 @@
 
   .tabbar {
     display: flex;
-    height: 68px;
+    height: var(--nav-height);
     flex: 1;
     align-items: stretch;
     padding: 4px;
@@ -569,8 +587,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 68px;
-    height: 68px;
+    width: var(--nav-height);
+    height: var(--nav-height);
     flex: none;
     border-radius: 999px;
     background: var(--color-ink);

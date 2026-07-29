@@ -77,22 +77,22 @@ const TABS = [
  * The blur ramp: [radius, solid to %, transparent by %], bottom-up.
  *
  * Each layer sits on top of the previous one and re-blurs its output, so the
- * radii compound rather than replace — about 25px effective at the bottom edge,
- * tapering to nothing by the top of the fade. Radii grow while the window
- * halves, because perceived blur scales with the square root of the summed
- * radii, not linearly; equal steps read as visible bands.
+ * radii compound rather than replace — about 6px effective at the bottom edge,
+ * tapering to nothing by the top of the band.
  *
- * Four layers, not more. Every backdrop-filter costs the compositor a separate
- * snapshot-and-blur of the region behind it on each frame, and this band is
- * fixed over a scrolling list, so it pays that cost continuously. The ramp is
- * what creates the depth, not the layer count — seven looked the same and cost
- * nearly twice as much.
+ * 6px is deliberately mild, because the Figma effect is a progressive blur of
+ * 0 → 4 and the depth comes from the gradient fill layered over it, not from
+ * the radius. An aggressive blur reads as frosted glass; this reads as content
+ * receding.
+ *
+ * Three layers, not more. Every backdrop-filter costs the compositor its own
+ * snapshot-and-blur of the region behind it, every frame, and this band is
+ * fixed over a scrolling list — so it pays that continuously.
  */
 const BLUR_RAMP = [
-  [2, 66, 100],
-  [5, 44, 72],
-  [10, 22, 48],
-  [22, 0, 26],
+  [1.5, 60, 100],
+  [3, 32, 66],
+  [5, 0, 36],
 ]
 
 /**
@@ -140,7 +140,7 @@ function tabBar() {
     'nav',
     {
       class: 'pointer-events-none fixed inset-x-0 bottom-0 z-40 px-[20px]',
-      style: { paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' },
+      style: { paddingBottom: 'var(--nav-inset)' },
     },
     h(
       'div',

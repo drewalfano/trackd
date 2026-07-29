@@ -13,7 +13,7 @@ let host = null
 function getHost() {
   if (!host) {
     host = h('div', {
-      // Clears the floating tab bar: 68px bar + 20px inset + 10px gap.
+      // Clears the floating tab bar, tracking its shared geometry.
       //
       // pointer-events-none is load-bearing. This host spans the full width and
       // sits above the tab bar, and its bottom padding overlaps the add button;
@@ -22,7 +22,7 @@ function getHost() {
       class:
         'pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-center ' +
         'gap-[10px] px-[20px]',
-      style: { paddingBottom: 'calc(98px + env(safe-area-inset-bottom, 0px))' },
+      style: { paddingBottom: 'calc(var(--nav-height) + var(--nav-inset) + 10px)' },
       role: 'status',
       'aria-live': 'polite',
     })
