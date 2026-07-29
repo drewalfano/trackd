@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <title>Macro Tracker</title>
+    <meta name="description" content="Personal macro tracker. Local first, works offline." />
+
+    <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <link rel="icon" href="%BASE_URL%icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon.png" />
+
+    <!-- Matched to the app background, per spec 8. Swapped at runtime for dark. -->
+    <meta name="theme-color" content="#F0F0F0" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Macros" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <script>
+      // Applied before first paint so an installed dark-mode launch never flashes light.
+      try {
+        var t = localStorage.getItem('mt:theme') || 'system'
+        document.documentElement.dataset.theme = t
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+    <noscript>Macro Tracker needs JavaScript. All of it runs on your device.</noscript>
+  </body>
+</html>

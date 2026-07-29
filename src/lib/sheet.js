@@ -1,0 +1,213 @@
+import { h, clear } from './dom.js'
+import { icon } from './icons.js'
+
+/**
+ * Bottom sheet with a panel stack.
+ *
+ * The Add Food action row is a route picker, not a tab set, so choosing Scan or
+ * Search or Custom pushes a panel rather than swapping the body. Panels keep
+ * their DOM when you push past them, so going back to a search restores the
+ * query and results instead of starting over.
+ *
+ * The hardware/gesture back button pops one panel, which is why each push gets
+ * its own history entry.
+ */
+
+let active = null
+
+const STATE = 'mt-sheet'
+
+function lockScroll(lock) {
+  document.body.style.overflow = lock ? 'hidden' : ''
+}
+
+export function isSheetOpen() {
+  return !!active
+}
+
+export function openSheet({ title, render, footer = null }) {
+  // One sheet at a time. A second open replaces the first.
+  if (active) active.destroy()
+
+  let resolveResult
+  const result = new Promise((r) => (resolveResult = r))
+
+  const panels = []
+  let closing = false
+
+  const titleEl = h('h2', { class: 'flex-1 text-[20px] font-bold' })
+  const backBtn = h(
+    'button',
+    { class: 'icon-btn bg-canvas', 'aria-label': 'Back', onclick: () => history.back() },
+    icon('chevronLeft', { size: 20 })
+  )
+  const closeBtn = h(
+    'button',
+    { class: 'icon-btn bg-canvas', 'aria-label': 'Close', onclick: () => closeAll() },
+    icon('close', { size: 20 })
+  )
+
+  const header = h(
+    'header',
+    { class: 'flex items-center gap-3 px-5 pb-3 pt-5' },
+    backBtn,
+    titleEl,
+    closeBtn
+  )
+  const body = h('div', { class: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5' })
+  const footerEl = h('div', { class: 'px-5 pb-5 empty:hidden' })
+
+  const panel = h(
+    'div',
+    {
+      class:
+        'sheet-panel absolute inset-x-0 bottom-0 flex max-h-[94svh] flex-col rounded-t-[24px] bg-canvas safe-b',
+      role: 'dialog',
+      'aria-modal': 'true',
+      onclick: (e) => e.stopPropagation(),
+    },
+    header,
+    body,
+    footerEl
+  )
+
+  const scrim = h(
+    'div',
+    {
+      class: 'sheet-scrim fixed inset-0 z-[60] bg-black/35',
+      onclick: () => closeAll(),
+    },
+    panel
+  )
+
+  function syncHeader() {
+    const top = panels[panels.length - 1]
+    titleEl.textContent = top?.title ?? ''
+    backBtn.style.display = panels.length > 1 ? '' : 'none'
+    footerEl.replaceChildren(...(top?.footerNode ? [top.footerNode] : []))
+  }
+
+  function showTop() {
+    const top = panels[panels.length - 1]
+    clear(body)
+    if (top?.node) body.appendChild(top.node)
+    syncHeader()
+    body.scrollTop = top?.scrollTop ?? 0
+  }
+
+  function makeCtx(entry) {
+    return {
+      close: (value) => closeAll(value),
+      pop: () => history.back(),
+      push: (spec) => pushPanel(spec),
+      /**
+       * Runs when this panel is popped or the sheet closes. Anything holding a
+       * hardware resource — the camera, an in-flight fetch — registers here.
+       */
+      onDispose: (fn) => entry.disposers.push(fn),
+      setTitle: (t) => {
+        entry.title = t
+        syncHeader()
+      },
+      setFooter: (node) => {
+        entry.footerNode = node
+        syncHeader()
+      },
+      /** Re-run this panel's render in place, e.g. after a data change. */
+      refresh: () => {
+        runDisposers(entry)
+        const next = entry.render(makeCtx(entry))
+        entry.node = next
+        if (panels[panels.length - 1] === entry) showTop()
+      },
+      body,
+    }
+  }
+
+  function pushPanel(spec) {
+    const current = panels[panels.length - 1]
+    if (current) current.scrollTop = body.scrollTop
+
+    const entry = {
+      title: spec.title,
+      render: spec.render,
+      footerNode: spec.footer ?? null,
+      disposers: [],
+    }
+    entry.node = spec.render(makeCtx(entry))
+    panels.push(entry)
+
+    history.pushState({ [STATE]: panels.length }, '')
+    showTop()
+    return entry
+  }
+
+  function runDisposers(entry) {
+    for (const fn of entry.disposers.splice(0)) {
+      try {
+        fn()
+      } catch (err) {
+        console.warn('Sheet panel cleanup failed', err)
+      }
+    }
+  }
+
+  function destroy() {
+    for (const entry of panels) runDisposers(entry)
+    window.removeEventListener('popstate', onPop)
+    document.removeEventListener('keydown', onKey)
+    scrim.remove()
+    lockScroll(false)
+    if (active?.scrim === scrim) active = null
+  }
+
+  function teardown(value) {
+    if (closing) return
+    closing = true
+    scrim.dataset.closing = 'true'
+    panel.dataset.closing = 'true'
+    setTimeout(destroy, 200)
+    resolveResult(value)
+  }
+
+  /** Close every panel at once, unwinding the history entries we pushed. */
+  function closeAll(value) {
+    if (closing) return
+    const depth = panels.length
+    pendingValue = value
+    history.go(-depth)
+  }
+
+  let pendingValue
+
+  function onPop(event) {
+    const depth = event.state?.[STATE] ?? 0
+    if (depth >= panels.length) return
+    if (depth <= 0) {
+      teardown(pendingValue)
+      return
+    }
+    // Popped back to a panel we still have — drop everything above it.
+    for (const entry of panels.splice(depth)) runDisposers(entry)
+    showTop()
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape') closeAll()
+  }
+
+  window.addEventListener('popstate', onPop)
+  document.addEventListener('keydown', onKey)
+  document.body.appendChild(scrim)
+  lockScroll(true)
+
+  active = { scrim, destroy, closeAll }
+  pushPanel({ title, render, footer })
+
+  return result
+}
+
+/** Used by the router: navigating away should not leave a sheet floating. */
+export function closeAnySheet() {
+  active?.closeAll()
+}

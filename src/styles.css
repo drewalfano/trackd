@@ -1,0 +1,340 @@
+@import 'tailwindcss';
+
+/* ---------------------------------------------------------------------------
+   Design tokens — spec section 7.
+
+   The whole palette is five neutrals plus four macro hues. If you are about to
+   add a colour here, check it against the two rules in the brief: colour only
+   ever means macro identity, and any new hue has to sit in the 45–60% lightness
+   band so the set still reads as deliberate.
+   --------------------------------------------------------------------------- */
+@theme {
+  --color-ink: #232323;
+  --color-canvas: #f0f0f0;
+  --color-surface: #ffffff;
+  --color-muted: #717171;
+  --color-hairline: #d8d8d8;
+
+  /* Fixed order everywhere: calories, protein, fat, carbs. */
+  --color-kcal: #44a057;
+  --color-protein: #5075be;
+  --color-fat: #caaf3a;
+  --color-carbs: #cd493d;
+
+  /* One grotesque family. System stack keeps it offline and renders SF Pro on
+     the target device, which is the grotesque this was designed against. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  --radius-card: 18px;
+  --radius-sheet: 24px;
+
+  --text-display: 40px;
+  --text-display--line-height: 1.05;
+  --text-display--letter-spacing: -0.02em;
+}
+
+/* Dark mode inverts neutrals only. The four macro hues do not move — see spec 7. */
+:root[data-theme='dark'] {
+  --color-ink: #f0f0f0;
+  --color-canvas: #141414;
+  --color-surface: #1e1e1e;
+  --color-muted: #8a8a8a;
+  --color-hairline: #303030;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme='system'] {
+    --color-ink: #f0f0f0;
+    --color-canvas: #141414;
+    --color-surface: #1e1e1e;
+    --color-muted: #8a8a8a;
+    --color-hairline: #303030;
+  }
+}
+
+@layer base {
+  html {
+    background: var(--color-canvas);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    /* Every number in this app either updates live or sits in a column. */
+    font-variant-numeric: tabular-nums lining-nums;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior-y: none;
+  }
+
+  /* One-handed, often rushed: no accidental text selection or tap highlight. */
+  button,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+    font-variant-numeric: tabular-nums lining-nums;
+    background: transparent;
+    border: 0;
+    outline: none;
+  }
+
+  /* iOS zooms the viewport on focus for anything under 16px. */
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+
+  input[type='number'] {
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Grouped card, iOS settings pattern. Grouping reads from the surface change
+     against the canvas, so these carry no border. */
+  .card {
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+    overflow: hidden;
+  }
+
+  /* Hairline dividers between rows, never above the first or below the last. */
+  .card > .row + .row,
+  .card > .row-group + .row-group {
+    border-top: 1px solid var(--color-hairline);
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    padding: 12px 16px;
+    width: 100%;
+    text-align: left;
+  }
+
+  .label {
+    font-weight: 500;
+    font-size: 15px;
+  }
+
+  .sublabel {
+    font-size: 13px;
+    color: var(--color-muted);
+  }
+
+  /* 16px is the smallest height the overshoot chip fits inside legibly, and a
+     uniform height across calories and macros keeps the block reading as one
+     system rather than a hierarchy of bars. */
+  .bar-track {
+    height: 16px;
+    width: 100%;
+    border-radius: 999px;
+    background: var(--color-canvas);
+    overflow: hidden;
+    position: relative;
+  }
+  :root[data-theme='dark'] .bar-track,
+  :root[data-theme='system'] .bar-track {
+    background: color-mix(in srgb, var(--color-ink) 10%, transparent);
+  }
+
+  .bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    /* Fires once, on value change, then gets out of the way. */
+    transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* Circular icon button: chevrons, close, swipe actions. 44px tap target. */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    flex: none;
+  }
+
+  .btn-primary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    width: 100%;
+    border-radius: 999px;
+    background: var(--color-ink);
+    color: var(--color-surface);
+    font-weight: 600;
+    font-size: 16px;
+  }
+  .btn-primary:disabled {
+    opacity: 0.35;
+  }
+
+  .btn-secondary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    width: 100%;
+    border-radius: 999px;
+    background: var(--color-surface);
+    color: var(--color-ink);
+    font-weight: 600;
+    font-size: 16px;
+  }
+
+  .field {
+    display: block;
+    width: 100%;
+    background: var(--color-surface);
+    border-radius: 12px;
+    padding: 12px 14px;
+    min-height: 48px;
+  }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    background: var(--color-surface);
+    color: var(--color-muted);
+    flex: none;
+  }
+  .chip[aria-pressed='true'],
+  .chip[data-selected='true'] {
+    background: var(--color-ink);
+    color: var(--color-surface);
+  }
+
+  .section-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-muted);
+    padding: 0 4px 8px;
+    letter-spacing: 0.01em;
+  }
+}
+
+@layer utilities {
+  .safe-b {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-t {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  /* Content scrolls behind the floating tab bar; this keeps the last row clear. */
+  .pad-tabbar {
+    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+}
+
+/* Motion — fires once, in response to the user. No loops, no ambient motion. */
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@keyframes sheet-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes scrim-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sheet-panel {
+  animation: sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.sheet-panel[data-closing='true'] {
+  animation: sheet-out 200ms ease-in forwards;
+}
+.sheet-scrim {
+  animation: scrim-in 260ms ease-out;
+}
+.sheet-scrim[data-closing='true'] {
+  animation: scrim-out 200ms ease-in forwards;
+}
+.toast-in {
+  animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

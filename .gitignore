@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+.vite/
+
+# Generated at build time by scripts/make-icons.mjs
+public/icons/

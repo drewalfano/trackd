@@ -1,0 +1,90 @@
+/**
+ * Dates are stored as local 'YYYY-MM-DD' strings, never UTC timestamps.
+ * A log entry belongs to the day the user was living in, not the day UTC was
+ * having. This module is the only place that knows how to cross that boundary.
+ */
+
+export const BLOCKS = ['morning', 'afternoon', 'night']
+
+export function toDateStr(date = new Date()) {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+export function todayStr() {
+  return toDateStr(new Date())
+}
+
+/** Local midnight for a 'YYYY-MM-DD' string. */
+export function fromDateStr(str) {
+  const [y, m, d] = str.split('-').map(Number)
+  return new Date(y, m - 1, d)
+}
+
+export function addDays(str, n) {
+  const d = fromDateStr(str)
+  d.setDate(d.getDate() + n)
+  return toDateStr(d)
+}
+
+export function daysBetween(a, b) {
+  return Math.round((fromDateStr(b) - fromDateStr(a)) / 86400000)
+}
+
+/** Descending list of date strings ending at `end` (inclusive). */
+export function lastNDays(n, end = todayStr()) {
+  return Array.from({ length: n }, (_, i) => addDays(end, -i))
+}
+
+export function isFuture(str) {
+  return str > todayStr()
+}
+
+export function isToday(str) {
+  return str === todayStr()
+}
+
+/** "Today" / "Yesterday" / "Tue 29 July". Relative labels earn their place here. */
+export function formatDayLabel(str) {
+  const today = todayStr()
+  if (str === today) return 'Today'
+  if (str === addDays(today, -1)) return 'Yesterday'
+  if (str === addDays(today, 1)) return 'Tomorrow'
+  const d = fromDateStr(str)
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: sameYear ? undefined : 'numeric',
+  })
+}
+
+/** The muted line under the screen title: "Tuesday, 29 July". */
+export function formatDateSub(str) {
+  const d = fromDateStr(str)
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: sameYear ? undefined : 'numeric',
+  })
+}
+
+export function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+}
+
+/**
+ * Which block a new entry lands in, from the clock.
+ * Thresholds are user-editable in settings, hence the argument.
+ */
+export function blockForTime(date = new Date(), thresholds = { afternoon: 12, night: 17 }) {
+  const hour = date.getHours()
+  if (hour < thresholds.afternoon) return 'morning'
+  if (hour < thresholds.night) return 'afternoon'
+  return 'night'
+}
