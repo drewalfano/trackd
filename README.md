@@ -17,8 +17,8 @@ npm install
 npm run dev
 ```
 
-The dev server serves at `/macro-tracker-app/` to match the GitHub Pages base
-path, so the URL is `http://localhost:5173/macro-tracker-app/`.
+The dev server serves at `/macro-tracking-app/` to match the GitHub Pages base
+path, so the URL is `http://localhost:5173/macro-tracking-app/`.
 
 | Command | What it does |
 |---|---|
@@ -41,7 +41,7 @@ Pages over HTTPS, at which point it installs to the home screen, runs from the
 service worker cache, and the scanner works:
 
 ```
-gh repo create macro-tracker-app --private --source=. --push
+gh repo create macro-tracking-app --private --source=. --push
 ```
 
 Then enable Pages with "GitHub Actions" as the source. After that, open the

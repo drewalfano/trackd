@@ -35,7 +35,7 @@ jobs:
         run: npm run build
         env:
           # Must match the repository name, since Pages serves from a subpath.
-          BASE_PATH: /macro-tracker-app/
+          BASE_PATH: /macro-tracking-app/
 
       - uses: actions/upload-pages-artifact@v3
         with:

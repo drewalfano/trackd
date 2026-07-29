@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 // Repo name on GitHub Pages. Override with BASE_PATH=/ for a custom domain.
-const base = process.env.BASE_PATH ?? '/macro-tracker-app/'
+const base = process.env.BASE_PATH ?? '/macro-tracking-app/'
 
 /**
  * Hand-rolled service worker build step.
