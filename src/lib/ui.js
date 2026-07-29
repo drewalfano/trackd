@@ -27,7 +27,23 @@ const MACRO_EDGE = {
   carbs: 'var(--color-carbs-edge)',
 }
 
+/**
+ * Macro colour as TEXT, which is never the fill.
+ *
+ * The gold fill is 2.10:1 on white and the green 3.28:1 — both fail AA for the
+ * 15px P/F/C suffixes. These resolve to the darker shade in light mode and to a
+ * lighter tint in dark, where the darker shades fail instead.
+ */
+const MACRO_TEXT = {
+  kcal: 'var(--color-kcal-text)',
+  protein: 'var(--color-protein-text)',
+  fat: 'var(--color-fat-text)',
+  carbs: 'var(--color-carbs-text)',
+}
+
+/** The fill shade. For painted areas only — see MACRO_TEXT for type. */
 export const macroColor = (macro) => MACRO_VAR[macro]
+export const macroTextColor = (macro) => MACRO_TEXT[macro]
 
 /* ------------------------------------------------------------------ header */
 
@@ -139,7 +155,7 @@ export function macroLine(totals, { size = 15, muted = false, omit = [] } = {}) 
         ' ',
         h(
           'span',
-          { style: { color: MACRO_VAR[macro] }, class: 'font-semibold' },
+          { style: { color: MACRO_TEXT[macro] }, class: 'font-semibold' },
           macro === 'kcal' ? 'cal' : meta.letter
         )
       )
@@ -192,12 +208,12 @@ export function progressBar({ value, target, macro, animate = true, key = macro 
         minWidth: pct > 0 ? '24px' : '0px',
       },
     },
+    // A full-height segment of the darker shade, butted against the fill's
+    // right end and clipped to its cap by the fill's own overflow:hidden.
     over > 0
       ? h(
           'span',
-          {
-            class: 'mr-[7px] text-[12px] font-bold leading-none text-white',
-          },
+          { class: 'bar-over', style: { background: MACRO_EDGE[macro] } },
           `+${Math.round(over)}`
         )
       : null
@@ -235,7 +251,7 @@ export function macroRow({ macro, value, target }) {
         'div',
         {
           class: 'text-[20px] font-bold leading-tight tracking-[-0.01em]',
-          style: { color: MACRO_VAR[macro] },
+          style: { color: MACRO_TEXT[macro] },
         },
         MACRO_META[macro].label
       ),
@@ -280,7 +296,7 @@ export function caloriesBlock({ value, target }) {
         'div',
         {
           class: 'text-[20px] font-bold leading-tight tracking-[-0.01em]',
-          style: { color: MACRO_VAR.kcal },
+          style: { color: MACRO_TEXT.kcal },
         },
         'Calories'
       )

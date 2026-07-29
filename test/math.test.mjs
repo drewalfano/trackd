@@ -7,6 +7,8 @@
  * without ever looking wrong on screen, which is what earns them a test.
  */
 
+import { readFileSync } from 'node:fs'
+
 const R = new URL('../src/lib/', import.meta.url).href
 const C = await import(R + 'compute.js')
 const T = await import(R + 'trend.js')
@@ -73,6 +75,65 @@ eq('day arithmetic crosses a leap day', D.addDays('2028-02-28', 1), '2028-02-29'
 eq('block prefill: 08:00', D.blockForTime(new Date(2026, 0, 1, 8), { afternoon: 12, night: 17 }), 'morning')
 eq('block prefill: 12:00', D.blockForTime(new Date(2026, 0, 1, 12), { afternoon: 12, night: 17 }), 'afternoon')
 eq('block prefill: 17:00', D.blockForTime(new Date(2026, 0, 1, 17), { afternoon: 12, night: 17 }), 'night')
+
+/* -------------------------------------------------------------- contrast */
+
+/**
+ * The macro palette is checked against WCAG AA here rather than trusted.
+ *
+ * These values are read straight out of styles.css, so changing a hex there
+ * without re-measuring it fails the build. Colour is the one part of this
+ * design system where "it looks fine" and "it is legible" genuinely diverge —
+ * the gold fill reads perfectly well as a bar and is unreadable as 15px type.
+ */
+const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+
+const token = (name, scope = css) => {
+  const m = scope.match(new RegExp(`--color-${name}:\\s*(#[0-9a-fA-F]{6}|var\\(--color-[\\w-]+\\))`))
+  if (!m) throw new Error(`token --color-${name} not found`)
+  // A token may alias another, e.g. --color-fat-text: var(--color-fat-edge).
+  return m[1].startsWith('#') ? m[1] : token(m[1].slice(4, -1).replace('--color-', ''), scope)
+}
+
+const darkBlock = css.slice(css.indexOf("[data-theme='dark']"), css.indexOf('@media'))
+
+const luminance = (hex) => {
+  const c = hex.replace('#', '').match(/../g).map((h) => parseInt(h, 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4))
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+}
+const contrast = (a, b) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+  return (hi + 0.05) / (lo + 0.05)
+}
+const atLeast = (label, a, b, min) => {
+  const r = contrast(a, b)
+  eq(`${label} (${r.toFixed(2)}:1 >= ${min})`, r >= min, true)
+}
+
+const MACROS = ['kcal', 'protein', 'fat', 'carbs']
+const AA = 4.5 // the P/F/C suffixes are 15px, which is not "large text"
+
+// Macro type on the light page.
+for (const m of MACROS) atLeast(`${m} text on white`, token(`${m}-text`), token('canvas'), AA)
+
+// Macro type on a card, which is the grey surface rather than the page.
+for (const m of MACROS) atLeast(`${m} text on surface`, token(`${m}-text`), token('surface'), AA)
+
+// White "+117" on the overage segment, which is the edge shade.
+for (const m of MACROS) atLeast(`white on ${m} overage`, '#ffffff', token(`${m}-edge`), AA)
+
+// Dark mode: the darker shades invert into the ground, so text lifts to a tint.
+for (const m of MACROS) {
+  atLeast(`${m} text on dark surface`, token(`${m}-text`, darkBlock), token('surface', darkBlock), AA)
+}
+
+// Body and secondary text.
+atLeast('ink on canvas', token('ink'), token('canvas'), 7)
+atLeast('muted on canvas', token('muted'), token('canvas'), AA)
+atLeast('muted on surface', token('muted'), token('surface'), AA)
+atLeast('ink on dark canvas', token('ink', darkBlock), token('canvas', darkBlock), 7)
+atLeast('muted on dark surface', token('muted', darkBlock), token('surface', darkBlock), AA)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

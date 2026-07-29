@@ -6,6 +6,74 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.1.1 — overage segment, and a measured palette
+
+### Overage is a segment of the bar, not a chip on it
+
+Was a small pill floating inside the fill. Now a full-height segment of the
+macro's darker shade, butted against the right end of the fill and clipped to
+its cap by the fill's own `overflow: hidden`. The bar is one object that changes
+tone where it passes the target, which is both closer to the mockups and a
+better description of what actually happened.
+
+It also fixes the legibility problem. White on a *fill* is 2.10:1 on gold and
+3.28:1 on green — both unreadable. White on the darker shades runs 4.74:1 to
+6.54:1, so putting the label on the darker segment is what makes `+7` work on
+the gold bar at all.
+
+### The palette is now measured, not chosen
+
+Gold moved to `#D2B02A` as the fill. Every macro is three values:
+
+| | fill | edge — stroke + overage | text (light) | text (dark) |
+|---|---|---|---|---|
+| calories | `#44A057` | `#2A7340` | `#2A7340` | `#44A057` |
+| protein | `#5075BE` | `#3D5C9C` | `#3D5C9C` | `#7E9FD6` |
+| fat | `#D2B02A` | `#7A6200` | `#7A6200` | `#D2B02A` |
+| carbs | `#CD493D` | `#B42A2A` | `#B42A2A` | `#E2796E` |
+
+**A fill is never used as type.** The obvious version of this rule — "measure it
+on white" — is wrong, and measuring caught it: the `P`/`F`/`C` letters mostly
+appear inside log rows, which are the grey `#F0F0F0` card, not the white page.
+Against grey, all four fills land between 3.98:1 and 4.16:1 and every one of
+them fails. The edges clear 5.0:1 there.
+
+That is also why gold's darker shade is `#7A6200` rather than the `#8C7000` in
+the brief. `#8C7000` is correct for the white page at 4.74:1, but it is 4.16:1
+on a card. Two steps darker clears both grounds.
+
+Dark mode inverts the problem — the darker shades sink into the ground, where
+protein and carbs only reach 3.66:1 — so macro *type* lifts to a tint there. The
+**fills still never move between themes**; only type does.
+
+`--color-muted` went `#717171` → `#6B6B6B` for the same reason: 4.28:1 on a card.
+
+### It is a test now, not a claim
+
+`npm test` reads the hexes out of `styles.css` and checks 21 pairings — every
+macro as type on both grounds in both themes, white on all four overage
+segments, and ink and muted on both grounds. Changing a colour without
+re-measuring it fails the build. Colour is the one part of this system where
+"looks fine" and "is legible" genuinely diverge; the gold fill reads perfectly
+as a bar and is unreadable as 15px type.
+
+### Blur with depth
+
+The four fixed bands read flat because the eye finds the seams between them. The
+layers now compound — each is a stacked sibling that re-blurs the output of the
+one beneath, so radii accumulate downward to roughly 28px at the bottom edge and
+taper to nothing. Radii double while mask windows halve (`BLUR_RAMP` in
+`main.js`), since perceived blur scales with the square root of the summed
+radii, not linearly. The fade is 170px → 260px.
+
+The scrim is two layers now. A veil in the **canvas** colour, so content
+dissolves into the page rather than being greyed out — that is what makes the
+bar read as floating above a surface instead of pasted onto one. Then a low
+black gradient that only really shows in the last 60px, giving the bar an edge
+to sit against.
+
+---
+
 ## v1.1.0 — mockup pass
 
 Reconciled against the Figma mockups. Four of these are changes to the locked

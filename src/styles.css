@@ -20,21 +20,39 @@
   --color-ink: #232323;
   --color-canvas: #ffffff;
   --color-surface: #f0f0f0;
-  --color-muted: #717171;
+  --color-muted: #6b6b6b;
   --color-outline: #d9d9d9;
 
-  /* Fixed order everywhere: calories, protein, fat, carbs. */
+  /**
+   * Fixed order everywhere: calories, protein, fat, carbs.
+   *
+   * Each macro is three values. `--color-X` is the FILL. `--color-X-edge` is a
+   * darker shade of it, used for the stroke on that fill and as the background
+   * of the overage segment — white clears AA on all four edges (4.74:1 on gold
+   * up to 6.54:1 on blue), which it does not on the fills.
+   *
+   * `--color-X-text` is the macro as type, and aliases the edge, because the
+   * ground that matters is the grey card and not the white page. The P/F/C
+   * letters mostly appear inside log rows, and against #F0F0F0 every fill lands
+   * between 3.98:1 and 4.16:1 — all four fail. The edges clear 5.0:1 there.
+   *
+   * Nothing in this block is a stylistic choice. `npm test` measures all of it
+   * against both grounds and both themes; change a hex and it will tell you.
+   */
   --color-kcal: #44a057;
   --color-protein: #5075be;
-  --color-fat: #cab93a;
+  --color-fat: #d2b02a;
   --color-carbs: #cd493d;
 
-  /* Every filled shape carries a darker edge of its own hue, so a bar reads as
-     an object sitting in its track rather than a painted region. */
-  --color-kcal-edge: #2e7d45;
+  --color-kcal-edge: #2a7340;
   --color-protein-edge: #3d5c9c;
-  --color-fat-edge: #8c7000;
+  --color-fat-edge: #7a6200;
   --color-carbs-edge: #b42a2a;
+
+  --color-kcal-text: var(--color-kcal-edge);
+  --color-protein-text: var(--color-protein-edge);
+  --color-fat-text: var(--color-fat-edge);
+  --color-carbs-text: var(--color-carbs-edge);
 
   /* One grotesque family. System stack keeps it offline and renders SF Pro on
      the target device, which is the grotesque this was designed against. */
@@ -57,6 +75,13 @@
   --color-surface: #1e1e1e;
   --color-muted: #8a8a8a;
   --color-outline: #333333;
+  /* The darker shades go the wrong way against a dark ground: protein and
+     carbs only reach 3.66:1 on #1E1E1E. Macro text lifts to a tint here.
+     The FILLS are untouched — those still never move between themes. */
+  --color-kcal-text: #44a057;
+  --color-protein-text: #7e9fd6;
+  --color-fat-text: #d2b02a;
+  --color-carbs-text: #e2796e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -66,6 +91,13 @@
     --color-surface: #1e1e1e;
     --color-muted: #8a8a8a;
     --color-outline: #333333;
+    /* The darker shades go the wrong way against a dark ground: protein and
+       carbs only reach 3.66:1 on #1E1E1E. Macro text lifts to a tint here.
+       The FILLS are untouched — those still never move between themes. */
+    --color-kcal-text: #44a057;
+    --color-protein-text: #7e9fd6;
+    --color-fat-text: #d2b02a;
+    --color-carbs-text: #e2796e;
   }
 }
 
@@ -230,8 +262,31 @@
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    /* Clips the overage segment to the fill's own rounded right cap. */
+    overflow: hidden;
     /* Fires once, on value change, then gets out of the way. */
     transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /**
+   * Overage. A full-height segment of the darker shade butted against the right
+   * end of the fill, not a chip floating inside it — the bar is one object that
+   * changes tone where it passes the target.
+   *
+   * White on the darker shade clears AA for all four macros (4.74:1 on gold, up
+   * to 6.54:1 on blue). White on the fills does not: gold is 2.10:1. That is the
+   * whole reason this segment is the edge colour and not the fill.
+   */
+  .bar-over {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    flex: none;
+    padding: 0 11px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1;
   }
 
   /* --------------------------------------------------------------- controls */
@@ -355,11 +410,27 @@
    * line. A single backdrop-filter with a mask gives a visible seam where the
    * mask crosses 50%; four banded layers do not.
    */
+  /**
+   * Progressive blur under the floating tab bar.
+   *
+   * The blur layers are stacked siblings, so each one samples what the layers
+   * beneath it already painted and the radii COMPOUND downward — roughly 28px
+   * of effective blur at the bottom edge, tapering to nothing at the top. That
+   * compounding is what gives it depth; a handful of independent bands at fixed
+   * radii reads flat, because the eye sees the seams between them rather than a
+   * ramp. Radii and mask windows are in `BLUR_RAMP` in main.js.
+   *
+   * Then two scrims. The veil is the CANVAS colour, so content dissolves into
+   * the page instead of being greyed out — that is what makes the tab bar look
+   * like it is floating above a surface rather than pasted onto one. The shade
+   * is a low black gradient that only really shows in the last 60px, giving the
+   * bar an edge to sit against.
+   */
   .tabbar-fade {
     position: fixed;
     inset-inline: 0;
     bottom: 0;
-    height: 170px;
+    height: 260px;
     z-index: 30;
     pointer-events: none;
   }
@@ -370,49 +441,32 @@
     display: block;
   }
 
-  .tabbar-fade > span:nth-child(1) {
-    backdrop-filter: blur(1px);
-    -webkit-backdrop-filter: blur(1px);
-    -webkit-mask-image: linear-gradient(to top, #000 55%, #000 72%, transparent 96%);
-    mask-image: linear-gradient(to top, #000 55%, #000 72%, transparent 96%);
-  }
-  .tabbar-fade > span:nth-child(2) {
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
-    -webkit-mask-image: linear-gradient(to top, #000 35%, #000 48%, transparent 72%);
-    mask-image: linear-gradient(to top, #000 35%, #000 48%, transparent 72%);
-  }
-  .tabbar-fade > span:nth-child(3) {
-    backdrop-filter: blur(7px);
-    -webkit-backdrop-filter: blur(7px);
-    -webkit-mask-image: linear-gradient(to top, #000 18%, #000 30%, transparent 52%);
-    mask-image: linear-gradient(to top, #000 18%, #000 30%, transparent 52%);
-  }
-  .tabbar-fade > span:nth-child(4) {
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 14%, transparent 34%);
-    mask-image: linear-gradient(to top, #000 0%, #000 14%, transparent 34%);
+  .tabbar-fade > .fade-veil {
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--color-canvas) 88%, transparent) 0%,
+      color-mix(in srgb, var(--color-canvas) 74%, transparent) 18%,
+      color-mix(in srgb, var(--color-canvas) 46%, transparent) 42%,
+      color-mix(in srgb, var(--color-canvas) 18%, transparent) 66%,
+      transparent 100%
+    );
   }
 
-  /* The scrim rides on top of the blur so the floating bar has something to
-     sit against. Kept low — this is a shadow under the bar, not a curtain. */
-  .tabbar-fade > span:nth-child(5) {
+  .tabbar-fade > .fade-shade {
     background: linear-gradient(
       to top,
-      color-mix(in srgb, #000 13%, transparent) 0%,
-      color-mix(in srgb, #000 6%, transparent) 40%,
-      transparent 80%
+      color-mix(in srgb, #000 10%, transparent) 0%,
+      color-mix(in srgb, #000 4%, transparent) 22%,
+      transparent 55%
     );
-    backdrop-filter: none;
   }
-  :root[data-theme='dark'] .tabbar-fade > span:nth-child(5),
-  :root[data-theme='system'] .tabbar-fade > span:nth-child(5) {
+  :root[data-theme='dark'] .tabbar-fade > .fade-shade,
+  :root[data-theme='system'] .tabbar-fade > .fade-shade {
     background: linear-gradient(
       to top,
-      color-mix(in srgb, #000 62%, transparent) 0%,
-      color-mix(in srgb, #000 30%, transparent) 40%,
-      transparent 80%
+      color-mix(in srgb, #000 34%, transparent) 0%,
+      color-mix(in srgb, #000 14%, transparent) 24%,
+      transparent 58%
     );
   }
 

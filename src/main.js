@@ -56,22 +56,49 @@ const TABS = [
 ]
 
 /**
- * Progressive blur and a gradient scrim behind the floating bar.
+ * The blur ramp: [radius, solid to %, transparent by %], bottom-up.
+ *
+ * Each layer sits on top of the previous one and re-blurs its output, so the
+ * radii compound rather than replace — about 28px effective at the bottom edge,
+ * tapering to nothing by the top of the fade. Doubling the radius while halving
+ * the window height each step is what keeps the ramp smooth: equal steps read
+ * as visible bands, because perceived blur scales with the square root of the
+ * summed radii, not linearly.
+ */
+const BLUR_RAMP = [
+  [0.4, 76, 100],
+  [0.8, 63, 88],
+  [1.6, 51, 76],
+  [3, 38, 63],
+  [6, 26, 51],
+  [12, 13, 38],
+  [24, 0, 26],
+]
+
+/**
+ * Progressive blur and gradient scrims behind the floating bar.
  *
  * Content scrolls underneath rather than stopping at it, so without this the
- * bar sits on top of live text and both become hard to read. The blur ramps
- * across four banded layers and the scrim gives the bar an edge to sit against.
+ * bar sits on top of live text and both become hard to read.
  * Purely decorative, so it is hidden from assistive tech and ignores pointers.
  */
 function tabBarFade() {
+  const layers = BLUR_RAMP.map(([radius, solid, clear]) => {
+    const span = h('span')
+    const mask = `linear-gradient(to top, #000 0%, #000 ${solid}%, transparent ${clear}%)`
+    span.style.backdropFilter = `blur(${radius}px)`
+    span.style.webkitBackdropFilter = `blur(${radius}px)`
+    span.style.maskImage = mask
+    span.style.webkitMaskImage = mask
+    return span
+  })
+
   return h(
     'div',
     { class: 'tabbar-fade', 'aria-hidden': 'true' },
-    h('span'),
-    h('span'),
-    h('span'),
-    h('span'),
-    h('span')
+    layers,
+    h('span', { class: 'fade-veil' }),
+    h('span', { class: 'fade-shade' })
   )
 }
 
