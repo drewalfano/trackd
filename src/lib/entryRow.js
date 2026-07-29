@@ -38,12 +38,12 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
       // Name and time read as one line, separated by a middot, per the mockups.
       h(
         'div',
-        { class: 'truncate text-[17px] font-semibold leading-tight' },
+        { class: 'truncate text-[14px] font-semibold leading-tight' },
         entry.foodName || 'Deleted food',
         h('span', { class: 'text-muted' }, ' · '),
-        h('span', { class: 'font-medium' }, formatTime(entry.createdAt))
+        h('span', { class: 'font-normal' }, formatTime(entry.createdAt))
       ),
-      h('div', { class: 'mt-[4px]' }, macroLine(entry.computed, { size: 15 }))
+      h('div', { class: 'mt-[4px]' }, macroLine(entry.computed, { size: 12 }))
     )
   )
 

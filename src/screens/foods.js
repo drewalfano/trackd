@@ -74,7 +74,7 @@ export function foodsScreen() {
         h(
           'button',
           {
-            class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[14px] font-medium',
+            class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[12px] font-medium',
             onclick: () => navigate('settings'),
           },
           icon('chevronLeft', { size: 18 }),
@@ -83,8 +83,8 @@ export function foodsScreen() {
         h(
           'div',
           { class: 'px-0' },
-          h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'Food library'),
-          h('p', { class: 'text-[13px] text-muted' }, pluralize(foods.length, 'food'))
+          h('h1', { class: 'text-title font-semibold leading-tight' }, 'Food library'),
+          h('p', { class: 'text-[12px] text-muted' }, pluralize(foods.length, 'food'))
         ),
 
         search,
@@ -149,22 +149,22 @@ function nutritionTable(food) {
     h(
       'div',
       { class: 'row' },
-      h('span', { class: 'flex-1 text-[14px] font-medium' }, label),
-      h('span', { class: 'w-[76px] text-right text-[14px]' }, a),
-      h('span', { class: 'w-[76px] text-right text-[14px]' }, b)
+      h('span', { class: 'flex-1 text-[12px] font-medium' }, label),
+      h('span', { class: 'w-[76px] text-right text-[12px]' }, a),
+      h('span', { class: 'w-[76px] text-right text-[12px]' }, b)
     )
 
   return card(
     h(
       'div',
       { class: 'row' },
-      h('span', { class: 'flex-1 text-[13px] font-semibold text-muted' }, ''),
+      h('span', { class: 'flex-1 text-[12px] font-semibold text-muted' }, ''),
       h(
         'span',
-        { class: 'w-[76px] text-right text-[13px] font-semibold text-muted' },
+        { class: 'w-[76px] text-right text-[12px] font-semibold text-muted' },
         `Per 100 ${food.servingUnit}`
       ),
-      h('span', { class: 'w-[76px] text-right text-[13px] font-semibold text-muted' }, 'Per serving')
+      h('span', { class: 'w-[76px] text-right text-[12px] font-semibold text-muted' }, 'Per serving')
     ),
     // Full words here, without the colour-coded suffix — "Calories cal" reads
     // badly, and the macro line directly above already carries the identity.
@@ -211,8 +211,8 @@ export function foodDetailScreen(id) {
           h(
             'div',
             { class: 'min-w-0 flex-1' },
-            h('h1', { class: 'text-[22px] font-bold leading-tight' }, food.name),
-            food.brand ? h('p', { class: 'text-[14px] text-muted' }, food.brand) : null,
+            h('h1', { class: 'text-title font-semibold leading-tight' }, food.name),
+            food.brand ? h('p', { class: 'text-[12px] text-muted' }, food.brand) : null,
             h('div', { class: 'mt-[4px]' }, macroLine(computeMacros(food, 1, 'serving'), { size: 13 }))
           ),
           h(
@@ -235,25 +235,25 @@ export function foodDetailScreen(id) {
         card(
           listRow({
             title: 'Serving',
-            right: h('span', { class: 'text-[13px] text-muted' }, servingLabel(food)),
+            right: h('span', { class: 'text-[12px] text-muted' }, servingLabel(food)),
           }),
           listRow({
             title: 'Source',
             right: h(
               'span',
-              { class: 'text-[13px] text-muted' },
+              { class: 'text-[12px] text-muted' },
               food.source === 'off' ? 'Open Food Facts' : 'Custom'
             ),
           }),
           food.barcode
             ? listRow({
                 title: 'Barcode',
-                right: h('span', { class: 'text-[13px] text-muted' }, food.barcode),
+                right: h('span', { class: 'text-[12px] text-muted' }, food.barcode),
               })
             : null,
           listRow({
             title: 'Times logged',
-            right: h('span', { class: 'text-[13px] text-muted' }, String(food.useCount || 0)),
+            right: h('span', { class: 'text-[12px] text-muted' }, String(food.useCount || 0)),
           })
         ),
 
@@ -318,7 +318,7 @@ function backRow() {
   return h(
     'button',
     {
-      class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[14px] font-medium',
+      class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[12px] font-medium',
       onclick: () => navigate('foods'),
     },
     icon('chevronLeft', { size: 18 }),

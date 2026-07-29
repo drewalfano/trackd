@@ -6,6 +6,67 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.1.2 — Inclusive Sans, and the type scale
+
+### The family
+
+**Inclusive Sans**, self-hosted rather than linked from Google Fonts, because a
+webfont request in front of first paint is the one dependency this app cannot
+have. Both files are the variable font — a single 300–700 axis covers Regular
+and SemiBold — so the whole family is 46 KB. `latin-ext` is included on purpose:
+Open Food Facts returns a lot of French and German product names, and without it
+they would render in the fallback mid-list. OFL, license bundled.
+
+Vite hashes the woff2 files into `assets/`, so the service worker picks them up
+in the precache automatically and the font survives a cold offline launch.
+
+### The scale, measured off the mockups
+
+| | size | weight |
+|---|---|---|
+| calorie total | 48 | SemiBold |
+| screen titles | 30 | SemiBold |
+| section + macro labels | 16 | SemiBold |
+| body, `/ 2837`, values | 16 | Regular |
+| log row titles | 14 | SemiBold + Regular |
+| macro line | 12 | Regular |
+
+Five steps, and everything bold is now SemiBold (600) rather than Bold (700).
+
+This is a step *down* from v1.1.0, which had run the scale up to 20px section
+headings and a 15px macro line. That was a mistake I made reading the mockups at
+low zoom — the real values were smaller, and Inclusive Sans carries enough
+x-height that 12px holds up where the old system-font scale needed 15px.
+
+### It has no tabular figures
+
+The brief requires tabular lining figures throughout, because every number in
+this app either updates live or sits in a column. Inclusive Sans has no `tnum`
+feature — `font-variant-numeric` is measurably a no-op in it, and its digits vary
+by **0.165em**, which is about 8px per digit at 48px. A four-digit calorie
+count-up would have wobbled by ~30px.
+
+So digits get a synthetic fixed advance instead: `.tnum > .d` sets each digit to
+0.66em (the width of its widest glyph, `0`) and centres it. Every four-digit
+value now measures exactly the same width. Applied only where position matters —
+the calorie count-up, the history calorie column, the weekly averages, the weight
+readouts, and the macro target line. Numbers inline in running text keep the
+font's natural proportional spacing, which is what it was drawn for.
+
+### Green
+
+The mockups specify `#278544` for the Calories label. It is 4.64:1 on the white
+page but **4.07:1 on the grey cards**, where the `cal` suffix in every log row
+lives, so the token stays `#2A7340` — a hair darker, and 5.08:1 on grey. Same
+reasoning that moved gold from `#8C7000` to `#7A6200` in v1.1.1.
+
+### Frame
+
+Layout is verified at **402 × 874** (iPhone 17 Pro), which with 20px gutters
+gives the 363px content width the mockups are built on.
+
+---
+
 ## v1.1.1 — overage segment, and a measured palette
 
 ### Overage is a segment of the bar, not a chip on it

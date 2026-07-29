@@ -34,9 +34,9 @@ function pickRow({ title, subtitle, totals, onLog, onOpen }) {
       h(
         'div',
         { class: 'min-w-0 flex-1' },
-        h('div', { class: 'truncate text-[17px] font-semibold leading-tight' }, title),
-        h('div', { class: 'mt-[2px] truncate text-[14px] text-muted' }, subtitle),
-        totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 15 })) : null
+        h('div', { class: 'truncate text-[16px] font-semibold leading-tight' }, title),
+        h('div', { class: 'mt-[2px] truncate text-[12px] text-muted' }, subtitle),
+        totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 12 })) : null
       )
     ),
     h(
@@ -60,14 +60,14 @@ function actionButton({ iconName, label, selected, onclick }) {
     'button',
     {
       class:
-        'flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[24px] py-[20px] ' +
+        'flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[24px] py-[20px]' +
         (selected
           ? 'border border-ink bg-ink text-canvas'
           : 'border border-outline bg-surface text-ink'),
       onclick,
     },
     icon(iconName, { size: 26 }),
-    h('span', { class: 'text-[15px] font-bold' }, label)
+    h('span', { class: 'text-[13px] font-semibold' }, label)
   )
 }
 

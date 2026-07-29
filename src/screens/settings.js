@@ -125,10 +125,10 @@ function favouritesSheet() {
               h(
                 'div',
                 { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[15px] font-medium' }, item.name),
+                h('div', { class: 'truncate text-[13px] font-medium' }, item.name),
                 h(
                   'div',
-                  { class: 'text-[13px] text-muted' },
+                  { class: 'text-[12px] text-muted' },
                   fav.type === 'meal' ? pluralize(item.items.length, 'item') : 'Food'
                 )
               ),
@@ -180,7 +180,7 @@ function favouritesSheet() {
           card(rows.length ? rows : emptyRow('Nothing pinned yet.')),
           h(
             'p',
-            { class: 'px-0 pt-[10px] text-[13px] leading-snug text-muted' },
+            { class: 'px-0 pt-[10px] text-[12px] leading-snug text-muted' },
             'Favourites never re-sort themselves. Fixed positions are what make the tap ' +
               'muscle memory, so the order here is the order in the add sheet.'
           )
@@ -213,10 +213,10 @@ function mealsSheet() {
                     h(
                       'div',
                       { class: 'min-w-0 flex-1' },
-                      h('div', { class: 'truncate text-[15px] font-medium' }, meal.name),
+                      h('div', { class: 'truncate text-[13px] font-medium' }, meal.name),
                       h(
                         'div',
-                        { class: 'text-[13px] text-muted' },
+                        { class: 'text-[12px] text-muted' },
                         `${pluralize(meal.items.length, 'item')} · used ${meal.useCount || 0}×`
                       )
                     ),
@@ -358,10 +358,10 @@ function openImportSheet(data) {
           h(
             'div',
             { class: 'row' },
-            h('div', { class: 'flex-1 text-[15px] font-medium capitalize' }, store),
+            h('div', { class: 'flex-1 text-[13px] font-medium capitalize' }, store),
             h(
               'div',
-              { class: 'text-right text-[13px] leading-tight text-muted' },
+              { class: 'text-right text-[12px] leading-tight text-muted' },
               h('div', {}, mode === 'replace' ? `${c.existing} → ${c.after}` : `${c.existing} → ${c.after}`),
               h(
                 'div',
@@ -396,7 +396,7 @@ function openImportSheet(data) {
           data.exportedAt
             ? h(
                 'p',
-                { class: 'px-0 text-[13px] text-muted' },
+                { class: 'px-0 text-[12px] text-muted' },
                 `Exported ${new Date(data.exportedAt).toLocaleString()}`
               )
             : null
@@ -464,7 +464,7 @@ export function settingsScreen() {
         },
       })
 
-      const derivedHint = h('div', { class: 'px-0 text-[13px] text-muted' })
+      const derivedHint = h('div', { class: 'px-0 text-[12px] text-muted' })
 
       const syncDerived = () => {
         const derived = kcalFromMacros(targets)
@@ -522,7 +522,7 @@ export function settingsScreen() {
         h(
           'div',
           { class: 'row flex-col items-stretch gap-[10px]' },
-          h('span', { class: 'text-[15px] font-medium' }, label),
+          h('span', { class: 'text-[13px] font-medium' }, label),
           control
         )
 
@@ -532,7 +532,7 @@ export function settingsScreen() {
         h(
           'div',
           { class: 'px-0 pt-[10px]' },
-          h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'Settings')
+          h('h1', { class: 'text-title font-semibold leading-tight' }, 'Settings')
         ),
 
         h(
@@ -679,7 +679,7 @@ export function settingsScreen() {
           ),
           h(
             'p',
-            { class: 'px-0 pt-[10px] text-[13px] leading-snug text-muted' },
+            { class: 'px-0 pt-[10px] text-[12px] leading-snug text-muted' },
             'Export is the only backup. Clearing this browser’s site data deletes everything ' +
               'here, and nothing is stored anywhere else.'
           )
@@ -691,14 +691,14 @@ export function settingsScreen() {
           card(
             listRow({
               title: 'Version',
-              right: h('span', { class: 'text-[13px] text-muted' }, VERSION),
+              right: h('span', { class: 'text-[12px] text-muted' }, VERSION),
             }),
             estimate?.usage != null
               ? listRow({
                   title: 'Storage used',
                   right: h(
                     'span',
-                    { class: 'text-[13px] text-muted' },
+                    { class: 'text-[12px] text-muted' },
                     `${round(estimate.usage / 1024, 0)} KB`
                   ),
                 })
@@ -706,7 +706,7 @@ export function settingsScreen() {
             h(
               'a',
               { class: 'row', href: REPO_URL, target: '_blank', rel: 'noreferrer noopener' },
-              h('span', { class: 'flex-1 text-[15px] font-medium' }, 'Source code'),
+              h('span', { class: 'flex-1 text-[13px] font-medium' }, 'Source code'),
               icon('chevronRight', { size: 18, class: 'text-muted' })
             )
           )

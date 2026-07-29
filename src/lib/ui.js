@@ -1,4 +1,4 @@
-import { h, countTo } from './dom.js'
+import { h, countTo, setTabularText } from './dom.js'
 import { icon } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
 import { g, kcal } from './format.js'
@@ -42,6 +42,18 @@ const MACRO_TEXT = {
 }
 
 /** The fill shade. For painted areas only — see MACRO_TEXT for type. */
+/** Digit nodes for a string, for use inside an element that carries .tnum. */
+export function digits(text) {
+  const holder = h('span')
+  setTabularText(holder, text)
+  return [...holder.childNodes]
+}
+
+/** A number that holds its position as it changes. See `.tnum` in styles.css. */
+export function tnum(text, cls = '') {
+  return h('span', { class: `tnum ${cls}`.trim() }, ...digits(text))
+}
+
 export const macroColor = (macro) => MACRO_VAR[macro]
 export const macroTextColor = (macro) => MACRO_TEXT[macro]
 
@@ -92,12 +104,12 @@ export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle
       },
       h(
         'div',
-        { class: 'truncate text-[28px] font-bold leading-tight tracking-[-0.02em]' },
+        { class: 'truncate text-title font-semibold' },
         title
       ),
       h(
         'div',
-        { class: 'truncate text-[13px] leading-tight text-muted' },
+        { class: 'truncate text-[12px] leading-tight text-muted' },
         subtitle ?? (date ? formatDateSub(date) : '')
       ),
       dateInput
@@ -128,8 +140,8 @@ export function pageTitle(title, subtitle) {
   return h(
     'div',
     {},
-    h('h1', { class: 'text-[28px] font-bold leading-tight tracking-[-0.02em]' }, title),
-    subtitle ? h('p', { class: 'text-[14px] text-muted' }, subtitle) : null
+    h('h1', { class: 'text-title font-semibold' }, title),
+    subtitle ? h('p', { class: 'text-[13px] text-muted' }, subtitle) : null
   )
 }
 
@@ -140,7 +152,7 @@ export function pageTitle(title, subtitle) {
  * Numbers stay in ink so the data is readable; only the unit carries colour.
  * Fixed order, always.
  */
-export function macroLine(totals, { size = 15, muted = false, omit = [] } = {}) {
+export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) {
   const parts = []
   const shown = MACRO_ORDER.filter((m) => !omit.includes(m))
   shown.forEach((macro, i) => {
@@ -250,16 +262,16 @@ export function macroRow({ macro, value, target }) {
       h(
         'div',
         {
-          class: 'text-[20px] font-bold leading-tight tracking-[-0.01em]',
+          class: 'text-[16px] font-semibold leading-tight',
           style: { color: MACRO_TEXT[macro] },
         },
         MACRO_META[macro].label
       ),
       h(
         'div',
-        { class: 'text-[15px] leading-tight' },
-        h('span', { class: 'font-bold' }, `${g(value)}g`),
-        h('span', { class: 'text-muted' }, ` / ${g(target)}g`)
+        { class: 'tnum text-[16px] leading-tight' },
+        h('span', { class: 'font-semibold' }, ...digits(`${g(value)}g`)),
+        h('span', { class: 'text-muted' }, ...digits(` / ${g(target)}g`))
       )
     ),
     progressBar({ value, target, macro })
@@ -273,7 +285,7 @@ export function macroRow({ macro, value, target }) {
 let lastKcal = 0
 
 export function caloriesBlock({ value, target }) {
-  const number = h('span', { class: 'text-display font-bold' })
+  const number = h('span', { class: 'tnum text-display font-semibold' })
   // Same reasoning as the bars: count up from wherever the number last was, so
   // logging one more thing ticks 2255 → 2489 rather than restarting at zero.
   number.dataset.value = String(lastKcal)
@@ -290,12 +302,12 @@ export function caloriesBlock({ value, target }) {
         'div',
         { class: 'flex items-baseline gap-[8px]' },
         number,
-        h('span', { class: 'text-[20px] font-medium text-muted' }, `/ ${kcal(target)}`)
+        tnum(`/ ${kcal(target)}`, 'text-[16px] text-muted')
       ),
       h(
         'div',
         {
-          class: 'text-[20px] font-bold leading-tight tracking-[-0.01em]',
+          class: 'text-[16px] font-semibold leading-tight',
           style: { color: MACRO_TEXT.kcal },
         },
         'Calories'
@@ -337,8 +349,8 @@ export function listRow({ title, subtitle, right, onclick, chevron = false, lead
     h(
       'div',
       { class: 'min-w-0 flex-1' },
-      h('div', { class: 'truncate text-[17px] font-semibold' }, title),
-      subtitle ? h('div', { class: 'truncate text-[14px] text-muted' }, subtitle) : null
+      h('div', { class: 'truncate text-[16px] font-semibold' }, title),
+      subtitle ? h('div', { class: 'truncate text-[12px] text-muted' }, subtitle) : null
     ),
     right || null,
     chevron ? icon('chevronRight', { size: 20, class: 'text-muted shrink-0' }) : null
@@ -349,11 +361,11 @@ export function emptyRow(text, { action, onAction } = {}) {
   return h(
     'div',
     { class: 'row justify-between' },
-    h('span', { class: 'text-[15px] text-muted' }, text),
+    h('span', { class: 'text-[14px] text-muted' }, text),
     action
       ? h(
           'button',
-          { class: 'text-[15px] font-bold underline underline-offset-2', onclick: onAction },
+          { class: 'text-[14px] font-semibold underline underline-offset-2', onclick: onAction },
           action
         )
       : null
@@ -365,8 +377,8 @@ export function emptyState(title, body, action) {
   return h(
     'div',
     { class: 'flex flex-col items-center gap-[10px] px-[20px] py-[50px] text-center' },
-    h('p', { class: 'text-[17px] font-bold' }, title),
-    h('p', { class: 'text-[15px] leading-snug text-muted' }, body),
+    h('p', { class: 'text-[16px] font-semibold' }, title),
+    h('p', { class: 'text-[14px] leading-snug text-muted' }, body),
     action || null
   )
 }
@@ -415,15 +427,15 @@ export function labelledField({ label, hint, children }) {
   return h(
     'label',
     { class: 'flex flex-col gap-[10px]' },
-    h('span', { class: 'text-[15px] font-bold' }, label),
+    h('span', { class: 'text-[14px] font-semibold' }, label),
     children,
-    hint ? h('span', { class: 'text-[13px] text-muted' }, hint) : null
+    hint ? h('span', { class: 'text-[12px] text-muted' }, hint) : null
   )
 }
 
 export function numberInput({ value, onInput, placeholder, suffix, step = 'any', ...rest }) {
   const input = h('input', {
-    class: 'w-full min-w-0 text-[17px] font-semibold',
+    class: 'w-full min-w-0 text-[16px] font-semibold',
     type: 'number',
     inputmode: 'decimal',
     step,
@@ -436,7 +448,7 @@ export function numberInput({ value, onInput, placeholder, suffix, step = 'any',
     'div',
     { class: 'field' },
     input,
-    suffix ? h('span', { class: 'shrink-0 text-[15px] text-muted' }, suffix) : null
+    suffix ? h('span', { class: 'shrink-0 text-[14px] text-muted' }, suffix) : null
   )
   // Callers that need to write a new value back (the unit toggle converting
   // 2 servings into 60 g) need the field itself, not the wrapper.
@@ -446,7 +458,7 @@ export function numberInput({ value, onInput, placeholder, suffix, step = 'any',
 
 export function textInput({ value, onInput, placeholder, ...rest }) {
   const input = h('input', {
-    class: 'w-full min-w-0 text-[17px] font-semibold',
+    class: 'w-full min-w-0 text-[16px] font-semibold',
     type: 'text',
     value: value ?? '',
     placeholder: placeholder ?? '',
@@ -481,13 +493,13 @@ export function notice(text, { iconName = 'info', action, onAction } = {}) {
     icon(iconName, { size: 20, class: 'mt-px shrink-0 text-muted' }),
     h(
       'div',
-      { class: 'flex-1 text-[14px] leading-snug' },
+      { class: 'flex-1 text-[13px] leading-snug' },
       text,
       action
         ? h(
             'button',
             {
-              class: 'mt-[10px] block text-[14px] font-bold underline underline-offset-2',
+              class: 'mt-[10px] block text-[13px] font-semibold underline underline-offset-2',
               onclick: onAction,
             },
             action
@@ -500,7 +512,7 @@ export function notice(text, { iconName = 'info', action, onAction } = {}) {
 export function spinner(label = 'Loading') {
   return h(
     'div',
-    { class: 'flex items-center justify-center py-[40px] text-[15px] text-muted' },
+    { class: 'flex items-center justify-center py-[40px] text-[14px] text-muted' },
     label + '…'
   )
 }

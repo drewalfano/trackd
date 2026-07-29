@@ -51,7 +51,7 @@ export function todayScreen() {
             h('span', { class: 'section-label' }, 'Log'),
             h(
               'span',
-              { class: 'flex items-center gap-[6px] text-[15px] text-muted' },
+              { class: 'flex items-center gap-[6px] text-[13px] text-muted' },
               entries.length ? `${entries.length}` : '',
               icon('chevronRight', { size: 20 })
             )

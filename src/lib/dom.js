@@ -85,21 +85,44 @@ export function haptic(pattern = 8) {
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
+ * Render text with every digit in a fixed-advance span, so numbers hold their
+ * position as they change. See the `.tnum` note in styles.css for why the font
+ * cannot do this itself.
+ */
+export function setTabularText(el, text) {
+  const out = []
+  let run = ''
+  for (const ch of String(text)) {
+    if (ch >= '0' && ch <= '9') {
+      if (run) { out.push(document.createTextNode(run)); run = '' }
+      out.push(h('span', { class: 'd' }, ch))
+    } else {
+      run += ch
+    }
+  }
+  if (run) out.push(document.createTextNode(run))
+  el.replaceChildren(...out)
+}
+
+/**
  * Count a number up to its new value over ~200ms.
  * Used for the totals on Today, which are the only numbers that earn it.
  */
 export function countTo(el, to, { duration = 200, format = (n) => Math.round(n) } = {}) {
   const from = Number(el.dataset.value ?? 0)
   el.dataset.value = String(to)
+  // The element carries .tnum, so write digits as fixed-advance spans rather
+  // than as a text node — otherwise the number reflows on every frame.
+  const write = (v) => setTabularText(el, format(v))
   if (from === to || reduceMotion()) {
-    el.textContent = format(to)
+    write(to)
     return
   }
   const start = performance.now()
   const step = (now) => {
     const t = Math.min(1, (now - start) / duration)
     const eased = 1 - Math.pow(1 - t, 3)
-    el.textContent = format(from + (to - from) * eased)
+    write(from + (to - from) * eased)
     if (t < 1) requestAnimationFrame(step)
   }
   requestAnimationFrame(step)

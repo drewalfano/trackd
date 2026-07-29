@@ -1,5 +1,38 @@
 @import 'tailwindcss';
 
+/**
+ * Inclusive Sans, self-hosted.
+ *
+ * Linking Google Fonts would put a network dependency in front of first paint,
+ * which is the one thing this app is not allowed to have. Both files are the
+ * variable font — a single 300-700 weight axis covers Regular and SemiBold, so
+ * the whole family costs 46 KB.
+ *
+ * latin-ext is here on purpose: Open Food Facts returns a lot of French and
+ * German product names, and without it they would render in the fallback font
+ * mid-list. See src/fonts/LICENSE.txt.
+ */
+@font-face {
+  font-family: 'Inclusive Sans';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./fonts/inclusive-sans-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Inclusive Sans';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('./fonts/inclusive-sans-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 /* ---------------------------------------------------------------------------
    Design tokens — v1.1, matched to the mockups.
 
@@ -54,18 +87,33 @@
   --color-fat-text: var(--color-fat-edge);
   --color-carbs-text: var(--color-carbs-edge);
 
-  /* One grotesque family. System stack keeps it offline and renders SF Pro on
-     the target device, which is the grotesque this was designed against. */
+  /* One family. The system stack is the fallback while the woff2 loads. */
   --font-sans:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    'Inclusive Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, sans-serif;
 
   /* One radius. 24px on everything that is not a pill. */
   --radius-card: 24px;
   --radius-sheet: 24px;
 
-  --text-display: 56px;
+  /**
+   * Five steps, measured off the mockups:
+   *   48  the calorie total          SemiBold
+   *   30  screen titles              SemiBold
+   *   16  section + macro labels,    SemiBold, and body at Regular
+   *   14  log row titles and body
+   *   12  the macro line
+   *
+   * Inclusive Sans carries a large x-height, which is why 12px still holds up
+   * for the macro line where the old system-font scale needed 15px.
+   */
+  --text-display: 48px;
   --text-display--line-height: 1;
-  --text-display--letter-spacing: -0.03em;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-title: 30px;
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.02em;
 }
 
 /* Dark mode inverts neutrals only. The macro hues do not move — see spec 7. */
@@ -223,16 +271,33 @@
   /* Section headings — "Log", "Your Favourites", "Morning". Bold ink, not the
      small muted caps of v1; the mockups treat these as real headings. */
   .section-label {
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-size: 16px;
+    font-weight: 600;
     color: var(--color-ink);
   }
 
   .section-action {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
     color: var(--color-muted);
+  }
+
+  /**
+   * Synthetic tabular figures.
+   *
+   * Inclusive Sans ships no `tnum` feature, so `font-variant-numeric` is a
+   * no-op in it and its digits vary by 0.165em — about 8px per digit at display
+   * size. Any number that counts up or sits in a column would visibly wobble.
+   *
+   * So digits get a fixed advance instead, set to the widest glyph (`0`, at
+   * 0.6594em) and centred. Applied only where position matters; inline numbers
+   * in running text keep the font's natural proportional spacing, which is what
+   * it was drawn for.
+   */
+  .tnum > .d {
+    display: inline-block;
+    width: 0.66em;
+    text-align: center;
   }
 
   /* ------------------------------------------------------------------ bars */
@@ -284,8 +349,8 @@
     flex: none;
     padding: 0 11px;
     color: #fff;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 600;
     line-height: 1;
   }
 
@@ -320,8 +385,8 @@
     background: var(--color-ink);
     border: 1px solid var(--color-ink);
     color: var(--color-canvas);
-    font-weight: 700;
-    font-size: 17px;
+    font-weight: 600;
+    font-size: 16px;
   }
   .btn-primary:disabled {
     opacity: 0.3;
@@ -337,8 +402,8 @@
     background: var(--color-surface);
     border: 1px solid var(--color-outline);
     color: var(--color-ink);
-    font-weight: 700;
-    font-size: 17px;
+    font-weight: 600;
+    font-size: 16px;
   }
 
   /* Single-line input row: 48px tall, 24px radius, so it reads as a pill. */
@@ -360,7 +425,7 @@
     height: 48px;
     padding: 0 20px;
     border-radius: var(--radius-card);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     background: var(--color-surface);
     border: 1px solid var(--color-outline);
@@ -389,7 +454,7 @@
     flex: 1;
     min-height: 40px;
     border-radius: 20px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     color: var(--color-muted);
     border: 1px solid transparent;
@@ -487,7 +552,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 2px;
+    gap: 1px;
     border-radius: 999px;
     border: 1px solid transparent;
     color: var(--color-muted);

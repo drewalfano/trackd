@@ -36,7 +36,7 @@ export function openSheet({ title, render, footer = null }) {
   let closing = false
 
   const titleEl = h('h2', {
-    class: 'flex-1 truncate text-[28px] font-bold leading-tight tracking-[-0.02em]',
+    class: 'flex-1 truncate text-title font-semibold',
   })
   const backBtn = h(
     'button',

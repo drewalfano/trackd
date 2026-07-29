@@ -3,7 +3,7 @@ import { icon } from '../lib/icons.js'
 import { createScreen } from '../lib/screen.js'
 import { entriesInRange, getSettings, loggedDates } from '../lib/db.js'
 import { sumEntries, progress } from '../lib/compute.js'
-import { macroColor, card, emptyState } from '../lib/ui.js'
+import { macroColor, card, emptyState, tnum } from '../lib/ui.js'
 import { kcal, g } from '../lib/format.js'
 import { addDays, daysBetween, formatDayLabel, todayStr } from '../lib/dates.js'
 import { setDate } from '../state.js'
@@ -52,10 +52,10 @@ function averagesStrip(days, targets) {
     h(
       'div',
       { class: 'flex items-baseline justify-between' },
-      h('span', { class: 'text-[14px] font-semibold' }, 'Last 7 days'),
+      h('span', { class: 'section-label' }, 'Last 7 days'),
       h(
         'span',
-        { class: 'text-[13px] text-muted' },
+        { class: 'text-[12px] text-muted' },
         last7.length ? `${last7.length} of 7 tracked` : 'nothing tracked'
       )
     ),
@@ -65,20 +65,20 @@ function averagesStrip(days, targets) {
       h(
         'div',
         { class: 'flex flex-col' },
-        h('span', { class: 'text-[26px] font-bold leading-tight' }, kcal(mean('kcal'))),
+        tnum(kcal(mean('kcal')), 'text-title font-semibold leading-tight'),
         h(
           'span',
-          { class: 'text-[13px] text-muted' },
+          { class: 'text-[12px] text-muted' },
           `mean cal · target ${kcal(targets.kcal)}`
         )
       ),
       h(
         'div',
         { class: 'flex flex-col' },
-        h('span', { class: 'text-[26px] font-bold leading-tight' }, g(mean('protein'))),
+        tnum(g(mean('protein')), 'text-title font-semibold leading-tight'),
         h(
           'span',
-          { class: 'text-[13px] text-muted' },
+          { class: 'text-[12px] text-muted' },
           `mean protein · target ${g(targets.protein)}`
         )
       )
@@ -86,7 +86,7 @@ function averagesStrip(days, targets) {
     tracked.length < 3
       ? h(
           'p',
-          { class: 'text-[13px] leading-snug text-muted' },
+          { class: 'text-[12px] leading-snug text-muted' },
           'Averages get useful after about a week of tracking.'
         )
       : null
@@ -146,19 +146,20 @@ export function historyScreen() {
               h(
                 'div',
                 { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[17px] font-semibold' }, formatDayLabel(day.date)),
+                h('div', { class: 'truncate text-[16px] font-semibold' }, formatDayLabel(day.date)),
                 h(
                   'div',
-                  { class: 'mt-[2px] text-[13px] text-muted' },
+                  { class: 'mt-[2px] text-[12px] text-muted' },
                   `${day.entries.length} item${day.entries.length === 1 ? '' : 's'}`
                 )
               ),
               macroTicks(day.totals, targets),
               h(
                 'span',
-                { class: 'w-[70px] shrink-0 text-right text-[17px] font-bold' },
-                kcal(day.totals.kcal),
-                h('span', { class: 'ml-1 text-[12px] font-medium text-muted' }, 'cal')
+                // A right-aligned column, so the digits must not drift.
+                { class: 'w-[70px] shrink-0 text-right text-[16px] font-semibold' },
+                tnum(kcal(day.totals.kcal)),
+                h('span', { class: 'ml-[4px] text-[12px] font-normal text-muted' }, 'cal')
               ),
               icon('chevronRight', { size: 16, class: 'shrink-0 text-muted' })
             )
@@ -203,7 +204,7 @@ function header() {
     h(
       'button',
       {
-        class: 'flex items-center gap-[10px] self-start px-0 text-[14px] font-medium',
+        class: 'flex items-center gap-[10px] self-start px-0 text-[12px] font-medium',
         onclick: () => navigate('log'),
       },
       icon('chevronLeft', { size: 18 }),
@@ -212,8 +213,8 @@ function header() {
     h(
       'div',
       { class: 'px-0 pt-[10px]' },
-      h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'History'),
-      h('p', { class: 'text-[13px] text-muted' }, 'Averages are more honest than any single day.')
+      h('h1', { class: 'text-title font-semibold leading-tight' }, 'History'),
+      h('p', { class: 'text-[12px] text-muted' }, 'Averages are more honest than any single day.')
     )
   )
 }

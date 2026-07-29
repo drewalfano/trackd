@@ -65,7 +65,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
     title: mode === 'edit' ? 'Edit food' : 'Custom food',
     render: (ctx) => {
       const warningsEl = h('div')
-      const kcalHint = h('div', { class: 'text-[13px] leading-snug text-muted' })
+      const kcalHint = h('div', { class: 'text-[12px] leading-snug text-muted' })
       let kcalInput
 
       const currentPer100 = () => {
@@ -98,7 +98,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
                 h(
                   'button',
                   {
-                    class: 'font-bold underline underline-offset-2',
+                    class: 'font-semibold underline underline-offset-2',
                     onclick: () => {
                       kcalOverridden = false
                       syncCalories()

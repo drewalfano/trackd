@@ -1,0 +1,7 @@
+Inclusive Sans by Olivia King
+Licensed under the SIL Open Font License, Version 1.1
+https://openfontlicense.org  ·  https://fonts.google.com/specimen/Inclusive+Sans
+
+Bundled here rather than linked from Google Fonts because this app has to work
+with the radio off. These are the `latin` and `latin-ext` subsets of the
+variable font (weight axis 300-700), italic omitted since the app never uses it.

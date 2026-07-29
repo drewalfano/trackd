@@ -48,7 +48,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
         initial.block ?? blockForTime(new Date(), settings.blockThresholds)
       let date = initial.date ?? todayStr()
 
-      const kcalEl = h('span', { class: 'text-[34px] font-bold leading-none' })
+      const kcalEl = h('span', { class: 'text-[30px] font-semibold leading-none' })
       const macrosEl = h('div')
 
       const repaintPreview = () => {
@@ -193,8 +193,8 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
           h(
             'div',
             { class: 'min-w-0 flex-1' },
-            h('div', { class: 'text-[17px] font-bold leading-tight' }, food.name),
-            food.brand ? h('div', { class: 'text-[13px] text-muted' }, food.brand) : null
+            h('div', { class: 'text-[16px] font-semibold leading-tight' }, food.name),
+            food.brand ? h('div', { class: 'text-[12px] text-muted' }, food.brand) : null
           ),
           favBtn
         ),
@@ -206,7 +206,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
             'div',
             { class: 'flex items-baseline gap-[10px]' },
             kcalEl,
-            h('span', { class: 'text-[14px] font-medium text-muted' }, 'cal')
+            h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal')
           ),
           macrosEl
         ),
@@ -341,11 +341,11 @@ export async function openEditEntry(entry) {
         return h(
           'div',
           { class: 'flex flex-col gap-[20px] pb-[10px]' },
-          h('div', { class: 'text-[17px] font-bold' }, entry.foodName || 'Deleted food'),
+          h('div', { class: 'text-[16px] font-semibold' }, entry.foodName || 'Deleted food'),
           h(
             'div',
             { class: 'card px-[20px] py-[20px]' },
-            h('div', { class: 'text-[13px] leading-snug text-muted' },
+            h('div', { class: 'text-[12px] leading-snug text-muted' },
               'This food was deleted from your library, so the amount can no longer be recalculated. The numbers below are the ones recorded when you logged it.'),
             h('div', { class: 'mt-[10px]' }, macroLine(entry.computed, { size: 14 }))
           ),

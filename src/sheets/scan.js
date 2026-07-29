@@ -85,8 +85,8 @@ export function pushScan(ctx, { date, block }) {
           h(
             'div',
             { class: 'flex flex-col items-center gap-[10px] py-[50px]' },
-            h('div', { class: 'text-[17px] font-bold' }, 'Looking up…'),
-            h('div', { class: 'text-[15px] text-muted' }, code)
+            h('div', { class: 'text-[16px] font-semibold' }, 'Looking up…'),
+            h('div', { class: 'text-[13px] text-muted' }, code)
           )
         )
       }
@@ -98,10 +98,10 @@ export function pushScan(ctx, { date, block }) {
             h(
               'div',
               { class: 'flex flex-col gap-[10px] p-[20px]' },
-              h('div', { class: 'text-[17px] font-bold' }, 'Create this food'),
+              h('div', { class: 'text-[16px] font-semibold' }, 'Create this food'),
               h(
                 'div',
-                { class: 'text-[15px] leading-snug text-muted' },
+                { class: 'text-[13px] leading-snug text-muted' },
                 `The barcode ${code} will be saved with it, so the next scan finds it instantly.`
               ),
               h(
@@ -135,8 +135,8 @@ export function pushScan(ctx, { date, block }) {
             h(
               'div',
               { class: 'flex flex-col gap-[10px] p-[20px]' },
-              h('div', { class: 'text-[17px] font-bold' }, heading),
-              h('div', { class: 'text-[15px] leading-snug text-muted' }, body),
+              h('div', { class: 'text-[16px] font-semibold' }, heading),
+              h('div', { class: 'text-[13px] leading-snug text-muted' }, body),
               retry
                 ? h(
                     'button',
@@ -205,7 +205,7 @@ export function pushScan(ctx, { date, block }) {
               'div',
               {
                 class:
-                  'pointer-events-none absolute inset-x-0 bottom-0 p-[20px] text-center text-[15px] font-semibold text-white',
+                  'pointer-events-none absolute inset-x-0 bottom-0 p-[20px] text-center text-[14px] font-semibold text-white',
               },
               'Line the barcode up inside the frame'
             )

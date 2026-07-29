@@ -64,8 +64,8 @@ async function promptSaveAsMeal(entries, defaultName) {
             h(
               'div',
               { class: 'row' },
-              h('span', { class: 'flex-1 truncate text-[14px]' }, e.foodName),
-              h('span', { class: 'text-[13px] text-muted' }, `${Math.round(e.computed.kcal)} cal`)
+              h('span', { class: 'flex-1 truncate text-[12px]' }, e.foodName),
+              h('span', { class: 'text-[12px] text-muted' }, `${Math.round(e.computed.kcal)} cal`)
             )
           )
         )
@@ -115,7 +115,7 @@ export function logScreen() {
                 h(
                   'button',
                   {
-                    class: 'row text-[14px] text-muted',
+                    class: 'row text-[12px] text-muted',
                     onclick: () => openAddFood({ date: state.date, block }),
                   },
                   icon('plus', { size: 16 }),
@@ -134,14 +134,14 @@ export function logScreen() {
           { class: 'flex items-center justify-between' },
           h(
             'button',
-            { class: 'flex items-center gap-[10px] text-[14px] font-medium', onclick: () => navigate('today') },
+            { class: 'flex items-center gap-[10px] text-[12px] font-medium', onclick: () => navigate('today') },
             icon('chevronLeft', { size: 18 }),
             'Today'
           ),
           h(
             'button',
             {
-              class: 'flex items-center gap-[10px] text-[14px] font-medium text-muted',
+              class: 'flex items-center gap-[10px] text-[12px] font-medium text-muted',
               onclick: () => navigate('history'),
             },
             'History',
@@ -160,10 +160,10 @@ export function logScreen() {
             { class: 'row justify-between' },
             h(
               'span',
-              { class: 'shrink-0 text-[15px] font-semibold text-muted' },
+              { class: 'shrink-0 text-[13px] font-semibold text-muted' },
               pluralize(entries.length, 'item')
             ),
-            macroLine(totals, { size: 15 })
+            macroLine(totals, { size: 12 })
           )
         ),
 

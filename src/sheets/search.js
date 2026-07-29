@@ -37,17 +37,17 @@ function resultRow({ title, subtitle, totals, badge, onclick }) {
       h(
         'div',
         { class: 'flex items-center gap-[10px]' },
-        h('span', { class: 'min-w-0 flex-1 truncate text-[17px] font-semibold' }, title),
+        h('span', { class: 'min-w-0 flex-1 truncate text-[16px] font-semibold' }, title),
         badge
           ? h(
               'span',
-              { class: 'chip h-[26px] shrink-0 bg-canvas px-[10px] text-[13px]' },
+              { class: 'chip h-[26px] shrink-0 bg-canvas px-[10px] text-[12px]' },
               badge
             )
           : null
       ),
-      subtitle ? h('div', { class: 'mt-[2px] truncate text-[14px] text-muted' }, subtitle) : null,
-      totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 15 })) : null
+      subtitle ? h('div', { class: 'mt-[2px] truncate text-[12px] text-muted' }, subtitle) : null,
+      totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 12 })) : null
     ),
     icon('chevronRight', { size: 20, class: 'shrink-0 text-muted' })
   )
@@ -65,7 +65,7 @@ export function pushSearch(ctx, { date, block }) {
       const offlineNotice = h('div')
 
       const input = h('input', {
-        class: 'w-full min-w-0 text-[17px] font-semibold',
+        class: 'w-full min-w-0 text-[16px] font-semibold',
         type: 'search',
         placeholder: 'Search foods',
         enterkeyhint: 'search',
@@ -137,7 +137,7 @@ export function pushSearch(ctx, { date, block }) {
         if (!isOnline()) return
 
         remoteSlot.replaceChildren(
-          h('div', { class: 'py-[30px] text-center text-[15px] text-muted' }, 'Searching…')
+          h('div', { class: 'py-[30px] text-center text-[13px] text-muted' }, 'Searching…')
         )
 
         controller = new AbortController()

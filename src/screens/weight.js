@@ -2,7 +2,7 @@ import { h, s } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import { listWeights, getWeight, putWeight, deleteWeight, getSettings } from '../lib/db.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
-import { card, segmentedWide, numberInput, notice, emptyState } from '../lib/ui.js'
+import { card, segmentedWide, numberInput, notice, emptyState, tnum, digits } from '../lib/ui.js'
 import { kgToUnit, unitToKg, weight as fmtWeight, signed } from '../lib/format.js'
 import { formatDayLabel, todayStr } from '../lib/dates.js'
 import { toast, confirm } from '../lib/toast.js'
@@ -180,7 +180,7 @@ export function weightScreen() {
         todayEntry
           ? h(
               'p',
-              { class: 'px-0 text-[13px] text-muted' },
+              { class: 'px-0 text-[12px] text-muted' },
               'Saving again replaces today’s value rather than adding a second one.'
             )
           : null
@@ -231,32 +231,32 @@ export function weightScreen() {
             h(
               'div',
               { class: 'flex flex-col' },
-              h('span', { class: 'text-[13px] font-semibold text-muted' }, 'Current'),
+              h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Current'),
               h(
                 'div',
                 { class: 'flex items-baseline gap-[10px]' },
-                h('span', { class: 'text-display font-bold' }, fmtWeight(latest.kg, unit)),
-                h('span', { class: 'text-[14px] font-medium text-muted' }, unit)
+                tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold'),
+                h('span', { class: 'text-[12px] font-medium text-muted' }, unit)
               ),
-              h('span', { class: 'text-[13px] text-muted' }, formatDayLabel(latest.date))
+              h('span', { class: 'text-[12px] text-muted' }, formatDayLabel(latest.date))
             ),
             h(
               'div',
               { class: 'flex flex-col items-end' },
-              h('span', { class: 'text-[13px] font-semibold text-muted' }, 'Trend'),
+              h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Trend'),
               h(
                 'div',
                 { class: 'flex items-baseline gap-[10px]' },
                 h(
                   'span',
-                  { class: 'text-[26px] font-bold' },
-                  latestTrend == null ? '—' : fmtWeight(latestTrend, unit)
+                  { class: 'tnum text-title font-semibold' },
+                  ...digits(latestTrend == null ? '—' : fmtWeight(latestTrend, unit))
                 ),
-                h('span', { class: 'text-[13px] font-medium text-muted' }, unit)
+                h('span', { class: 'text-[12px] font-medium text-muted' }, unit)
               ),
               h(
                 'span',
-                { class: 'text-[13px] text-muted' },
+                { class: 'text-[12px] text-muted' },
                 rate == null
                   ? 'needs more data'
                   : `${signed(kgToUnit(rate, unit))} ${unit} / week`
@@ -267,7 +267,7 @@ export function weightScreen() {
           chartNode ||
             h(
               'div',
-              { class: 'py-[30px] text-center text-[13px] text-muted' },
+              { class: 'py-[30px] text-center text-[12px] text-muted' },
               'Two readings are needed before there is anything to draw.'
             ),
 
@@ -292,6 +292,6 @@ function heading() {
   return h(
     'div',
     { class: 'px-0 pt-[10px]' },
-    h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'Weight')
+    h('h1', { class: 'text-title font-semibold leading-tight' }, 'Weight')
   )
 }
