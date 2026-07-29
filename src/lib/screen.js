@@ -33,11 +33,18 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
   })
   const offDate = watchDate ? subscribe(rerender) : () => {}
 
-  rerender()
+  /**
+   * The first render is async, because it reads IndexedDB. Callers must wait
+   * on this before putting `el` on screen — mounting it early shows an empty
+   * div for as long as the read takes, which reads as a white flash on every
+   * navigation.
+   */
+  const ready = rerender()
 
   return {
     el,
     rerender,
+    ready,
     destroy() {
       disposed = true
       offData()

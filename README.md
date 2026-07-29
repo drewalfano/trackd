@@ -28,6 +28,38 @@ path, so the URL is `http://localhost:5173/macro-tracker-app/`.
 | `npm test` | Macro arithmetic, sanity flags, trend smoothing, local dates |
 | `npm run icons` | Regenerates the PWA icons into `public/icons/` |
 
+## Getting it onto the phone
+
+`npm run dev` over the LAN is the worst way to judge how this feels. Vite serves
+every module unbundled, so it is ~50 separate requests over WiFi; there is no
+service worker, so nothing is cached; and plain HTTP is not a secure context, so
+neither the camera nor Add to Home Screen will work. It will feel slow, and none
+of that slowness is the app.
+
+**The real answer is to deploy it.** Push to GitHub and the workflow publishes to
+Pages over HTTPS, at which point it installs to the home screen, runs from the
+service worker cache, and the scanner works:
+
+```
+gh repo create macro-tracker-app --private --source=. --push
+```
+
+Then enable Pages with "GitHub Actions" as the source. After that, open the
+Pages URL in Safari on the phone → Share → Add to Home Screen. Launched from the
+icon it runs standalone with no browser chrome, and every asset is served from
+the local cache.
+
+**For a quick check without deploying**, `npm run serve` builds and serves the
+production bundle on the LAN. That gets you the real bundle and the real type
+and layout, but still no service worker or camera, because HTTPS is the gate on
+both. A tunnel closes that gap:
+
+```
+npx cloudflared tunnel --url http://localhost:4173
+```
+
+which prints an HTTPS URL that behaves exactly like production.
+
 ## Deploying
 
 Pushing to `main` builds and publishes to GitHub Pages via

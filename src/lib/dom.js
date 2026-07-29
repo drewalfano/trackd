@@ -142,6 +142,15 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
   const surface = el.querySelector('[data-swipe-surface]')
   if (!surface) return () => {}
 
+  /**
+   * `pan-y` tells the compositor this row scrolls vertically and never pans
+   * horizontally. That does two things: vertical scrolling no longer waits on
+   * our JS, and horizontal gestures need no preventDefault — which lets every
+   * listener below be passive. A non-passive touchmove on each of a dozen log
+   * rows is enough to make the whole list feel like it is dragging.
+   */
+  el.style.touchAction = 'pan-y'
+
   const setX = (x, animate) => {
     surface.style.transition = animate ? 'transform 200ms cubic-bezier(0.16,1,0.3,1)' : 'none'
     surface.style.transform = `translateX(${x}px)`
@@ -179,7 +188,6 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
       if (Math.abs(deltaX) < 6) return
       decided = true
     }
-    e.preventDefault()
     dx = Math.max(-width - 24, Math.min(0, (open ? -width : 0) + deltaX))
     setX(dx, false)
   }
@@ -200,7 +208,7 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
   }
 
   el.addEventListener('touchstart', onStart, { passive: true })
-  el.addEventListener('touchmove', onMove, { passive: false })
+  el.addEventListener('touchmove', onMove, { passive: true })
   el.addEventListener('touchend', onEnd)
   el.addEventListener('touchcancel', onEnd)
 

@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "node scripts/make-icons.mjs && vite build",
     "preview": "vite preview",
+    "serve": "npm run build && vite preview --host --port 4173",
     "test": "node test/math.test.mjs",
     "icons": "node scripts/make-icons.mjs"
   },

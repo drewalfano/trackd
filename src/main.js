@@ -42,10 +42,28 @@ const view = h('main', { class: 'screen', id: 'view' })
 
 let currentScreen = null
 
-function show(factory) {
+let showToken = 0
+
+/**
+ * Swap screens only once the new one has actually rendered.
+ *
+ * A screen's first render is async — it reads IndexedDB — so mounting it as
+ * soon as it is constructed puts an empty div on screen until the read
+ * resolves. On a phone that is a visible white flash on every tap. The outgoing
+ * screen stays put until the incoming one has content.
+ */
+async function show(factory) {
+  const token = ++showToken
+  const next = factory()
+  await next.ready
+  // A faster tap already started another navigation; this one is stale.
+  if (token !== showToken) {
+    next.destroy()
+    return
+  }
   currentScreen?.destroy()
-  currentScreen = factory()
-  mount(view, currentScreen.el)
+  currentScreen = next
+  mount(view, next.el)
   window.scrollTo(0, 0)
 }
 
@@ -59,20 +77,22 @@ const TABS = [
  * The blur ramp: [radius, solid to %, transparent by %], bottom-up.
  *
  * Each layer sits on top of the previous one and re-blurs its output, so the
- * radii compound rather than replace — about 28px effective at the bottom edge,
- * tapering to nothing by the top of the fade. Doubling the radius while halving
- * the window height each step is what keeps the ramp smooth: equal steps read
- * as visible bands, because perceived blur scales with the square root of the
- * summed radii, not linearly.
+ * radii compound rather than replace — about 25px effective at the bottom edge,
+ * tapering to nothing by the top of the fade. Radii grow while the window
+ * halves, because perceived blur scales with the square root of the summed
+ * radii, not linearly; equal steps read as visible bands.
+ *
+ * Four layers, not more. Every backdrop-filter costs the compositor a separate
+ * snapshot-and-blur of the region behind it on each frame, and this band is
+ * fixed over a scrolling list, so it pays that cost continuously. The ramp is
+ * what creates the depth, not the layer count — seven looked the same and cost
+ * nearly twice as much.
  */
 const BLUR_RAMP = [
-  [0.4, 76, 100],
-  [0.8, 63, 88],
-  [1.6, 51, 76],
-  [3, 38, 63],
-  [6, 26, 51],
-  [12, 13, 38],
-  [24, 0, 26],
+  [2, 66, 100],
+  [5, 44, 72],
+  [10, 22, 48],
+  [22, 0, 26],
 ]
 
 /**

@@ -17,8 +17,33 @@ let active = null
 
 const STATE = 'mt-sheet'
 
+/**
+ * iOS-safe scroll lock.
+ *
+ * `overflow: hidden` on body does not reliably lock scrolling in mobile Safari,
+ * and the page loses its scroll offset while the sheet is open — so closing it
+ * snaps the list back to the top. Pinning the body at a negative offset holds
+ * the position visually, and it is restored on unlock.
+ */
+let lockedScrollY = 0
+
 function lockScroll(lock) {
-  document.body.style.overflow = lock ? 'hidden' : ''
+  const { style } = document.body
+  if (lock) {
+    lockedScrollY = window.scrollY
+    style.position = 'fixed'
+    style.top = `-${lockedScrollY}px`
+    style.left = '0'
+    style.right = '0'
+    style.overflow = 'hidden'
+  } else {
+    style.position = ''
+    style.top = ''
+    style.left = ''
+    style.right = ''
+    style.overflow = ''
+    window.scrollTo(0, lockedScrollY)
+  }
 }
 
 export function isSheetOpen() {
