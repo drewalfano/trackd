@@ -53,7 +53,7 @@ export function foodsScreen() {
 
       const search = h(
         'div',
-        { class: 'field flex items-center gap-2' },
+        { class: 'field flex items-center gap-[10px]' },
         icon('search', { size: 18, class: 'shrink-0 text-muted' }),
         h('input', {
           class: 'w-full text-[16px]',
@@ -70,11 +70,11 @@ export function foodsScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-4 pb-4' },
+        { class: 'flex flex-col gap-[20px] pb-[20px]' },
         h(
           'button',
           {
-            class: 'flex items-center gap-1 self-start px-1 pt-1 text-[14px] font-medium',
+            class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[14px] font-medium',
             onclick: () => navigate('settings'),
           },
           icon('chevronLeft', { size: 18 }),
@@ -82,7 +82,7 @@ export function foodsScreen() {
         ),
         h(
           'div',
-          { class: 'px-1' },
+          { class: 'px-0' },
           h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'Food library'),
           h('p', { class: 'text-[13px] text-muted' }, pluralize(foods.length, 'food'))
         ),
@@ -158,13 +158,13 @@ function nutritionTable(food) {
     h(
       'div',
       { class: 'row' },
-      h('span', { class: 'flex-1 text-[12px] font-semibold text-muted' }, ''),
+      h('span', { class: 'flex-1 text-[13px] font-semibold text-muted' }, ''),
       h(
         'span',
-        { class: 'w-[76px] text-right text-[12px] font-semibold text-muted' },
+        { class: 'w-[76px] text-right text-[13px] font-semibold text-muted' },
         `Per 100 ${food.servingUnit}`
       ),
-      h('span', { class: 'w-[76px] text-right text-[12px] font-semibold text-muted' }, 'Per serving')
+      h('span', { class: 'w-[76px] text-right text-[13px] font-semibold text-muted' }, 'Per serving')
     ),
     // Full words here, without the colour-coded suffix — "Calories cal" reads
     // badly, and the macro line directly above already carries the identity.
@@ -189,7 +189,7 @@ export function foodDetailScreen(id) {
       if (!food) {
         return h(
           'div',
-          { class: 'flex flex-col gap-4' },
+          { class: 'flex flex-col gap-[20px]' },
           backRow(),
           emptyState('Food not found', 'It may have been deleted.')
         )
@@ -202,18 +202,18 @@ export function foodDetailScreen(id) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-4' },
+        { class: 'flex flex-col gap-[20px] pb-[20px]' },
         backRow(),
 
         h(
           'div',
-          { class: 'flex items-start gap-3 px-1' },
+          { class: 'flex items-start gap-[10px] px-0' },
           h(
             'div',
             { class: 'min-w-0 flex-1' },
             h('h1', { class: 'text-[22px] font-bold leading-tight' }, food.name),
             food.brand ? h('p', { class: 'text-[14px] text-muted' }, food.brand) : null,
-            h('div', { class: 'mt-1' }, macroLine(computeMacros(food, 1, 'serving'), { size: 13 }))
+            h('div', { class: 'mt-[4px]' }, macroLine(computeMacros(food, 1, 'serving'), { size: 13 }))
           ),
           h(
             'button',
@@ -259,7 +259,7 @@ export function foodDetailScreen(id) {
 
         h(
           'div',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h(
             'button',
             {
@@ -318,7 +318,7 @@ function backRow() {
   return h(
     'button',
     {
-      class: 'flex items-center gap-1 self-start px-1 pt-1 text-[14px] font-medium',
+      class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[14px] font-medium',
       onclick: () => navigate('foods'),
     },
     icon('chevronLeft', { size: 18 }),

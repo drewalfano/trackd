@@ -14,7 +14,7 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
     h(
       'button',
       {
-        class: 'flex h-9 w-9 items-center justify-center rounded-full bg-canvas',
+        class: 'icon-btn icon-btn-sm bg-canvas',
         'aria-label': label,
         onclick: (e) => {
           e.stopPropagation()
@@ -35,29 +35,31 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
     h(
       'div',
       { class: 'min-w-0 flex-1' },
+      // Name and time read as one line, separated by a middot, per the mockups.
       h(
         'div',
-        { class: 'flex items-baseline gap-2' },
-        h('span', { class: 'min-w-0 flex-1 truncate text-[15px] font-medium' }, entry.foodName || 'Deleted food'),
-        h('span', { class: 'shrink-0 text-[12px] text-muted' }, formatTime(entry.createdAt))
+        { class: 'truncate text-[17px] font-semibold leading-tight' },
+        entry.foodName || 'Deleted food',
+        h('span', { class: 'text-muted' }, ' · '),
+        h('span', { class: 'font-medium' }, formatTime(entry.createdAt))
       ),
-      h('div', { class: 'mt-1' }, macroLine(entry.computed, { size: 13 }))
+      h('div', { class: 'mt-[4px]' }, macroLine(entry.computed, { size: 15 }))
     )
   )
 
   const wrapper = h(
     'div',
-    { class: 'row-group relative overflow-hidden bg-canvas' },
+    { class: 'relative overflow-hidden bg-canvas' },
     h(
       'div',
-      { class: 'absolute inset-y-0 right-0 flex items-center gap-2 pr-3' },
+      { class: 'absolute inset-y-0 right-0 flex items-center gap-[10px] pr-[15px]' },
       onEdit && actionBtn('pencil', 'Edit entry', onEdit),
       onDelete && actionBtn('trash', 'Delete entry', onDelete)
     ),
     surface
   )
 
-  swipeToReveal(wrapper, { width: 96 })
+  swipeToReveal(wrapper, { width: 106 })
   if (onDuplicate) longPress(wrapper, () => onDuplicate(entry))
 
   return wrapper

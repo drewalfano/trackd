@@ -13,8 +13,16 @@ let host = null
 function getHost() {
   if (!host) {
     host = h('div', {
-      class: 'fixed inset-x-0 bottom-0 z-[80] flex flex-col items-center gap-2 px-4 safe-b',
-      style: { paddingBottom: 'calc(112px + env(safe-area-inset-bottom, 0px))' },
+      // Clears the floating tab bar: 68px bar + 20px inset + 10px gap.
+      //
+      // pointer-events-none is load-bearing. This host spans the full width and
+      // sits above the tab bar, and its bottom padding overlaps the add button;
+      // without it the first toast permanently swallows every tap on the tab
+      // bar. Individual toasts opt back in.
+      class:
+        'pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-center ' +
+        'gap-[10px] px-[20px]',
+      style: { paddingBottom: 'calc(98px + env(safe-area-inset-bottom, 0px))' },
       role: 'status',
       'aria-live': 'polite',
     })
@@ -28,15 +36,16 @@ export function toast(message, { action, onAction, duration = 5000 } = {}) {
     'div',
     {
       class:
-        'toast-in pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-2xl bg-ink px-4 py-3 text-surface shadow-none',
+        'toast-in pointer-events-auto flex w-full max-w-[430px] items-center gap-[10px] ' +
+        'rounded-[24px] bg-ink px-[20px] py-[15px] text-canvas',
     },
-    h('span', { class: 'flex-1 text-sm font-medium' }, message),
+    h('span', { class: 'flex-1 text-[15px] font-medium' }, message),
     action &&
       h(
         'button',
         {
-          class: 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold',
-          style: { background: 'color-mix(in srgb, currentColor 15%, transparent)' },
+          class: 'flex shrink-0 items-center gap-[6px] rounded-full px-[14px] py-[8px] text-[14px] font-bold',
+          style: { background: 'color-mix(in srgb, currentColor 16%, transparent)' },
           onclick: () => {
             dismiss()
             onAction?.()
@@ -96,7 +105,7 @@ export function confirm(
       'div',
       {
         class:
-          'sheet-scrim fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-6 backdrop-blur-[2px]',
+          'sheet-scrim fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-[20px] backdrop-blur-[2px]',
         onclick: (e) => {
           if (e.target === scrim) close(false)
         },
@@ -104,19 +113,19 @@ export function confirm(
       h(
         'div',
         {
-          class: 'w-full max-w-sm rounded-[24px] bg-surface p-5',
+          class: 'w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
           role: 'alertdialog',
           'aria-modal': 'true',
         },
-        h('h2', { class: 'text-[18px] font-bold' }, title),
-        message && h('p', { class: 'mt-2 text-[15px] leading-snug text-muted' }, message),
+        h('h2', { class: 'text-[20px] font-bold' }, title),
+        message && h('p', { class: 'mt-[10px] text-[15px] leading-snug text-muted' }, message),
         requireText &&
           h(
             'div',
-            { class: 'mt-4' },
-            h('p', { class: 'mb-2 text-[13px] text-muted' }, `Type ${requireText} to confirm.`),
+            { class: 'mt-[20px]' },
+            h('p', { class: 'mb-[10px] text-[14px] text-muted' }, `Type ${requireText} to confirm.`),
             h('input', {
-              class: 'field bg-canvas',
+              class: 'field text-[17px] font-semibold',
               autocapitalize: 'characters',
               autocomplete: 'off',
               ref: (el) => (input = el),
@@ -127,9 +136,9 @@ export function confirm(
           ),
         h(
           'div',
-          { class: 'mt-5 flex flex-col gap-2' },
+          { class: 'mt-[20px] flex flex-col gap-[10px]' },
           confirmBtn,
-          h('button', { class: 'btn-secondary bg-canvas', onclick: () => close(false) }, cancelLabel)
+          h('button', { class: 'btn-secondary', onclick: () => close(false) }, cancelLabel)
         )
       )
     )

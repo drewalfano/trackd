@@ -46,7 +46,7 @@ async function promptSaveAsMeal(entries, defaultName) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-4 pb-2' },
+        { class: 'flex flex-col gap-[20px] pb-[10px]' },
         labelledField({
           label: 'Name',
           hint: 'Saved meals are pinned to Favourites so they stay in one place.',
@@ -86,7 +86,7 @@ export function logScreen() {
 
         return h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h(
             'div',
             { class: 'flex items-end justify-between' },
@@ -95,7 +95,7 @@ export function logScreen() {
               ? h(
                   'button',
                   {
-                    class: 'section-label underline underline-offset-2',
+                    class: 'section-action underline underline-offset-2',
                     onclick: () => promptSaveAsMeal(blockEntries, `Usual ${name.toLowerCase()}`),
                   },
                   'Save as meal'
@@ -127,21 +127,21 @@ export function logScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-4' },
+        { class: 'flex flex-col gap-[30px]' },
 
         h(
           'div',
-          { class: 'flex items-center justify-between px-1 pt-1' },
+          { class: 'flex items-center justify-between' },
           h(
             'button',
-            { class: 'flex items-center gap-1 text-[14px] font-medium', onclick: () => navigate('today') },
+            { class: 'flex items-center gap-[10px] text-[14px] font-medium', onclick: () => navigate('today') },
             icon('chevronLeft', { size: 18 }),
             'Today'
           ),
           h(
             'button',
             {
-              class: 'flex items-center gap-1.5 text-[14px] font-medium text-muted',
+              class: 'flex items-center gap-[10px] text-[14px] font-medium text-muted',
               onclick: () => navigate('history'),
             },
             'History',
@@ -151,15 +151,20 @@ export function logScreen() {
 
         dayHeader({ date: state.date, setDate, title: 'Log' }),
 
-        h(
-          'div',
-          { class: 'card flex items-center justify-between gap-3 px-4 py-3' },
+        // The card wraps a row rather than being one: `.card > * + *` draws the
+        // dividers, so a card that is itself a row would rule between its own
+        // two halves.
+        card(
           h(
-            'span',
-            { class: 'shrink-0 text-[13px] text-muted' },
-            pluralize(entries.length, 'item')
-          ),
-          macroLine(totals, { size: 13 })
+            'div',
+            { class: 'row justify-between' },
+            h(
+              'span',
+              { class: 'shrink-0 text-[15px] font-semibold text-muted' },
+              pluralize(entries.length, 'item')
+            ),
+            macroLine(totals, { size: 15 })
+          )
         ),
 
         ...sections

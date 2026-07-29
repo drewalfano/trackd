@@ -65,7 +65,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
     title: mode === 'edit' ? 'Edit food' : 'Custom food',
     render: (ctx) => {
       const warningsEl = h('div')
-      const kcalHint = h('div', { class: 'text-[12px] text-muted' })
+      const kcalHint = h('div', { class: 'text-[13px] leading-snug text-muted' })
       let kcalInput
 
       const currentPer100 = () => {
@@ -98,7 +98,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
                 h(
                   'button',
                   {
-                    class: 'font-semibold underline underline-offset-2',
+                    class: 'font-bold underline underline-offset-2',
                     onclick: () => {
                       kcalOverridden = false
                       syncCalories()
@@ -219,7 +219,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-2' },
+        { class: 'flex flex-col gap-[20px] pb-[10px]' },
         draft.barcode
           ? notice(`Barcode ${draft.barcode} will be saved with this food.`, {
               iconName: 'barcode',
@@ -250,11 +250,11 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
 
         h(
           'div',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Serving'),
           h(
             'div',
-            { class: 'flex gap-2' },
+            { class: 'flex gap-[10px]' },
             h(
               'div',
               { class: 'flex-1' },
@@ -279,18 +279,18 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
 
         h(
           'div',
-          { class: 'flex flex-col gap-3' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, `Nutrition ${basisLabel}`),
           basisRow,
           h(
             'div',
-            { class: 'flex flex-col gap-3' },
+            { class: 'flex flex-col gap-[10px]' },
             macroField('protein', 'Protein', 'g'),
             macroField('fat', 'Fat', 'g'),
             macroField('carbs', 'Carbs', 'g'),
             h(
               'div',
-              { class: 'flex flex-col gap-1.5' },
+              { class: 'flex flex-col gap-[10px]' },
               macroField('kcal', 'Calories', 'cal'),
               kcalHint
             ),

@@ -36,20 +36,20 @@ function resultRow({ title, subtitle, totals, badge, onclick }) {
       { class: 'min-w-0 flex-1' },
       h(
         'div',
-        { class: 'flex items-center gap-2' },
-        h('span', { class: 'min-w-0 flex-1 truncate text-[15px] font-medium' }, title),
+        { class: 'flex items-center gap-[10px]' },
+        h('span', { class: 'min-w-0 flex-1 truncate text-[17px] font-semibold' }, title),
         badge
           ? h(
               'span',
-              { class: 'shrink-0 rounded-full bg-canvas px-2 py-0.5 text-[11px] font-semibold text-muted' },
+              { class: 'chip h-[26px] shrink-0 bg-canvas px-[10px] text-[13px]' },
               badge
             )
           : null
       ),
-      subtitle ? h('div', { class: 'mt-0.5 truncate text-[12px] text-muted' }, subtitle) : null,
-      totals ? h('div', { class: 'mt-1' }, macroLine(totals, { size: 12 })) : null
+      subtitle ? h('div', { class: 'mt-[2px] truncate text-[14px] text-muted' }, subtitle) : null,
+      totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 15 })) : null
     ),
-    icon('chevronRight', { size: 18, class: 'shrink-0 text-muted' })
+    icon('chevronRight', { size: 20, class: 'shrink-0 text-muted' })
   )
 }
 
@@ -61,11 +61,11 @@ export function pushSearch(ctx, { date, block }) {
       let controller = null
       let query = ''
 
-      const results = h('div', { class: 'flex flex-col gap-4' })
+      const results = h('div', { class: 'flex flex-col gap-[20px]' })
       const offlineNotice = h('div')
 
       const input = h('input', {
-        class: 'w-full text-[17px] font-medium',
+        class: 'w-full min-w-0 text-[17px] font-semibold',
         type: 'search',
         placeholder: 'Search foods',
         enterkeyhint: 'search',
@@ -81,7 +81,7 @@ export function pushSearch(ctx, { date, block }) {
 
       const field = h(
         'div',
-        { class: 'field flex items-center gap-2' },
+        { class: 'field' },
         icon('search', { size: 18, class: 'shrink-0 text-muted' }),
         input
       )
@@ -114,7 +114,7 @@ export function pushSearch(ctx, { date, block }) {
         const local = await searchFoods(q, 20)
         const localCard = h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Your library'),
           card(
             local.length
@@ -137,7 +137,7 @@ export function pushSearch(ctx, { date, block }) {
         if (!isOnline()) return
 
         remoteSlot.replaceChildren(
-          h('div', { class: 'py-6 text-center text-[14px] text-muted' }, 'Searching…')
+          h('div', { class: 'py-[30px] text-center text-[15px] text-muted' }, 'Searching…')
         )
 
         controller = new AbortController()
@@ -149,7 +149,7 @@ export function pushSearch(ctx, { date, block }) {
           remoteSlot.replaceChildren(
             h(
               'section',
-              { class: 'flex flex-col gap-2' },
+              { class: 'flex flex-col gap-[10px]' },
               h('div', { class: 'section-label' }, 'Open Food Facts'),
               card(
                 fresh.length
@@ -203,7 +203,7 @@ export function pushSearch(ctx, { date, block }) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-4 pb-2' },
+        { class: 'flex flex-col gap-[20px] pb-[10px]' },
         field,
         offlineNotice,
         results,

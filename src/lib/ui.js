@@ -2,11 +2,15 @@ import { h, countTo } from './dom.js'
 import { icon } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
 import { g, kcal } from './format.js'
-import { formatDateSub, formatDayLabel, isFuture, todayStr } from './dates.js'
+import { formatDateSub, formatDayLabel, isFuture } from './dates.js'
 
 /**
  * The component vocabulary. Everything visual that appears on more than one
  * screen lives here, so the visual system has exactly one place to change.
+ *
+ * Layout spacing is on a 10px grid throughout: 10 inside a group, 20 between
+ * groups, 30 between sections. The only sub-10 values are typographic — a
+ * heading and the line directly under it are one unit, not two.
  */
 
 const MACRO_VAR = {
@@ -14,6 +18,13 @@ const MACRO_VAR = {
   protein: 'var(--color-protein)',
   fat: 'var(--color-fat)',
   carbs: 'var(--color-carbs)',
+}
+
+const MACRO_EDGE = {
+  kcal: 'var(--color-kcal-edge)',
+  protein: 'var(--color-protein-edge)',
+  fat: 'var(--color-fat-edge)',
+  carbs: 'var(--color-carbs-edge)',
 }
 
 export const macroColor = (macro) => MACRO_VAR[macro]
@@ -41,19 +52,19 @@ export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle
 
   return h(
     'header',
-    { class: 'flex items-center gap-2 px-4 pb-4 pt-2' },
+    { class: 'flex items-center gap-[10px]' },
     onPrev
       ? h(
           'button',
           { class: 'icon-btn', 'aria-label': 'Previous day', onclick: onPrev },
-          icon('chevronLeft', { size: 20 })
+          icon('chevronLeft', { size: 20, stroke: 2 })
         )
-      : h('div', { class: 'w-9' }),
+      : h('div', { class: 'w-11 shrink-0' }),
     h(
       'button',
       {
-        class: 'relative min-w-0 flex-1 py-1',
-        style: future ? { opacity: '0.55' } : null,
+        class: 'relative min-w-0 flex-1',
+        style: future ? { opacity: '0.5' } : null,
         disabled: !onPickDate,
         onclick: (e) => {
           const input = e.currentTarget.querySelector('input')
@@ -63,7 +74,11 @@ export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle
           else input.click()
         },
       },
-      h('div', { class: 'truncate text-[17px] font-bold leading-tight' }, title),
+      h(
+        'div',
+        { class: 'truncate text-[28px] font-bold leading-tight tracking-[-0.02em]' },
+        title
+      ),
       h(
         'div',
         { class: 'truncate text-[13px] leading-tight text-muted' },
@@ -75,9 +90,9 @@ export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle
       ? h(
           'button',
           { class: 'icon-btn', 'aria-label': 'Next day', onclick: onNext },
-          icon('chevronRight', { size: 20 })
+          icon('chevronRight', { size: 20, stroke: 2 })
         )
-      : h('div', { class: 'w-9' })
+      : h('div', { class: 'w-11 shrink-0' })
   )
 }
 
@@ -92,14 +107,24 @@ export function dayHeader({ date, setDate, title }) {
   })
 }
 
+/** Plain screen title for the destinations that do not navigate by day. */
+export function pageTitle(title, subtitle) {
+  return h(
+    'div',
+    {},
+    h('h1', { class: 'text-[28px] font-bold leading-tight tracking-[-0.02em]' }, title),
+    subtitle ? h('p', { class: 'text-[14px] text-muted' }, subtitle) : null
+  )
+}
+
 /* -------------------------------------------------------------- macro line */
 
 /**
  * `650 cal · 35 P · 22 F · 70 C`
- * Numbers stay in ink so the data is readable; only the unit letter carries
- * colour. Fixed order, always.
+ * Numbers stay in ink so the data is readable; only the unit carries colour.
+ * Fixed order, always.
  */
-export function macroLine(totals, { size = 13, muted = false, omit = [] } = {}) {
+export function macroLine(totals, { size = 15, muted = false, omit = [] } = {}) {
   const parts = []
   const shown = MACRO_ORDER.filter((m) => !omit.includes(m))
   shown.forEach((macro, i) => {
@@ -124,7 +149,7 @@ export function macroLine(totals, { size = 13, muted = false, omit = [] } = {}) 
   return h(
     'div',
     {
-      class: 'flex flex-wrap items-baseline gap-x-1.5 font-medium',
+      class: 'flex flex-wrap items-baseline gap-x-[6px] font-medium',
       style: { fontSize: `${size}px` },
       'aria-label': `${kcal(totals.kcal)} calories, ${g(totals.protein)} grams protein, ${g(
         totals.fat
@@ -145,8 +170,9 @@ export function macroLine(totals, { size = 13, muted = false, omit = [] } = {}) 
 const lastPct = new Map()
 
 /**
- * A track and a fill. Going over fills the track and shows the excess as a chip
- * inside the fill — no colour change, no error state. Over is information.
+ * A track and an inset fill. Going over fills the track and shows the excess as
+ * a chip inside the fill — no colour change, no error state. Over is
+ * information.
  */
 export function progressBar({ value, target, macro, animate = true, key = macro }) {
   const { pct, over } = progress(value, target)
@@ -160,14 +186,17 @@ export function progressBar({ value, target, macro, animate = true, key = macro 
       style: {
         width: `${from}%`,
         background: MACRO_VAR[macro],
+        borderColor: MACRO_EDGE[macro],
+        // A 2% sliver would render as a broken-looking nub; below the width of
+        // its own cap the fill is better shown as nothing at all.
+        minWidth: pct > 0 ? '24px' : '0px',
       },
     },
     over > 0
       ? h(
           'span',
           {
-            class: 'mr-1 rounded-full px-1.5 text-[10px] font-semibold leading-[13px] text-white',
-            style: { background: 'color-mix(in srgb, #000 26%, transparent)' },
+            class: 'mr-[7px] text-[12px] font-bold leading-none text-white',
           },
           `+${Math.round(over)}`
         )
@@ -190,20 +219,31 @@ export function progressBar({ value, target, macro, animate = true, key = macro 
   return track
 }
 
-/** Label, `consumed / target` beneath, then the bar. Used for P, F, C. */
+/**
+ * Coloured macro heading, `consumed / target` beneath it, then the bar.
+ * The heading and its numbers are one typographic unit; the 10px gap is
+ * between that unit and the bar.
+ */
 export function macroRow({ macro, value, target }) {
   return h(
     'div',
-    { class: 'flex flex-col gap-1.5' },
+    { class: 'flex flex-col gap-[10px]' },
     h(
       'div',
-      { class: 'flex items-baseline justify-between' },
-      h('span', { class: 'text-[14px] font-semibold' }, MACRO_META[macro].label),
+      {},
       h(
-        'span',
-        { class: 'text-[13px] text-muted' },
-        `${g(value)} / ${g(target)}`,
-        h('span', { class: 'ml-0.5' }, 'g')
+        'div',
+        {
+          class: 'text-[20px] font-bold leading-tight tracking-[-0.01em]',
+          style: { color: MACRO_VAR[macro] },
+        },
+        MACRO_META[macro].label
+      ),
+      h(
+        'div',
+        { class: 'text-[15px] leading-tight' },
+        h('span', { class: 'font-bold' }, `${g(value)}g`),
+        h('span', { class: 'text-muted' }, ` / ${g(target)}g`)
       )
     ),
     progressBar({ value, target, macro })
@@ -211,8 +251,8 @@ export function macroRow({ macro, value, target }) {
 }
 
 /**
- * The calories block: label, display number with the target trailing small and
- * grey, then a full-width bar.
+ * The calories block: the number at display size with the target trailing small
+ * and grey, the label beneath it, then a full-width bar.
  */
 let lastKcal = 0
 
@@ -226,13 +266,24 @@ export function caloriesBlock({ value, target }) {
 
   return h(
     'div',
-    { class: 'flex flex-col gap-2' },
-    h('span', { class: 'text-[14px] font-semibold' }, 'Calories'),
+    { class: 'flex flex-col gap-[10px]' },
     h(
       'div',
-      { class: 'flex items-baseline gap-1.5' },
-      number,
-      h('span', { class: 'text-[15px] font-medium text-muted' }, `/ ${kcal(target)}`)
+      {},
+      h(
+        'div',
+        { class: 'flex items-baseline gap-[8px]' },
+        number,
+        h('span', { class: 'text-[20px] font-medium text-muted' }, `/ ${kcal(target)}`)
+      ),
+      h(
+        'div',
+        {
+          class: 'text-[20px] font-bold leading-tight tracking-[-0.01em]',
+          style: { color: MACRO_VAR.kcal },
+        },
+        'Calories'
+      )
     ),
     progressBar({ value, target, macro: 'kcal' })
   )
@@ -247,30 +298,34 @@ export function card(...children) {
 export function sectionLabel(text, right) {
   return h(
     'div',
-    { class: 'flex items-end justify-between' },
+    { class: 'flex items-center justify-between gap-[10px]' },
     h('div', { class: 'section-label' }, text),
     right || null
   )
 }
 
 /**
- * A tappable row inside a grouped card. `right` sits at the end, before the
- * chevron. Keeps the 44px minimum without every caller remembering to.
+ * A row inside a grouped card. Single-line rows are exactly 48px; rows with a
+ * subtitle grow. `right` sits at the end, before the chevron.
  */
 export function listRow({ title, subtitle, right, onclick, chevron = false, leading, dim = false }) {
   const tag = onclick ? 'button' : 'div'
   return h(
     tag,
-    { class: 'row' + (dim ? ' opacity-60' : ''), onclick, type: onclick ? 'button' : null },
+    {
+      class: `row${subtitle ? '' : ' row-single'}${dim ? ' opacity-60' : ''}`,
+      onclick,
+      type: onclick ? 'button' : null,
+    },
     leading || null,
     h(
       'div',
       { class: 'min-w-0 flex-1' },
-      h('div', { class: 'truncate text-[15px] font-medium' }, title),
-      subtitle ? h('div', { class: 'mt-0.5 truncate text-[13px] text-muted' }, subtitle) : null
+      h('div', { class: 'truncate text-[17px] font-semibold' }, title),
+      subtitle ? h('div', { class: 'truncate text-[14px] text-muted' }, subtitle) : null
     ),
     right || null,
-    chevron ? icon('chevronRight', { size: 18, class: 'text-muted shrink-0' }) : null
+    chevron ? icon('chevronRight', { size: 20, class: 'text-muted shrink-0' }) : null
   )
 }
 
@@ -278,11 +333,11 @@ export function emptyRow(text, { action, onAction } = {}) {
   return h(
     'div',
     { class: 'row justify-between' },
-    h('span', { class: 'text-[14px] text-muted' }, text),
+    h('span', { class: 'text-[15px] text-muted' }, text),
     action
       ? h(
           'button',
-          { class: 'text-[14px] font-semibold underline underline-offset-2', onclick: onAction },
+          { class: 'text-[15px] font-bold underline underline-offset-2', onclick: onAction },
           action
         )
       : null
@@ -293,20 +348,20 @@ export function emptyRow(text, { action, onAction } = {}) {
 export function emptyState(title, body, action) {
   return h(
     'div',
-    { class: 'flex flex-col items-center gap-2 px-8 py-14 text-center' },
-    h('p', { class: 'text-[16px] font-semibold' }, title),
-    h('p', { class: 'text-[14px] leading-snug text-muted' }, body),
+    { class: 'flex flex-col items-center gap-[10px] px-[20px] py-[50px] text-center' },
+    h('p', { class: 'text-[17px] font-bold' }, title),
+    h('p', { class: 'text-[15px] leading-snug text-muted' }, body),
     action || null
   )
 }
 
 /* ---------------------------------------------------------------- controls */
 
-/** Pill segmented control. Selected segment goes solid ink. */
+/** Scrolling row of pill chips. Selected chip goes solid ink. */
 export function segmented({ options, value, onChange, class: cls = '' }) {
   return h(
     'div',
-    { class: `flex gap-2 overflow-x-auto no-scrollbar ${cls}` },
+    { class: `flex gap-[10px] overflow-x-auto no-scrollbar ${cls}` },
     options.map((opt) =>
       h(
         'button',
@@ -321,21 +376,17 @@ export function segmented({ options, value, onChange, class: cls = '' }) {
   )
 }
 
-/**
- * Full-width segmented control that splits the row evenly.
- * `on` picks the track colour: surface against the canvas, canvas inside a card.
- */
-export function segmentedWide({ options, value, onChange, on = 'canvas' }) {
+/** Full-width segmented control that splits the row evenly. */
+export function segmentedWide({ options, value, onChange }) {
   return h(
     'div',
-    { class: `flex gap-1 rounded-full p-1 ${on === 'card' ? 'bg-canvas' : 'bg-surface'}` },
+    { class: 'segmented' },
     options.map((opt) =>
       h(
         'button',
         {
-          class:
-            'flex-1 rounded-full py-2 text-[14px] font-semibold transition-colors ' +
-            (opt.value === value ? 'bg-ink text-surface' : 'text-muted'),
+          class: 'segment',
+          'aria-pressed': String(opt.value === value),
           onclick: () => onChange(opt.value),
         },
         opt.label
@@ -347,16 +398,16 @@ export function segmentedWide({ options, value, onChange, on = 'canvas' }) {
 export function labelledField({ label, hint, children }) {
   return h(
     'label',
-    { class: 'flex flex-col gap-1.5' },
-    h('span', { class: 'text-[13px] font-semibold text-muted' }, label),
+    { class: 'flex flex-col gap-[10px]' },
+    h('span', { class: 'text-[15px] font-bold' }, label),
     children,
-    hint ? h('span', { class: 'text-[12px] text-muted' }, hint) : null
+    hint ? h('span', { class: 'text-[13px] text-muted' }, hint) : null
   )
 }
 
 export function numberInput({ value, onInput, placeholder, suffix, step = 'any', ...rest }) {
   const input = h('input', {
-    class: 'w-full text-[17px] font-medium',
+    class: 'w-full min-w-0 text-[17px] font-semibold',
     type: 'number',
     inputmode: 'decimal',
     step,
@@ -367,9 +418,9 @@ export function numberInput({ value, onInput, placeholder, suffix, step = 'any',
   })
   const wrapper = h(
     'div',
-    { class: 'field flex items-center gap-2' },
+    { class: 'field' },
     input,
-    suffix ? h('span', { class: 'text-[14px] text-muted' }, suffix) : null
+    suffix ? h('span', { class: 'shrink-0 text-[15px] text-muted' }, suffix) : null
   )
   // Callers that need to write a new value back (the unit toggle converting
   // 2 servings into 60 g) need the field itself, not the wrapper.
@@ -378,14 +429,17 @@ export function numberInput({ value, onInput, placeholder, suffix, step = 'any',
 }
 
 export function textInput({ value, onInput, placeholder, ...rest }) {
-  return h('input', {
-    class: 'field text-[17px] font-medium',
+  const input = h('input', {
+    class: 'w-full min-w-0 text-[17px] font-semibold',
     type: 'text',
     value: value ?? '',
     placeholder: placeholder ?? '',
     oninput: (e) => onInput?.(e.target.value, e),
     ...rest,
   })
+  const wrapper = h('div', { class: 'field' }, input)
+  wrapper.input = input
+  return wrapper
 }
 
 /** Time-block picker, prefilled by the clock but always overrideable. */
@@ -407,17 +461,17 @@ export function blockSelector({ value, onChange, blockNames }) {
 export function notice(text, { iconName = 'info', action, onAction } = {}) {
   return h(
     'div',
-    { class: 'flex items-start gap-2.5 rounded-2xl bg-surface px-4 py-3' },
-    icon(iconName, { size: 18, class: 'mt-px shrink-0 text-muted' }),
+    { class: 'panel flex items-start gap-[10px] px-[20px] py-[15px]' },
+    icon(iconName, { size: 20, class: 'mt-px shrink-0 text-muted' }),
     h(
       'div',
-      { class: 'flex-1 text-[13px] leading-snug' },
+      { class: 'flex-1 text-[14px] leading-snug' },
       text,
       action
         ? h(
             'button',
             {
-              class: 'mt-1.5 block text-[13px] font-semibold underline underline-offset-2',
+              class: 'mt-[10px] block text-[14px] font-bold underline underline-offset-2',
               onclick: onAction,
             },
             action
@@ -430,7 +484,7 @@ export function notice(text, { iconName = 'info', action, onAction } = {}) {
 export function spinner(label = 'Loading') {
   return h(
     'div',
-    { class: 'flex items-center justify-center gap-2 py-8 text-[14px] text-muted' },
+    { class: 'flex items-center justify-center py-[40px] text-[15px] text-muted' },
     label + '…'
   )
 }

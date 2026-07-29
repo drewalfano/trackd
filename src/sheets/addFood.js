@@ -27,45 +27,47 @@ import { pushScan } from './scan.js'
 function pickRow({ title, subtitle, totals, onLog, onOpen }) {
   return h(
     'div',
-    { class: 'row gap-2 p-0' },
+    { class: 'flex items-center' },
     h(
       'button',
       { class: 'row min-w-0 flex-1', onclick: onLog },
       h(
         'div',
         { class: 'min-w-0 flex-1' },
-        h('div', { class: 'truncate text-[15px] font-medium' }, title),
-        h(
-          'div',
-          { class: 'mt-0.5 flex items-center gap-2' },
-          h('span', { class: 'shrink-0 text-[12px] text-muted' }, subtitle)
-        ),
-        totals ? h('div', { class: 'mt-1' }, macroLine(totals, { size: 12 })) : null
+        h('div', { class: 'truncate text-[17px] font-semibold leading-tight' }, title),
+        h('div', { class: 'mt-[2px] truncate text-[14px] text-muted' }, subtitle),
+        totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 15 })) : null
       )
     ),
     h(
       'button',
       {
-        class: 'mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas',
+        class: 'icon-btn icon-btn-sm mr-[20px] bg-canvas',
         'aria-label': `Adjust ${title}`,
         onclick: onOpen,
       },
-      icon('pencil', { size: 16 })
+      icon('pencil', { size: 17 })
     )
   )
 }
 
+/**
+ * Route picker, not a tab set. Scan is the default and renders solid; the other
+ * two sit on surface with an outline like every other unselected control.
+ */
 function actionButton({ iconName, label, selected, onclick }) {
   return h(
     'button',
     {
       class:
-        'flex flex-1 flex-col items-center justify-center gap-1.5 rounded-2xl py-4 ' +
-        (selected ? 'bg-ink text-surface' : 'bg-surface text-ink'),
+        'flex flex-1 flex-col items-center justify-center gap-[10px] rounded-[24px] py-[20px] ' +
+        (selected
+          ? 'border border-ink bg-ink text-canvas'
+          : 'border border-outline bg-surface text-ink'),
       onclick,
     },
-    icon(iconName, { size: 22 }),
-    h('span', { class: 'text-[13px] font-semibold' }, label)
+    icon(iconName, { size: 26 }),
+    h('span', { class: 'text-[15px] font-bold' }, label)
   )
 }
 
@@ -140,7 +142,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
         favouritesCard.replaceChildren(
           h(
             'section',
-            { class: 'flex flex-col gap-2' },
+            { class: 'flex flex-col gap-[10px]' },
             h('div', { class: 'section-label' }, 'Your Favourites'),
             card(
               favNodes.length
@@ -157,7 +159,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
         recentsCard.replaceChildren(
           h(
             'section',
-            { class: 'flex flex-col gap-2' },
+            { class: 'flex flex-col gap-[10px]' },
             h('div', { class: 'section-label' }, 'Recents'),
             card(
               recents.length
@@ -190,7 +192,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
 
       const routeRow = h(
         'div',
-        { class: 'flex gap-2' },
+        { class: 'flex gap-[10px]' },
         actionButton({
           iconName: 'scan',
           label: 'Scan',
@@ -209,7 +211,13 @@ export async function openAddFood({ date = state.date, block } = {}) {
         })
       )
 
-      return h('div', { class: 'flex flex-col gap-5 pb-2' }, routeRow, favouritesCard, recentsCard)
+      return h(
+        'div',
+        { class: 'flex flex-col gap-[30px] pb-[10px]' },
+        routeRow,
+        favouritesCard,
+        recentsCard
+      )
     },
   })
 }

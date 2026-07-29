@@ -153,7 +153,7 @@ export function weightScreen() {
 
       const entryBlock = h(
         'section',
-        { class: 'flex flex-col gap-2' },
+        { class: 'flex flex-col gap-[10px]' },
         h(
           'div',
           { class: 'flex items-end justify-between' },
@@ -162,7 +162,7 @@ export function weightScreen() {
             ? h(
                 'button',
                 {
-                  class: 'section-label underline underline-offset-2',
+                  class: 'section-action underline underline-offset-2',
                   onclick: async () => {
                     const ok = await confirm({
                       title: 'Remove today’s weight?',
@@ -176,11 +176,11 @@ export function weightScreen() {
               )
             : null
         ),
-        h('div', { class: 'flex items-center gap-2' }, h('div', { class: 'flex-1' }, input), h('div', { class: 'w-[104px]' }, saveBtn)),
+        h('div', { class: 'flex items-center gap-[10px]' }, h('div', { class: 'flex-1' }, input), h('div', { class: 'w-[104px]' }, saveBtn)),
         todayEntry
           ? h(
               'p',
-              { class: 'px-1 text-[12px] text-muted' },
+              { class: 'px-0 text-[13px] text-muted' },
               'Saving again replaces today’s value rather than adding a second one.'
             )
           : null
@@ -189,7 +189,7 @@ export function weightScreen() {
       if (!weights.length) {
         return h(
           'div',
-          { class: 'flex flex-col gap-5 pb-4' },
+          { class: 'flex flex-col gap-[20px] pb-[20px]' },
           heading(),
           emptyState(
             'No weigh-ins yet',
@@ -219,12 +219,12 @@ export function weightScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-4' },
+        { class: 'flex flex-col gap-[20px] pb-[20px]' },
         heading(),
 
         h(
           'section',
-          { class: 'card flex flex-col gap-4 px-4 py-5' },
+          { class: 'panel flex flex-col gap-[20px] px-[20px] py-[20px]' },
           h(
             'div',
             { class: 'flex items-end justify-between' },
@@ -234,11 +234,11 @@ export function weightScreen() {
               h('span', { class: 'text-[13px] font-semibold text-muted' }, 'Current'),
               h(
                 'div',
-                { class: 'flex items-baseline gap-1' },
+                { class: 'flex items-baseline gap-[10px]' },
                 h('span', { class: 'text-display font-bold' }, fmtWeight(latest.kg, unit)),
                 h('span', { class: 'text-[14px] font-medium text-muted' }, unit)
               ),
-              h('span', { class: 'text-[12px] text-muted' }, formatDayLabel(latest.date))
+              h('span', { class: 'text-[13px] text-muted' }, formatDayLabel(latest.date))
             ),
             h(
               'div',
@@ -246,7 +246,7 @@ export function weightScreen() {
               h('span', { class: 'text-[13px] font-semibold text-muted' }, 'Trend'),
               h(
                 'div',
-                { class: 'flex items-baseline gap-1' },
+                { class: 'flex items-baseline gap-[10px]' },
                 h(
                   'span',
                   { class: 'text-[26px] font-bold' },
@@ -256,7 +256,7 @@ export function weightScreen() {
               ),
               h(
                 'span',
-                { class: 'text-[12px] text-muted' },
+                { class: 'text-[13px] text-muted' },
                 rate == null
                   ? 'needs more data'
                   : `${signed(kgToUnit(rate, unit))} ${unit} / week`
@@ -267,7 +267,7 @@ export function weightScreen() {
           chartNode ||
             h(
               'div',
-              { class: 'py-6 text-center text-[13px] text-muted' },
+              { class: 'py-[30px] text-center text-[13px] text-muted' },
               'Two readings are needed before there is anything to draw.'
             ),
 
@@ -291,7 +291,7 @@ export function weightScreen() {
 function heading() {
   return h(
     'div',
-    { class: 'px-1 pt-2' },
+    { class: 'px-0 pt-[10px]' },
     h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'Weight')
   )
 }

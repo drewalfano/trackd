@@ -38,10 +38,7 @@ export function applyTheme(theme) {
 
 /* --------------------------------------------------------------- app shell */
 
-const view = h('main', {
-  class: 'mx-auto w-full max-w-md px-4 pt-2 pad-tabbar safe-t',
-  id: 'view',
-})
+const view = h('main', { class: 'screen', id: 'view' })
 
 let currentScreen = null
 
@@ -53,10 +50,30 @@ function show(factory) {
 }
 
 const TABS = [
-  { path: 'today', label: 'Today', iconName: 'home' },
-  { path: 'weight', label: 'Weight', iconName: 'weight' },
-  { path: 'settings', label: 'Settings', iconName: 'gear' },
+  { path: 'today', label: 'Today', iconName: 'calendarFilled' },
+  { path: 'weight', label: 'Weight', iconName: 'weightFilled' },
+  { path: 'settings', label: 'Settings', iconName: 'gearFilled' },
 ]
+
+/**
+ * Progressive blur and a gradient scrim behind the floating bar.
+ *
+ * Content scrolls underneath rather than stopping at it, so without this the
+ * bar sits on top of live text and both become hard to read. The blur ramps
+ * across four banded layers and the scrim gives the bar an edge to sit against.
+ * Purely decorative, so it is hidden from assistive tech and ignores pointers.
+ */
+function tabBarFade() {
+  return h(
+    'div',
+    { class: 'tabbar-fade', 'aria-hidden': 'true' },
+    h('span'),
+    h('span'),
+    h('span'),
+    h('span'),
+    h('span')
+  )
+}
 
 /**
  * The add button sits outside the pill, to its left, and is always available.
@@ -66,51 +83,41 @@ function tabBar() {
   const tabButtons = TABS.map((tab) =>
     h(
       'button',
-      {
-        class: 'flex flex-1 flex-col items-center justify-center gap-0.5 rounded-full py-2',
-        'data-tab': tab.path,
-        onclick: () => navigate(tab.path),
-      },
-      icon(tab.iconName, { size: 21 }),
-      h('span', { class: 'text-[10px] font-semibold tracking-wide' }, tab.label)
+      { class: 'tab', 'data-tab': tab.path, onclick: () => navigate(tab.path) },
+      icon(tab.iconName, { size: 22 }),
+      h('span', { class: 'text-[11px] font-bold' }, tab.label)
     )
   )
 
   return h(
     'nav',
     {
-      class: 'pointer-events-none fixed inset-x-0 bottom-0 z-40 px-4 pb-3 safe-b',
-      style: { paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' },
+      class: 'pointer-events-none fixed inset-x-0 bottom-0 z-40 px-[20px]',
+      style: { paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))' },
     },
     h(
       'div',
-      { class: 'pointer-events-auto mx-auto flex max-w-md items-center gap-3' },
+      { class: 'pointer-events-auto mx-auto flex max-w-[430px] items-center gap-[10px]' },
       h(
         'button',
-        {
-          class:
-            'flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-ink text-surface',
-          'aria-label': 'Add food',
-          onclick: () => openAddFood(),
-        },
-        icon('plus', { size: 26, stroke: 2 })
+        { class: 'add-btn', 'aria-label': 'Add food', onclick: () => openAddFood() },
+        icon('plus', { size: 28, stroke: 2.25 })
       ),
-      h('div', { class: 'flex h-[60px] flex-1 items-stretch rounded-full bg-surface px-1' }, tabButtons)
+      h('div', { class: 'tabbar' }, tabButtons)
     )
   )
 }
 
 const nav = tabBar()
+const fade = tabBarFade()
 
-/** The active tab is ink; the rest are muted. No pill, no underline. */
+/** The active tab gets a canvas pill with an ink edge; the rest stay muted. */
 function syncTabs(path) {
   const root = path.split('/')[0]
   const active =
     root === 'log' || root === 'history' ? 'today' : root === 'foods' ? 'settings' : root
   for (const btn of nav.querySelectorAll('[data-tab]')) {
-    const on = btn.dataset.tab === active
-    btn.style.color = on ? 'var(--color-ink)' : 'var(--color-muted)'
-    btn.setAttribute('aria-current', on ? 'page' : 'false')
+    btn.setAttribute('aria-current', btn.dataset.tab === active ? 'page' : 'false')
   }
 }
 
@@ -234,6 +241,7 @@ async function boot() {
 
   clear(app)
   app.appendChild(view)
+  app.appendChild(fade)
   app.appendChild(nav)
 
   defineRoutes()

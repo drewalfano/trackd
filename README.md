@@ -4,8 +4,10 @@ A personal macro tracker. Installable PWA, single user, local first. No accounts
 no backend, no subscription — every byte lives on the device.
 
 Built to replace a paid MacroFactor subscription, and to be a UX case study with
-a real user and documented iteration. See [`CHANGELOG-visual.md`](CHANGELOG-visual.md)
-for the visual system and every change made to it, and [`NOTES-friction.md`](NOTES-friction.md)
+a real user and documented iteration. The visual system is white page, grey
+outlined cards, a 24px radius, and a 10px spacing grid; colour appears only as
+macro identity. See [`CHANGELOG-visual.md`](CHANGELOG-visual.md)
+for the full system and every change made to it, and [`NOTES-friction.md`](NOTES-friction.md)
 for the running log of things that broke or annoyed in daily use.
 
 ## Running it

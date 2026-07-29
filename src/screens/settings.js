@@ -67,10 +67,10 @@ function editBlocksSheet(settings) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-2' },
+        { class: 'flex flex-col gap-[20px] pb-[10px]' },
         h(
           'div',
-          { class: 'flex flex-col gap-3' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Names'),
           ...names.map((name, i) =>
             textInput({ value: name, onInput: (v) => (names[i] = v) })
@@ -78,7 +78,7 @@ function editBlocksSheet(settings) {
         ),
         h(
           'div',
-          { class: 'flex flex-col gap-3' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'When a new entry defaults to each block'),
           labelledField({
             label: `${names[1]} starts at`,
@@ -128,7 +128,7 @@ function favouritesSheet() {
                 h('div', { class: 'truncate text-[15px] font-medium' }, item.name),
                 h(
                   'div',
-                  { class: 'text-[12px] text-muted' },
+                  { class: 'text-[13px] text-muted' },
                   fav.type === 'meal' ? pluralize(item.items.length, 'item') : 'Food'
                 )
               ),
@@ -180,7 +180,7 @@ function favouritesSheet() {
           card(rows.length ? rows : emptyRow('Nothing pinned yet.')),
           h(
             'p',
-            { class: 'px-1 pt-3 text-[12px] leading-snug text-muted' },
+            { class: 'px-0 pt-[10px] text-[13px] leading-snug text-muted' },
             'Favourites never re-sort themselves. Fixed positions are what make the tap ' +
               'muscle memory, so the order here is the order in the add sheet.'
           )
@@ -216,7 +216,7 @@ function mealsSheet() {
                       h('div', { class: 'truncate text-[15px] font-medium' }, meal.name),
                       h(
                         'div',
-                        { class: 'text-[12px] text-muted' },
+                        { class: 'text-[13px] text-muted' },
                         `${pluralize(meal.items.length, 'item')} · used ${meal.useCount || 0}×`
                       )
                     ),
@@ -294,7 +294,7 @@ function promptText(title, initial) {
       )
       return h(
         'div',
-        { class: 'pb-2' },
+        { class: 'pb-[10px]' },
         textInput({ value, autofocus: true, onInput: (v) => (value = v) })
       )
     },
@@ -343,7 +343,7 @@ function openImportSheet(data) {
     title: 'Import data',
     render: (ctx) => {
       let mode = 'merge'
-      const body = h('div', { class: 'flex flex-col gap-4' })
+      const body = h('div', { class: 'flex flex-col gap-[20px]' })
 
       async function paint() {
         let counts
@@ -361,7 +361,7 @@ function openImportSheet(data) {
             h('div', { class: 'flex-1 text-[15px] font-medium capitalize' }, store),
             h(
               'div',
-              { class: 'text-right text-[12px] leading-tight text-muted' },
+              { class: 'text-right text-[13px] leading-tight text-muted' },
               h('div', {}, mode === 'replace' ? `${c.existing} → ${c.after}` : `${c.existing} → ${c.after}`),
               h(
                 'div',
@@ -396,7 +396,7 @@ function openImportSheet(data) {
           data.exportedAt
             ? h(
                 'p',
-                { class: 'px-1 text-[12px] text-muted' },
+                { class: 'px-0 text-[13px] text-muted' },
                 `Exported ${new Date(data.exportedAt).toLocaleString()}`
               )
             : null
@@ -431,7 +431,7 @@ function openImportSheet(data) {
       )
 
       paint()
-      return h('div', { class: 'pb-2' }, body)
+      return h('div', { class: 'pb-[10px]' }, body)
     },
   })
 }
@@ -464,7 +464,7 @@ export function settingsScreen() {
         },
       })
 
-      const derivedHint = h('div', { class: 'px-1 text-[12px] text-muted' })
+      const derivedHint = h('div', { class: 'px-0 text-[13px] text-muted' })
 
       const syncDerived = () => {
         const derived = kcalFromMacros(targets)
@@ -521,27 +521,27 @@ export function settingsScreen() {
       const prefRow = (label, control) =>
         h(
           'div',
-          { class: 'row flex-col items-stretch gap-2' },
+          { class: 'row flex-col items-stretch gap-[10px]' },
           h('span', { class: 'text-[15px] font-medium' }, label),
           control
         )
 
       return h(
         'div',
-        { class: 'flex flex-col gap-6 pb-4' },
+        { class: 'flex flex-col gap-[30px] pb-[20px]' },
         h(
           'div',
-          { class: 'px-1 pt-2' },
+          { class: 'px-0 pt-[10px]' },
           h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'Settings')
         ),
 
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Targets'),
           h(
             'div',
-            { class: 'flex flex-col gap-3' },
+            { class: 'flex flex-col gap-[10px]' },
             labelledField({ label: 'Calories', children: kcalField }),
             derivedHint,
             macroField('protein', 'Protein'),
@@ -552,7 +552,7 @@ export function settingsScreen() {
 
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Foods'),
           card(
             listRow({
@@ -578,7 +578,7 @@ export function settingsScreen() {
 
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Preferences'),
           card(
             prefRow(
@@ -641,7 +641,7 @@ export function settingsScreen() {
 
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Data'),
           card(
             listRow({
@@ -679,7 +679,7 @@ export function settingsScreen() {
           ),
           h(
             'p',
-            { class: 'px-1 pt-1 text-[12px] leading-snug text-muted' },
+            { class: 'px-0 pt-[10px] text-[13px] leading-snug text-muted' },
             'Export is the only backup. Clearing this browser’s site data deletes everything ' +
               'here, and nothing is stored anywhere else.'
           )
@@ -687,7 +687,7 @@ export function settingsScreen() {
 
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           card(
             listRow({
               title: 'Version',

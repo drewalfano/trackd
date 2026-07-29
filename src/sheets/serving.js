@@ -160,7 +160,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
       ctx.setFooter(
         h(
           'div',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           submitBtn,
           onDelete &&
             h(
@@ -186,10 +186,10 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-2' },
+        { class: 'flex flex-col gap-[20px] pb-[10px]' },
         h(
           'div',
-          { class: 'flex items-start gap-3' },
+          { class: 'flex items-start gap-[10px]' },
           h(
             'div',
             { class: 'min-w-0 flex-1' },
@@ -201,10 +201,10 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
 
         h(
           'div',
-          { class: 'card flex flex-col gap-2 px-4 py-4' },
+          { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' },
           h(
             'div',
-            { class: 'flex items-baseline gap-1.5' },
+            { class: 'flex items-baseline gap-[10px]' },
             kcalEl,
             h('span', { class: 'text-[14px] font-medium text-muted' }, 'cal')
           ),
@@ -220,7 +220,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
 
         h(
           'div',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Block'),
           blockRow
         ),
@@ -228,7 +228,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
         mode === 'edit'
           ? h(
               'div',
-              { class: 'flex flex-col gap-2' },
+              { class: 'flex flex-col gap-[10px]' },
               h('div', { class: 'section-label' }, 'Day'),
               dateRow
             )
@@ -311,7 +311,7 @@ export async function openEditEntry(entry) {
         ctx.setFooter(
           h(
             'div',
-            { class: 'flex flex-col gap-2' },
+            { class: 'flex flex-col gap-[10px]' },
             h(
               'button',
               {
@@ -340,16 +340,16 @@ export async function openEditEntry(entry) {
 
         return h(
           'div',
-          { class: 'flex flex-col gap-5 pb-2' },
+          { class: 'flex flex-col gap-[20px] pb-[10px]' },
           h('div', { class: 'text-[17px] font-bold' }, entry.foodName || 'Deleted food'),
           h(
             'div',
-            { class: 'card px-4 py-4' },
+            { class: 'card px-[20px] py-[20px]' },
             h('div', { class: 'text-[13px] leading-snug text-muted' },
               'This food was deleted from your library, so the amount can no longer be recalculated. The numbers below are the ones recorded when you logged it.'),
-            h('div', { class: 'mt-3' }, macroLine(entry.computed, { size: 14 }))
+            h('div', { class: 'mt-[10px]' }, macroLine(entry.computed, { size: 14 }))
           ),
-          h('div', { class: 'flex flex-col gap-2' }, h('div', { class: 'section-label' }, 'Block'), blockRow)
+          h('div', { class: 'flex flex-col gap-[10px]' }, h('div', { class: 'section-label' }, 'Block'), blockRow)
         )
       },
     })

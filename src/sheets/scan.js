@@ -21,7 +21,7 @@ export function pushScan(ctx, { date, block }) {
   ctx.push({
     title: 'Scan',
     render: (c) => {
-      const stage = h('div', { class: 'flex flex-col gap-4 pb-2' })
+      const stage = h('div', { class: 'flex flex-col gap-[20px] pb-[10px]' })
       let controls = null
       let stopped = false
 
@@ -84,9 +84,9 @@ export function pushScan(ctx, { date, block }) {
         stage.replaceChildren(
           h(
             'div',
-            { class: 'flex flex-col items-center gap-2 py-16' },
-            h('div', { class: 'text-[15px] font-semibold' }, 'Looking up…'),
-            h('div', { class: 'text-[13px] text-muted' }, code)
+            { class: 'flex flex-col items-center gap-[10px] py-[50px]' },
+            h('div', { class: 'text-[17px] font-bold' }, 'Looking up…'),
+            h('div', { class: 'text-[15px] text-muted' }, code)
           )
         )
       }
@@ -97,11 +97,11 @@ export function pushScan(ctx, { date, block }) {
           card(
             h(
               'div',
-              { class: 'flex flex-col gap-3 p-4' },
-              h('div', { class: 'text-[15px] font-semibold' }, 'Create this food'),
+              { class: 'flex flex-col gap-[10px] p-[20px]' },
+              h('div', { class: 'text-[17px] font-bold' }, 'Create this food'),
               h(
                 'div',
-                { class: 'text-[13px] leading-snug text-muted' },
+                { class: 'text-[15px] leading-snug text-muted' },
                 `The barcode ${code} will be saved with it, so the next scan finds it instantly.`
               ),
               h(
@@ -134,9 +134,9 @@ export function pushScan(ctx, { date, block }) {
           card(
             h(
               'div',
-              { class: 'flex flex-col gap-3 p-4' },
-              h('div', { class: 'text-[15px] font-semibold' }, heading),
-              h('div', { class: 'text-[13px] leading-snug text-muted' }, body),
+              { class: 'flex flex-col gap-[10px] p-[20px]' },
+              h('div', { class: 'text-[17px] font-bold' }, heading),
+              h('div', { class: 'text-[15px] leading-snug text-muted' }, body),
               retry
                 ? h(
                     'button',
@@ -148,7 +148,7 @@ export function pushScan(ctx, { date, block }) {
           ),
           h(
             'div',
-            { class: 'flex flex-col gap-3' },
+            { class: 'flex flex-col gap-[10px]' },
             labelledField({
               label: 'Or type the barcode',
               children: textInput({
@@ -187,7 +187,7 @@ export function pushScan(ctx, { date, block }) {
         stage.replaceChildren(
           h(
             'div',
-            { class: 'relative overflow-hidden rounded-[20px] bg-black', style: { aspectRatio: '3 / 4' } },
+            { class: 'relative overflow-hidden rounded-[24px] border border-outline bg-black', style: { aspectRatio: '3 / 4' } },
             video,
             // Framing guide: four corner brackets and a centre line.
             h(
@@ -205,7 +205,7 @@ export function pushScan(ctx, { date, block }) {
               'div',
               {
                 class:
-                  'pointer-events-none absolute inset-x-0 bottom-0 p-4 text-center text-[13px] font-medium text-white',
+                  'pointer-events-none absolute inset-x-0 bottom-0 p-[20px] text-center text-[15px] font-semibold text-white',
               },
               'Line the barcode up inside the frame'
             )

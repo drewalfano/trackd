@@ -21,7 +21,7 @@ import { navigate } from '../router.js'
 function macroTicks(totals, targets) {
   return h(
     'div',
-    { class: 'flex shrink-0 gap-1' },
+    { class: 'flex shrink-0 gap-[10px]' },
     ['protein', 'fat', 'carbs'].map((macro) => {
       const { pct } = progress(totals[macro], targets[macro])
       return h(
@@ -48,27 +48,27 @@ function averagesStrip(days, targets) {
 
   return h(
     'div',
-    { class: 'card flex flex-col gap-3 px-4 py-4' },
+    { class: 'panel flex flex-col gap-[20px] px-[20px] py-[20px]' },
     h(
       'div',
       { class: 'flex items-baseline justify-between' },
       h('span', { class: 'text-[14px] font-semibold' }, 'Last 7 days'),
       h(
         'span',
-        { class: 'text-[12px] text-muted' },
+        { class: 'text-[13px] text-muted' },
         last7.length ? `${last7.length} of 7 tracked` : 'nothing tracked'
       )
     ),
     h(
       'div',
-      { class: 'flex gap-6' },
+      { class: 'flex gap-[30px]' },
       h(
         'div',
         { class: 'flex flex-col' },
         h('span', { class: 'text-[26px] font-bold leading-tight' }, kcal(mean('kcal'))),
         h(
           'span',
-          { class: 'text-[12px] text-muted' },
+          { class: 'text-[13px] text-muted' },
           `mean cal · target ${kcal(targets.kcal)}`
         )
       ),
@@ -78,7 +78,7 @@ function averagesStrip(days, targets) {
         h('span', { class: 'text-[26px] font-bold leading-tight' }, g(mean('protein'))),
         h(
           'span',
-          { class: 'text-[12px] text-muted' },
+          { class: 'text-[13px] text-muted' },
           `mean protein · target ${g(targets.protein)}`
         )
       )
@@ -86,7 +86,7 @@ function averagesStrip(days, targets) {
     tracked.length < 3
       ? h(
           'p',
-          { class: 'text-[12px] leading-snug text-muted' },
+          { class: 'text-[13px] leading-snug text-muted' },
           'Averages get useful after about a week of tracking.'
         )
       : null
@@ -103,7 +103,7 @@ export function historyScreen() {
       if (!dates.length) {
         return h(
           'div',
-          { class: 'flex flex-col gap-5' },
+          { class: 'flex flex-col gap-[20px]' },
           header(),
           emptyState(
             'No history yet',
@@ -146,19 +146,19 @@ export function historyScreen() {
               h(
                 'div',
                 { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[15px] font-medium' }, formatDayLabel(day.date)),
+                h('div', { class: 'truncate text-[17px] font-semibold' }, formatDayLabel(day.date)),
                 h(
                   'div',
-                  { class: 'mt-0.5 text-[12px] text-muted' },
+                  { class: 'mt-[2px] text-[13px] text-muted' },
                   `${day.entries.length} item${day.entries.length === 1 ? '' : 's'}`
                 )
               ),
               macroTicks(day.totals, targets),
               h(
                 'span',
-                { class: 'w-[68px] shrink-0 text-right text-[15px] font-semibold' },
+                { class: 'w-[70px] shrink-0 text-right text-[17px] font-bold' },
                 kcal(day.totals.kcal),
-                h('span', { class: 'ml-1 text-[11px] font-medium text-muted' }, 'cal')
+                h('span', { class: 'ml-1 text-[12px] font-medium text-muted' }, 'cal')
               ),
               icon('chevronRight', { size: 16, class: 'shrink-0 text-muted' })
             )
@@ -167,26 +167,26 @@ export function historyScreen() {
             h(
               'button',
               {
-                class: 'flex w-full items-center gap-3 px-4 py-1.5',
+                class: 'flex w-full items-center gap-[10px] px-[20px] py-[8px]',
                 onclick: () => {
                   setDate(day.date)
                   navigate('log')
                 },
               },
-              h('span', { class: 'shrink-0 text-[11px] text-muted' }, formatDayLabel(day.date)),
+              h('span', { class: 'shrink-0 text-[12px] text-muted' }, formatDayLabel(day.date)),
               h('span', { class: 'h-px flex-1', style: { background: 'var(--color-hairline)' } }),
-              h('span', { class: 'shrink-0 text-[11px] text-muted' }, 'not tracked')
+              h('span', { class: 'shrink-0 text-[12px] text-muted' }, 'not tracked')
             )
       )
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-4' },
+        { class: 'flex flex-col gap-[30px]' },
         header(),
         averagesStrip(days, targets),
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Days'),
           card(rows)
         )
@@ -199,11 +199,11 @@ export function historyScreen() {
 function header() {
   return h(
     'div',
-    { class: 'flex flex-col gap-1 pt-1' },
+    { class: 'flex flex-col gap-[10px] pt-[10px]' },
     h(
       'button',
       {
-        class: 'flex items-center gap-1 self-start px-1 text-[14px] font-medium',
+        class: 'flex items-center gap-[10px] self-start px-0 text-[14px] font-medium',
         onclick: () => navigate('log'),
       },
       icon('chevronLeft', { size: 18 }),
@@ -211,7 +211,7 @@ function header() {
     ),
     h(
       'div',
-      { class: 'px-1 pt-2' },
+      { class: 'px-0 pt-[10px]' },
       h('h1', { class: 'text-[22px] font-bold leading-tight' }, 'History'),
       h('p', { class: 'text-[13px] text-muted' }, 'Averages are more honest than any single day.')
     )

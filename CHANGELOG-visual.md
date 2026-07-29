@@ -6,6 +6,107 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.1.0 — mockup pass
+
+Reconciled against the Figma mockups. Four of these are changes to the locked
+system rather than additions to it, so they are listed first.
+
+### Changed: the ground inverted
+
+The page is now white (`canvas #FFFFFF`) and cards are grey (`surface #F0F0F0`)
+with a **1px `#D9D9D9` outline**. v1 had it the other way round — white cards on
+a grey page, grouping communicated by surface alone.
+
+The outline is what makes the inversion work. With both grounds light, surface
+change alone is too weak to separate a card from the page, and it fails entirely
+for a component nested inside another component. Everything structural now
+carries the outline: cards, bar tracks, fields, chips, buttons, the tab bar, the
+segmented control, the camera viewfinder.
+
+### Changed: colour is allowed on macro headings
+
+v1 restricted the four hues to bar fills and the letter suffix. The mockups
+colour the "Calories" / "Protein" / "Fat" / "Carbs" headings as well, and that
+is now the rule.
+
+What has *not* changed is the constraint underneath it: colour still only ever
+means macro identity. Nothing is coloured for decoration, mood, or state, there
+is still no second red anywhere, and the four hues still sit in the same narrow
+lightness band. The heading is macro identity, so it is allowed; an error state
+is not, so it still is not.
+
+### Changed: every filled shape carries a darker edge
+
+Bar fills now have a 1px stroke of a darker shade of their own hue
+(`--color-kcal-edge` and friends; the fat and carbs values come straight from
+the mockups). The fill also sits inside its track with a 3px inset rather than
+filling it edge to edge. Both together make the bar read as an object in a
+channel instead of a painted region — and the inset is what keeps the track's
+own outline visible behind a full bar.
+
+### Changed: the calorie block reads number-first
+
+Was label, number, bar. Now number at display size with the target trailing
+small and grey, then the coloured label, then the bar. Display size went 40px →
+56px.
+
+### Geometry, on a grid
+
+- **Corner radius is 24px** on everything that is not a pill: cards, sheets,
+  buttons, fields, chips, the route buttons, the camera view.
+- **Single-line rows are exactly 48px** with a 24px radius, which makes them
+  read as pills. Rows with a subtitle grow from a 48px minimum.
+- **Layout spacing is on a 10px grid**: 10 inside a group, 20 between groups, 30
+  between sections, 20px screen gutters. The only sub-10 values left are
+  typographic — a heading and the line directly beneath it are one unit, not
+  two, and get 2–4px.
+- Type scale moved up throughout. Body 15px, row titles 17px, section headings
+  20px bold ink, screen titles 28px. v1's 12–13px muted labels were below the
+  mockups' floor.
+
+### Safe areas
+
+The screen container now pads by `env(safe-area-inset-top) + 20px`, so an
+installed launch clears the notch or Dynamic Island instead of running the
+header underneath it. Sheets cap their height at
+`100svh - env(safe-area-inset-top) - 20px` for the same reason. In a browser tab
+both resolve to the 20px base, since the browser chrome already does the job.
+
+### Tab bar
+
+- The pill is `surface` with an outline; the **active tab is a `canvas` pill
+  with an ink edge**, matching the segmented control.
+- Tab icons are **filled**, not stroked — the one place the icon set departs
+  from single-stroke. The gear is generated rather than hand-authored, because
+  eyeballing 32 path points produces a visible wobble at 22px.
+- Add button and bar are both 68px.
+
+### Progressive blur under the tab bar
+
+Content scrolls underneath the floating bar, so without treatment the bar sits
+on live text and both become hard to read. Four banded `backdrop-filter` layers
+(1 / 3 / 7 / 14px), each masked to its own window, ramp the blur toward the
+bottom edge; a single blurred layer with one mask shows a visible seam where the
+mask crosses 50%. A black gradient scrim rides on top — 13% at the bottom in
+light, 62% in dark — giving the bar an edge to sit against. It is decorative, so
+it is `aria-hidden` and `pointer-events: none`.
+
+### Two structural fixes found while doing this
+
+**`.panel` split out from `.card`.** `.card > * + *` draws the row dividers, so
+a card used as a padded container for a laid-out block ruled a line between
+every child of that layout. The weight chart, the weekly averages, the serving
+preview and the notice component are `.panel` now: same surface and outline, no
+dividers.
+
+**The toast host was swallowing taps on the tab bar.** It spans the full width
+at `z-[80]` and its bottom padding overlaps the add button; its children opted
+into pointer events but the host never opted out. After the first toast — that
+is, after your first log of the day — the add button silently stopped working.
+It is `pointer-events: none` now.
+
+---
+
 ## v1.0.0 — initial build
 
 ### The system as locked

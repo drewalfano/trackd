@@ -24,38 +24,36 @@ export function todayScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-4' },
+        { class: 'flex flex-col gap-[30px]' },
         dayHeader({ date: state.date, setDate }),
 
+        // The totals sit directly on the page rather than in a card. Wrapping
+        // them would put an outlined box inside an outlined box for every bar.
         h(
           'section',
-          { class: 'card flex flex-col gap-5 px-4 py-5' },
+          { class: 'flex flex-col gap-[20px]' },
           caloriesBlock({ value: totals.kcal, target: t.kcal }),
-          h(
-            'div',
-            { class: 'flex flex-col gap-4' },
-            // Fixed order: protein, fat, carbs.
-            macroRow({ macro: 'protein', value: totals.protein, target: t.protein }),
-            macroRow({ macro: 'fat', value: totals.fat, target: t.fat }),
-            macroRow({ macro: 'carbs', value: totals.carbs, target: t.carbs })
-          )
+          // Fixed order: protein, fat, carbs.
+          macroRow({ macro: 'protein', value: totals.protein, target: t.protein }),
+          macroRow({ macro: 'fat', value: totals.fat, target: t.fat }),
+          macroRow({ macro: 'carbs', value: totals.carbs, target: t.carbs })
         ),
 
         h(
           'section',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
           h(
             'button',
             {
-              class: 'flex w-full items-center justify-between px-1 pb-1',
+              class: 'flex w-full items-center justify-between gap-[10px]',
               onclick: () => navigate('log'),
             },
-            h('span', { class: 'text-[15px] font-bold' }, 'Log'),
+            h('span', { class: 'section-label' }, 'Log'),
             h(
               'span',
-              { class: 'flex items-center gap-1 text-[13px] text-muted' },
+              { class: 'flex items-center gap-[6px] text-[15px] text-muted' },
               entries.length ? `${entries.length}` : '',
-              icon('chevronRight', { size: 18 })
+              icon('chevronRight', { size: 20 })
             )
           ),
           // Flat and chronological here. Blocks are a Log page concern.

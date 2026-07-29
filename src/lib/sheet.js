@@ -35,33 +35,42 @@ export function openSheet({ title, render, footer = null }) {
   const panels = []
   let closing = false
 
-  const titleEl = h('h2', { class: 'flex-1 text-[20px] font-bold' })
+  const titleEl = h('h2', {
+    class: 'flex-1 truncate text-[28px] font-bold leading-tight tracking-[-0.02em]',
+  })
   const backBtn = h(
     'button',
-    { class: 'icon-btn bg-canvas', 'aria-label': 'Back', onclick: () => history.back() },
-    icon('chevronLeft', { size: 20 })
+    { class: 'icon-btn', 'aria-label': 'Back', onclick: () => history.back() },
+    icon('chevronLeft', { size: 20, stroke: 2 })
   )
   const closeBtn = h(
     'button',
-    { class: 'icon-btn bg-canvas', 'aria-label': 'Close', onclick: () => closeAll() },
-    icon('close', { size: 20 })
+    { class: 'icon-btn', 'aria-label': 'Close', onclick: () => closeAll() },
+    icon('close', { size: 20, stroke: 2 })
   )
 
   const header = h(
     'header',
-    { class: 'flex items-center gap-3 px-5 pb-3 pt-5' },
+    { class: 'flex items-center gap-[10px] px-[20px] pb-[20px] pt-[20px]' },
     backBtn,
     titleEl,
     closeBtn
   )
-  const body = h('div', { class: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5' })
-  const footerEl = h('div', { class: 'px-5 pb-5 empty:hidden' })
+  const body = h('div', {
+    class: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-[20px] pb-[20px]',
+  })
+  const footerEl = h('div', { class: 'px-[20px] pb-[20px] empty:hidden' })
 
   const panel = h(
     'div',
     {
+      // Capped so a tall sheet stops clear of the notch or Dynamic Island
+      // rather than running its header underneath them.
       class:
-        'sheet-panel absolute inset-x-0 bottom-0 flex max-h-[94svh] flex-col rounded-t-[24px] bg-canvas safe-b',
+        'sheet-panel absolute inset-x-0 bottom-0 flex flex-col rounded-t-[24px] border-t border-outline bg-canvas safe-b',
+      style: {
+        maxHeight: 'calc(100svh - env(safe-area-inset-top, 0px) - 20px)',
+      },
       role: 'dialog',
       'aria-modal': 'true',
       onclick: (e) => e.stopPropagation(),

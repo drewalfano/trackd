@@ -4,6 +4,48 @@
  * is growing — if this list gets long, something has gone wrong with the UI.
  */
 
+/**
+ * An 8-tooth gear, generated rather than hand-authored, because eyeballing 32
+ * path points produces a gear with a visible wobble at 22px.
+ */
+function gearPath({ teeth = 8, outer = 10.6, inner = 8, hole = 3.6, cx = 12, cy = 12 } = {}) {
+  const pts = []
+  const per = (Math.PI * 2) / teeth
+  // Four points per tooth: rise, tooth top, fall, valley.
+  const offsets = [
+    [-per * 0.22, outer],
+    [per * 0.22, outer],
+    [per * 0.28, inner],
+    [per * 0.72, inner],
+  ]
+  for (let t = 0; t < teeth; t++) {
+    for (const [off, r] of offsets) {
+      const a = t * per + off - Math.PI / 2
+      pts.push(`${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`)
+    }
+  }
+  // Second subpath is the centre hole, knocked out by fill-rule evenodd.
+  return (
+    `<path fill-rule="evenodd" d="M${pts.join('L')}Z` +
+    `M${cx} ${cy - hole}a${hole} ${hole} 0 1 0 0 ${hole * 2}a${hole} ${hole} 0 1 0 0 ${-hole * 2}Z"/>`
+  )
+}
+
+/** Filled icons, used only in the tab bar. Everything else stays single stroke. */
+export const FILLED = {
+  calendarFilled:
+    // Rounded-square ring, then a 4×3 grid of dots inside it.
+    '<path fill-rule="evenodd" d="M6 3.5h12A2.5 2.5 0 0 1 20.5 6v12a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Zm0 2.1a.4.4 0 0 0-.4.4v12a.4.4 0 0 0 .4.4h12a.4.4 0 0 0 .4-.4V6a.4.4 0 0 0-.4-.4H6Z"/>' +
+    '<circle cx="8.2" cy="10.2" r="1.05"/><circle cx="12" cy="10.2" r="1.05"/><circle cx="15.8" cy="10.2" r="1.05"/>' +
+    '<circle cx="8.2" cy="13.9" r="1.05"/><circle cx="12" cy="13.9" r="1.05"/><circle cx="15.8" cy="13.9" r="1.05"/>',
+
+  weightFilled:
+    // Ring handle over a solid trapezoid body.
+    '<path fill-rule="evenodd" d="M12 1.9a2.35 2.35 0 0 1 1.1 4.43V7h1.62a2.5 2.5 0 0 1 2.44 1.95l2.06 9.1A2.5 2.5 0 0 1 16.78 21H7.22a2.5 2.5 0 0 1-2.44-3.05l2.06-9.1A2.5 2.5 0 0 1 9.28 7h1.62v-.67A2.35 2.35 0 0 1 12 1.9Zm0 1.7a.85.85 0 1 0 0 1.7.85.85 0 0 0 0-1.7Z"/>',
+
+  gearFilled: gearPath(),
+}
+
 const P = {
   chevronLeft: '<path d="M15 5l-7 7 7 7"/>',
   chevronRight: '<path d="M9 5l7 7-7 7"/>',
@@ -55,15 +97,16 @@ const P = {
  */
 export function icon(name, opts = {}) {
   const { size = 22, stroke = 1.75, filled = false } = opts
-  const inner = P[name]
+  const solid = FILLED[name]
+  const inner = solid ?? P[name]
   if (!inner) throw new Error(`Unknown icon: ${name}`)
 
   const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   el.setAttribute('viewBox', '0 0 24 24')
   el.setAttribute('width', size)
   el.setAttribute('height', size)
-  el.setAttribute('fill', filled ? 'currentColor' : 'none')
-  el.setAttribute('stroke', 'currentColor')
+  el.setAttribute('fill', solid || filled ? 'currentColor' : 'none')
+  el.setAttribute('stroke', solid ? 'none' : 'currentColor')
   el.setAttribute('stroke-width', stroke)
   el.setAttribute('stroke-linecap', 'round')
   el.setAttribute('stroke-linejoin', 'round')
@@ -73,4 +116,4 @@ export function icon(name, opts = {}) {
   return el
 }
 
-export const ICON_NAMES = Object.keys(P)
+export const ICON_NAMES = [...Object.keys(P), ...Object.keys(FILLED)]

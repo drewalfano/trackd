@@ -1,46 +1,62 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Design tokens — spec section 7.
+   Design tokens — v1.1, matched to the mockups.
 
-   The whole palette is five neutrals plus four macro hues. If you are about to
-   add a colour here, check it against the two rules in the brief: colour only
-   ever means macro identity, and any new hue has to sit in the 45–60% lightness
-   band so the set still reads as deliberate.
+   Two changes from v1 that everything else follows from:
+
+   1. The ground inverted. The page is white and cards are grey `surface` with a
+      1px `outline`, rather than white cards on a grey page. Grouping now reads
+      from the outline as well as the surface change, which is what lets nested
+      components (a bar inside a card, a chip inside a sheet) stay legible.
+
+   2. Colour is allowed on macro headings. v1 restricted the four hues to bar
+      fills and the letter suffix; the mockups colour the "Protein" / "Fat" /
+      "Carbs" labels too. The narrow lightness band is what keeps that from
+      going loud, so the rule that replaces it is: colour still only ever means
+      macro identity, and never decoration, mood, or state.
    --------------------------------------------------------------------------- */
 @theme {
   --color-ink: #232323;
-  --color-canvas: #f0f0f0;
-  --color-surface: #ffffff;
+  --color-canvas: #ffffff;
+  --color-surface: #f0f0f0;
   --color-muted: #717171;
-  --color-hairline: #d8d8d8;
+  --color-outline: #d9d9d9;
 
   /* Fixed order everywhere: calories, protein, fat, carbs. */
   --color-kcal: #44a057;
   --color-protein: #5075be;
-  --color-fat: #caaf3a;
+  --color-fat: #cab93a;
   --color-carbs: #cd493d;
+
+  /* Every filled shape carries a darker edge of its own hue, so a bar reads as
+     an object sitting in its track rather than a painted region. */
+  --color-kcal-edge: #2e7d45;
+  --color-protein-edge: #3d5c9c;
+  --color-fat-edge: #8c7000;
+  --color-carbs-edge: #b42a2a;
 
   /* One grotesque family. System stack keeps it offline and renders SF Pro on
      the target device, which is the grotesque this was designed against. */
   --font-sans:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 
-  --radius-card: 18px;
+  /* One radius. 24px on everything that is not a pill. */
+  --radius-card: 24px;
   --radius-sheet: 24px;
 
-  --text-display: 40px;
-  --text-display--line-height: 1.05;
-  --text-display--letter-spacing: -0.02em;
+  --text-display: 56px;
+  --text-display--line-height: 1;
+  --text-display--letter-spacing: -0.03em;
 }
 
-/* Dark mode inverts neutrals only. The four macro hues do not move — see spec 7. */
+/* Dark mode inverts neutrals only. The macro hues do not move — see spec 7. */
 :root[data-theme='dark'] {
   --color-ink: #f0f0f0;
   --color-canvas: #141414;
   --color-surface: #1e1e1e;
   --color-muted: #8a8a8a;
-  --color-hairline: #303030;
+  --color-outline: #333333;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -49,7 +65,7 @@
     --color-canvas: #141414;
     --color-surface: #1e1e1e;
     --color-muted: #8a8a8a;
-    --color-hairline: #303030;
+    --color-outline: #333333;
   }
 }
 
@@ -112,59 +128,105 @@
 }
 
 @layer components {
-  /* Grouped card, iOS settings pattern. Grouping reads from the surface change
-     against the canvas, so these carry no border. */
+  /* ------------------------------------------------------------- structure */
+
+  /**
+   * The screen container. 20px gutters, and a top inset that clears the notch
+   * or Dynamic Island — in a standalone PWA that env() resolves to ~59px on the
+   * devices that have one, and to 0 in a browser tab where the chrome already
+   * does the job.
+   */
+  .screen {
+    width: 100%;
+    max-width: 430px;
+    margin-inline: auto;
+    padding-inline: 20px;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+    padding-bottom: calc(140px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Grouped card. Surface plus a 1px outline; the outline is what separates it
+     from the page now that both are light. */
   .card {
     background: var(--color-surface);
+    border: 1px solid var(--color-outline);
     border-radius: var(--radius-card);
     overflow: hidden;
   }
 
-  /* Hairline dividers between rows, never above the first or below the last. */
-  .card > .row + .row,
-  .card > .row-group + .row-group {
-    border-top: 1px solid var(--color-hairline);
+  /* Dividers between rows, never above the first or below the last. */
+  .card > * + * {
+    border-top: 1px solid var(--color-outline);
+  }
+
+  /**
+   * Same surface and outline as a card, but no dividers. For the boxes that
+   * hold a laid-out block rather than a list of rows — the weight chart, the
+   * weekly averages, the serving-sheet preview. Using `.card` for those draws a
+   * rule between every child of the layout.
+   */
+  .panel {
+    background: var(--color-surface);
+    border: 1px solid var(--color-outline);
+    border-radius: var(--radius-card);
   }
 
   .row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    min-height: 44px;
-    padding: 12px 16px;
+    gap: 10px;
+    min-height: 48px;
+    padding: 10px 20px;
     width: 100%;
     text-align: left;
   }
 
-  .label {
-    font-weight: 500;
-    font-size: 15px;
+  /* A row that is genuinely one line: exactly 48px, no vertical padding. */
+  .row-single {
+    padding-top: 0;
+    padding-bottom: 0;
+    height: 48px;
   }
 
-  .sublabel {
-    font-size: 13px;
+  /* Section headings — "Log", "Your Favourites", "Morning". Bold ink, not the
+     small muted caps of v1; the mockups treat these as real headings. */
+  .section-label {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+
+  .section-action {
+    font-size: 14px;
+    font-weight: 600;
     color: var(--color-muted);
   }
 
-  /* 16px is the smallest height the overshoot chip fits inside legibly, and a
-     uniform height across calories and macros keeps the block reading as one
-     system rather than a hierarchy of bars. */
+  /* ------------------------------------------------------------------ bars */
+
+  /**
+   * The fill sits inside the track with a 3px inset rather than filling it edge
+   * to edge, so both outlines stay visible and the bar reads as an object in a
+   * channel. 32px track / 24px fill is the smallest pairing where the overshoot
+   * chip still fits legibly inside the fill.
+   */
   .bar-track {
-    height: 16px;
+    height: 32px;
     width: 100%;
     border-radius: 999px;
-    background: var(--color-canvas);
-    overflow: hidden;
-    position: relative;
-  }
-  :root[data-theme='dark'] .bar-track,
-  :root[data-theme='system'] .bar-track {
-    background: color-mix(in srgb, var(--color-ink) 10%, transparent);
+    background: var(--color-surface);
+    border: 1px solid var(--color-outline);
+    padding: 3px;
+    display: flex;
+    align-items: center;
   }
 
   .bar-fill {
-    height: 100%;
+    height: 24px;
     border-radius: 999px;
+    border: 1px solid;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -172,94 +234,234 @@
     transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* Circular icon button: chevrons, close, swipe actions. 44px tap target. */
+  /* --------------------------------------------------------------- controls */
+
+  /* Circular icon button: chevrons, close, swipe actions. */
   .icon-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 999px;
     background: var(--color-surface);
+    border: 1px solid var(--color-outline);
     color: var(--color-ink);
     flex: none;
+  }
+
+  .icon-btn-sm {
+    width: 38px;
+    height: 38px;
   }
 
   .btn-primary {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 52px;
+    min-height: 56px;
     width: 100%;
-    border-radius: 999px;
+    border-radius: var(--radius-card);
     background: var(--color-ink);
-    color: var(--color-surface);
-    font-weight: 600;
-    font-size: 16px;
+    border: 1px solid var(--color-ink);
+    color: var(--color-canvas);
+    font-weight: 700;
+    font-size: 17px;
   }
   .btn-primary:disabled {
-    opacity: 0.35;
+    opacity: 0.3;
   }
 
   .btn-secondary {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 52px;
+    min-height: 56px;
     width: 100%;
-    border-radius: 999px;
+    border-radius: var(--radius-card);
     background: var(--color-surface);
+    border: 1px solid var(--color-outline);
     color: var(--color-ink);
-    font-weight: 600;
-    font-size: 16px;
+    font-weight: 700;
+    font-size: 17px;
   }
 
+  /* Single-line input row: 48px tall, 24px radius, so it reads as a pill. */
   .field {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     width: 100%;
-    background: var(--color-surface);
-    border-radius: 12px;
-    padding: 12px 14px;
     min-height: 48px;
+    padding: 0 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-outline);
+    border-radius: var(--radius-card);
   }
 
   .chip {
     display: inline-flex;
     align-items: center;
-    height: 34px;
-    padding: 0 14px;
-    border-radius: 999px;
-    font-size: 14px;
-    font-weight: 500;
+    height: 48px;
+    padding: 0 20px;
+    border-radius: var(--radius-card);
+    font-size: 15px;
+    font-weight: 600;
     background: var(--color-surface);
+    border: 1px solid var(--color-outline);
     color: var(--color-muted);
     flex: none;
   }
   .chip[aria-pressed='true'],
   .chip[data-selected='true'] {
     background: var(--color-ink);
-    color: var(--color-surface);
+    border-color: var(--color-ink);
+    color: var(--color-canvas);
   }
 
-  .section-label {
-    font-size: 13px;
+  /* Segmented control. The selected segment is a white pill with an ink edge,
+     matching the tab bar's treatment of the active tab. */
+  .segmented {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--radius-card);
+    background: var(--color-surface);
+    border: 1px solid var(--color-outline);
+  }
+
+  .segment {
+    flex: 1;
+    min-height: 40px;
+    border-radius: 20px;
+    font-size: 15px;
     font-weight: 600;
     color: var(--color-muted);
-    padding: 0 4px 8px;
-    letter-spacing: 0.01em;
+    border: 1px solid transparent;
+  }
+  .segment[aria-pressed='true'] {
+    background: var(--color-canvas);
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  /* ------------------------------------------------------------- tab bar */
+
+  /**
+   * Progressive blur under the floating tab bar.
+   *
+   * Each layer blurs a horizontal band and is masked to its own window, so the
+   * blur ramps up toward the bottom edge instead of switching on at a hard
+   * line. A single backdrop-filter with a mask gives a visible seam where the
+   * mask crosses 50%; four banded layers do not.
+   */
+  .tabbar-fade {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    height: 170px;
+    z-index: 30;
+    pointer-events: none;
+  }
+
+  .tabbar-fade > span {
+    position: absolute;
+    inset: 0;
+    display: block;
+  }
+
+  .tabbar-fade > span:nth-child(1) {
+    backdrop-filter: blur(1px);
+    -webkit-backdrop-filter: blur(1px);
+    -webkit-mask-image: linear-gradient(to top, #000 55%, #000 72%, transparent 96%);
+    mask-image: linear-gradient(to top, #000 55%, #000 72%, transparent 96%);
+  }
+  .tabbar-fade > span:nth-child(2) {
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    -webkit-mask-image: linear-gradient(to top, #000 35%, #000 48%, transparent 72%);
+    mask-image: linear-gradient(to top, #000 35%, #000 48%, transparent 72%);
+  }
+  .tabbar-fade > span:nth-child(3) {
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+    -webkit-mask-image: linear-gradient(to top, #000 18%, #000 30%, transparent 52%);
+    mask-image: linear-gradient(to top, #000 18%, #000 30%, transparent 52%);
+  }
+  .tabbar-fade > span:nth-child(4) {
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    -webkit-mask-image: linear-gradient(to top, #000 0%, #000 14%, transparent 34%);
+    mask-image: linear-gradient(to top, #000 0%, #000 14%, transparent 34%);
+  }
+
+  /* The scrim rides on top of the blur so the floating bar has something to
+     sit against. Kept low — this is a shadow under the bar, not a curtain. */
+  .tabbar-fade > span:nth-child(5) {
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, #000 13%, transparent) 0%,
+      color-mix(in srgb, #000 6%, transparent) 40%,
+      transparent 80%
+    );
+    backdrop-filter: none;
+  }
+  :root[data-theme='dark'] .tabbar-fade > span:nth-child(5),
+  :root[data-theme='system'] .tabbar-fade > span:nth-child(5) {
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, #000 62%, transparent) 0%,
+      color-mix(in srgb, #000 30%, transparent) 40%,
+      transparent 80%
+    );
+  }
+
+  .tabbar {
+    display: flex;
+    height: 68px;
+    flex: 1;
+    align-items: stretch;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-outline);
+  }
+
+  .tab {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    color: var(--color-muted);
+  }
+
+  /* Active tab: a canvas pill with an ink edge inside the grey bar. */
+  .tab[aria-current='page'] {
+    background: var(--color-canvas);
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  .add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 68px;
+    height: 68px;
+    flex: none;
+    border-radius: 999px;
+    background: var(--color-ink);
+    color: var(--color-canvas);
   }
 }
 
 @layer utilities {
   .safe-b {
     padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .safe-t {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-  /* Content scrolls behind the floating tab bar; this keeps the last row clear. */
-  .pad-tabbar {
-    padding-bottom: calc(112px + env(safe-area-inset-bottom, 0px));
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
