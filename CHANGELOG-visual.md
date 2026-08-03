@@ -6,6 +6,87 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.1.6 — the status bar joins the scrim, and the add sheet gets its spacing back
+
+Four changes, all of them about a sheet's relationship to the space around it.
+
+### The strip behind the clock
+
+**While a sheet is open, the status bar takes the scrimmed colour.** It had been
+staying at full canvas brightness while everything below it dimmed, which put a
+hard horizontal edge across the top of the screen for as long as a sheet was up
+— the one moment in the app where the eye should be travelling downward, and
+instead there was a line at the top competing for it.
+
+The cause is worth stating because it is not a CSS problem and no amount of
+looking at the stylesheet would have found it. On an installed PWA that strip is
+painted by iOS, from the `theme-color` meta tag, before the page gets a say. The
+scrim is a page element and cannot reach it. So the fix is not to extend the
+scrim but to publish a second colour: `theme-color` now carries the scrimmed
+value while a sheet is open and the canvas value the rest of the time.
+
+The two values are the arithmetic the scrim already does — canvas at 65%, which
+is what `black/35` over it computes to — rather than a colour picked to look
+close. Sampled rather than eyeballed, so if the canvas ever moves, the mismatch
+is a wrong number in one file instead of a drift nobody can name.
+
+The cost: this is invisible in a browser and only real once the app is
+installed. It is the first thing in the visual system that cannot be checked by
+looking at localhost.
+
+### One step and a half step
+
+**The add sheet's sections are 20 apart, and the parts inside a section are 10.**
+They had been 30 and 10.
+
+30 was not wrong on its own — it is the ratio that was doing the work, and 30:10
+is a stronger one than 20:10. It was wrong because nothing else in the app is at
+30. Every row, card, gutter and inset is on 10 or 20, so a sheet spending 30
+between its sections was running a second rhythm inside the first one, and the
+sections read as floating rather than as grouped.
+
+The grouping is the whole point of the number. A label belongs to the card under
+it because it sits half as far from it as the next section does — that is the
+only thing saying so, since there are no rules or boxes drawing the boundary.
+It survives the change to 20:10 intact and now uses the same scale as the rest
+of the app to do it.
+
+### Space that belonged to nothing
+
+**Containers that may be empty now collapse instead of holding their place.**
+
+A sheet lays out in a gap column, and an empty child still takes a full gap. So
+the plate bar with nothing staged, the offline notice while online, the
+derived-calories hint with nothing to derive, and the validation warnings on a
+valid form were each spending 20 they had no content to justify. The add sheet
+opened with a 50px void under its header on that account — the header's own 20
+plus a gap belonging to something that was not there.
+
+The reason this is a design problem and not a bug is that the rhythm was
+depending on state nobody could see. The sheet was correctly spaced only in the
+condition it happened to be tested in, and every other condition inherited
+whitespace by accident.
+
+### Edges belong to the frame, not the contents
+
+**The sheet's chrome owns all four insets: 20 on every side.** Each panel had
+been adding 10 of its own on top of the 20 the body already held, so content
+stopped at 20 from the sides and 30 from the bottom — and 30 from a footer
+button that carries its own 20 underneath it.
+
+Three values went with it that were not on the scale: the plate bar's padding,
+its `Log` button, and `notice()`, which now takes exactly the box a `.row` does
+so a notice sitting above a card lines up with the rows inside it.
+
+The `Log` pill sits 10 from the three edges it touches. It had been pinned at 10
+above and below by its own height while taking 20 to the right, so it read as
+sitting in a slot it did not fill. The left side of that bar keeps 20, because
+that side is text: a glyph needs the gutter every other row in the app gives it,
+and a filled pill carries its own padding and does not. Matching the numbers on
+both sides would have made the pill look further from the edge than the text.
+
+---
+
 ## v1.1.4 — an empty bar is empty, and buttons are capsules
 
 Two things that read as someone else's design system.
