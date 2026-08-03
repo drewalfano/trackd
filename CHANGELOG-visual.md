@@ -6,6 +6,51 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.1.4 — an empty bar is empty, and buttons are capsules
+
+Two things that read as someone else's design system.
+
+### The zero state of a bar
+
+**A bar with nothing logged now draws no fill at all.** It had been drawing one
+at `width: 0`, which is not the same as drawing nothing: the fill carries a 1px
+stroke, and at zero width the left and right edges of that stroke collapse into
+each other and paint a 2px coloured tick against the inside of the left cap.
+One of those is a smudge. Four of them stacked down a fresh day read as a
+rendering fault — the eye takes them for a bar that failed to load rather than
+for a bar with nothing in it. The empty track *is* the zero state, and it does
+not need a marker to say so; the coloured heading above it already carries the
+macro's identity.
+
+The fill is still built when there is a previous value to animate away from, so
+deleting the last entry of the day shrinks the bar out instead of snapping. On
+that path the stroke fades with the width, so the shrink does not land on the
+same tick.
+
+### Buttons
+
+**`.btn-primary` and `.btn-secondary` are capsules** — `999px`, where they had
+been `--radius-card` at 24px. 24px on a 56px box is a corner that is *smaller
+than half the height*, which is the Material signature: a token-sized radius
+applied to whatever it lands on. Everything else on the screen was already a
+true capsule — the field, the chips, the segments, the tab bar, the icon
+buttons — so a squarish button sitting in a row next to a pill field was the one
+control that did not belong to the family.
+
+The rest of the treatment is deliberately *not* Material either. No elevation,
+no ripple, no letter-spacing on the label. Press feedback is a 120ms
+scale-to-0.97 and a slight dim of the whole control, which is the iOS gesture
+and what gives a 56px slab the sense of physical give. `.icon-btn` gets the
+same, scaled harder (0.92) because it is small enough that 3% would not register.
+
+**`.btn-compact`** is new: 48px tall, auto width, for a button that shares a row
+with a field rather than owning a footer. The weight input used it immediately —
+a 56px button beside a 48px field looked like it had been lifted out of a sheet,
+and matching the heights is what makes the pair read as one control. The
+hard-coded `w-[104px]` wrapper around it is gone; the label sizes the button now.
+
+---
+
 ## v1.1.3 — tab bar placement, and a shorter fade
 
 Measured off the Figma frame rather than estimated.
@@ -299,7 +344,7 @@ block reading as one system, and the calorie bar already carries more weight
 from the display number above it.
 
 **Overshoot chip: a 26%-black overlay pill with white text, inside the fill.**
-Going over fills the track completely and shows the excess as `+117`. No colour
+Going over fills the track completely and shows the excess as `+74`. No colour
 change, no error state. Confirmed against real data at `2911 / 2837`.
 
 **Destructive and error states are ink and grey.**

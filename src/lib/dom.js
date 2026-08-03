@@ -73,6 +73,59 @@ export function mount(el, ...children) {
   return el
 }
 
+/**
+ * Replace a node's children, dropping the empty ones.
+ *
+ * `h()` ignores a null child; `replaceChildren` stringifies it and renders the
+ * word "null" on screen. Every in-place repaint in this app is conditional
+ * somewhere, so they all go through this rather than each one remembering — it
+ * had already shipped twice.
+ */
+export function repaint(el, ...children) {
+  el.replaceChildren(...children.flat().filter((c) => c != null && c !== false))
+  return el
+}
+
+/**
+ * Shrink an element's text just enough to stop it truncating.
+ *
+ * For one line in the app: the day header, which sits in 227px between two
+ * chevrons and has to hold everything from "Today, Aug 2" to
+ * "Wed, Jan 13, 2027". At the title size those differ by 75px, so a single
+ * font size either truncates the long ones or shrinks the everyday ones for
+ * no reason. This shrinks only what needs it, and only as far as it needs.
+ *
+ * Runs again after `document.fonts.ready` on purpose. Measuring before the
+ * webfont lands measures the fallback, and the fallback is a different width —
+ * which would size the header against a font the user never sees.
+ *
+ * Not wired to viewport resize: screens rebuild their header on navigation, and
+ * a rotation without a navigation is the one case this will not catch.
+ */
+export function fitText(el, { min = 22 } = {}) {
+  const fit = () => {
+    if (!el.isConnected || !el.clientWidth) return false
+    el.style.fontSize = ''
+    const max = parseFloat(getComputedStyle(el).fontSize)
+    // Starts at the token size, so the common case exits on the first pass.
+    for (let size = max; size >= min; size -= 0.5) {
+      el.style.fontSize = `${size}px`
+      if (el.scrollWidth <= el.clientWidth) break
+    }
+    return true
+  }
+
+  // The element is built before it is mounted, so the first measurement can
+  // land while it still has no box. Retry until it does, then stop.
+  let tries = 0
+  const attempt = () => {
+    if (!fit() && ++tries < 20) requestAnimationFrame(attempt)
+  }
+  requestAnimationFrame(attempt)
+  document.fonts?.ready.then(() => requestAnimationFrame(fit))
+  return el
+}
+
 /** Fires once per user action, ~10ms, then gets out of the way. */
 export function haptic(pattern = 8) {
   try {

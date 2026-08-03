@@ -13,6 +13,8 @@ const R = new URL('../src/lib/', import.meta.url).href
 const C = await import(R + 'compute.js')
 const T = await import(R + 'trend.js')
 const D = await import(R + 'dates.js')
+const G = await import(R + 'targets.js')
+const F = await import(R + 'format.js')
 
 let pass = 0, fail = 0
 const eq = (label, got, want) => {
@@ -72,9 +74,118 @@ eq('date string is local, not UTC', D.toDateStr(new Date(2026, 0, 1, 0, 30)), '2
 eq('late-night entry keeps its local day', D.toDateStr(new Date(2026, 0, 1, 23, 59)), '2026-01-01')
 eq('day arithmetic crosses a month', D.addDays('2026-01-31', 1), '2026-02-01')
 eq('day arithmetic crosses a leap day', D.addDays('2028-02-28', 1), '2028-02-29')
+// Mid-sentence day labels: lowercase the relative words, never a real date
+eq('relative labels lowercase mid-sentence', D.dayPhrase(D.todayStr()), 'today')
+eq('an absolute date keeps its capitals', D.dayPhrase('2020-03-17'), D.formatDayLabel('2020-03-17'))
+eq('and that date is not lowercased', /[A-Z]/.test(D.dayPhrase('2020-03-17')), true)
+
 eq('block prefill: 08:00', D.blockForTime(new Date(2026, 0, 1, 8), { afternoon: 12, night: 17 }), 'morning')
 eq('block prefill: 12:00', D.blockForTime(new Date(2026, 0, 1, 12), { afternoon: 12, night: 17 }), 'afternoon')
 eq('block prefill: 17:00', D.blockForTime(new Date(2026, 0, 1, 17), { afternoon: 12, night: 17 }), 'night')
+
+/* ------------------------------------------------------ weekly averages */
+
+/**
+ * The suppression threshold gets a test because the failure mode is silent: a
+ * mean over one day renders as a confident weekly figure and nothing about it
+ * looks wrong. Returning null below the threshold is the property worth
+ * locking down — it makes the bad number unrenderable rather than unrendered.
+ */
+const day = (kcal, protein) => ({ entries: [{}], totals: { kcal, protein } })
+const blank = () => ({ entries: [], totals: { kcal: 0, protein: 0 } })
+
+eq('one tracked day yields no average at all', C.weeklyAverages([day(1235, 90), blank(), blank()]), { tracked: 1, of: 7, enough: false, kcal: null, protein: null })
+eq('three is still not enough', C.weeklyAverages([day(2000, 150), day(2000, 150), day(2000, 150)]).enough, false)
+eq('four is', C.weeklyAverages(Array.from({ length: 4 }, () => day(2000, 150))).enough, true)
+eq('the mean divides by tracked days, not by seven', C.weeklyAverages([day(2000, 150), day(2400, 170), day(2000, 150), day(2400, 170), blank(), blank(), blank()]).kcal, 2200)
+eq('untracked days do not drag the mean toward zero', C.weeklyAverages(Array.from({ length: 5 }, () => day(2000, 150)).concat([blank(), blank()])).kcal, 2000)
+eq('only the last seven days count', C.weeklyAverages(Array.from({ length: 10 }, (_, i) => day(i < 7 ? 2000 : 9999, 150))).kcal, 2000)
+eq('nothing tracked is zero tracked, not a divide by zero', C.weeklyAverages([blank(), blank()]), { tracked: 0, of: 7, enough: false, kcal: null, protein: null })
+
+/* ----------------------------------------------------------------- height */
+
+/**
+ * Height feeds Mifflin-St Jeor at 6.25 cal per centimetre, so a conversion that
+ * drifts by an inch moves someone's target by about 16 calories a day, forever,
+ * without ever looking wrong on screen.
+ */
+eq('5 ft 11 in', Math.round(F.ftInToCm(5, 11)), 180)
+eq('180 cm back to feet and inches', F.cmToFtIn(180), { ft: 5, in: 11 })
+eq('a round 6 ft', F.cmToFtIn(F.ftInToCm(6, 0)), { ft: 6, in: 0 })
+eq('inches carry: 5 ft 12 in is 6 ft', F.cmToFtIn(F.ftInToCm(5, 12)), { ft: 6, in: 0 })
+eq('and keep carrying: 5 ft 25 in', F.cmToFtIn(F.ftInToCm(5, 25)), { ft: 7, in: 1 })
+eq('empty height is not a negative person', F.cmToFtIn(0), { ft: 0, in: 0 })
+eq('every whole inch survives the round trip', Array.from({ length: 96 }, (_, i) => {
+  const back = F.cmToFtIn(F.ftInToCm(Math.floor(i / 12), i % 12))
+  return back.ft * 12 + back.in === i
+}).every(Boolean), true)
+eq('label reads as feet and inches', F.heightLabel(180, 'imperial'), '5′ 11″')
+eq('and as centimetres otherwise', F.heightLabel(180, 'metric'), '180 cm')
+
+/* --------------------------------------------------------------- targets */
+
+/**
+ * The guardrails get tests before the onboarding UI gets pixels, because a
+ * calculator that can produce an 900-calorie target is a product decision, and
+ * a product decision that only exists in a comment is not one.
+ */
+
+// Mifflin-St Jeor, both terms, worked by hand
+eq('BMR male 80kg 180cm 30y', G.bmr({ sex: 'male', weightKg: 80, heightCm: 180, age: 30 }), 1780)
+eq('BMR female 65kg 165cm 30y', G.bmr({ sex: 'female', weightKg: 65, heightCm: 165, age: 30 }), 1370.25)
+eq('BMR refuses an unspecified sex rather than guessing', G.bmr({ sex: 'unspecified', weightKg: 65, heightCm: 165, age: 30 }), null)
+eq('BMR refuses a missing weight', G.bmr({ sex: 'male', heightCm: 180, age: 30 }), null)
+
+// Age is derived, so a stored profile cannot go quietly stale
+eq('age from birth year', G.ageFrom(1996, new Date(2026, 5, 1)), 30)
+eq('implausible age is no age', G.ageFrom(2021, new Date(2026, 5, 1)), null)
+eq('no birth year is no age', G.ageFrom(null), null)
+
+// Rates are capped on the way in, not just absent from the presets
+eq('an aggressive loss rate is capped', G.clampRate(-2, 'lose'), -0.5)
+eq('an aggressive gain rate is capped', G.clampRate(5, 'gain'), 0.25)
+eq('a goal with no rate gets the gentle default', G.clampRate(0, 'lose'), -0.25)
+eq('maintain is always zero', G.clampRate(-1, 'maintain'), 0)
+
+// The floor: a sedentary 65 kg woman losing at the fastest offered rate lands
+// under 1200 on the arithmetic, and the calculator stops rather than following.
+const floored = G.computeTargets(
+  { sex: 'female', birthYear: 1996, heightCm: 165, activity: 'sedentary', goal: 'lose', rateKgPerWeek: -0.5 },
+  { weightKg: 65, now: new Date(2026, 5, 1) }
+)
+eq('the arithmetic really did go below the floor', floored.requested < 1200, true)
+eq('the target stops at the floor', floored.kcal, 1200)
+eq('and says that is what happened', floored.floored, true)
+
+const normal = G.computeTargets(
+  { sex: 'male', birthYear: 1996, heightCm: 180, activity: 'moderate', goal: 'maintain' },
+  { weightKg: 80, now: new Date(2026, 5, 1) }
+)
+eq('maintenance is BMR times the activity factor', normal.maintenance, Math.round(1780 * 1.55))
+eq('no goal means no adjustment', normal.kcal, Math.round((1780 * 1.55) / 10) * 10)
+eq('an incomplete profile returns nothing rather than a guess', G.computeTargets({ sex: 'male' }, { weightKg: 80 }), null)
+eq('prefer-not-to-say cannot be calculated for', G.canCalculate({ sex: 'unspecified', birthYear: 1996, heightCm: 180, activity: 'moderate' }, 80), false)
+
+// Grams per kilo, not a percentage: the whole argument in one assertion
+eq(
+  'protein does not shrink with the calorie target',
+  G.macroSplit(2500, 70).protein === G.macroSplit(1600, 70).protein,
+  true
+)
+eq('normal split', G.macroSplit(1200, 65), { protein: 115, fat: 50, carbs: 75 })
+
+// A heavy body at a floored target cannot afford both fixed figures
+const squeezed = G.macroSplit(1500, 130)
+eq('the squeeze never returns negative carbs', squeezed.carbs >= 0, true)
+eq('the squeeze holds protein above the minimum', squeezed.protein >= 1.2 * 130 - 5, true)
+eq('the squeeze holds fat above the minimum', squeezed.fat >= 0.6 * 130 - 5, true)
+eq('no weight means no split rather than NaN', G.macroSplit(2000, 0), { protein: 0, fat: 0, carbs: 0 })
+
+// A hand-typed target below the floor is accepted, and mentioned once
+eq('a low manual target is flagged', G.belowFloor(1000, 'female'), 1200)
+eq('a fine manual target is not', G.belowFloor(1300, 'female'), null)
+eq('the male floor is higher', G.belowFloor(1300, 'male'), 1500)
+eq('unknown sex uses the lower floor, to avoid a false alarm', G.belowFloor(1300, null), null)
 
 /* -------------------------------------------------------------- contrast */
 
@@ -120,7 +231,7 @@ for (const m of MACROS) atLeast(`${m} text on white`, token(`${m}-text`), token(
 // Macro type on a card, which is the grey surface rather than the page.
 for (const m of MACROS) atLeast(`${m} text on surface`, token(`${m}-text`), token('surface'), AA)
 
-// White "+117" on the overage segment, which is the edge shade.
+// White "+74" on the overage segment, which is the edge shade.
 for (const m of MACROS) atLeast(`white on ${m} overage`, '#ffffff', token(`${m}-edge`), AA)
 
 // Dark mode: the darker shades invert into the ground, so text lifts to a tint.

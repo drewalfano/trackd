@@ -4,7 +4,7 @@ import { createScreen } from '../lib/screen.js'
 import { listEntries, getSettings, toggleFavourite } from '../lib/db.js'
 import { sumEntries } from '../lib/compute.js'
 import { saveEntriesAsMeal } from '../lib/logging.js'
-import { dayHeader, card, macroLine } from '../lib/ui.js'
+import { navHeader, card, macroLine } from '../lib/ui.js'
 import { entryRow } from '../lib/entryRow.js'
 import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
 import { openEditEntry } from '../sheets/serving.js'
@@ -13,7 +13,7 @@ import { toast } from '../lib/toast.js'
 import { openSheet } from '../lib/sheet.js'
 import { textInput, labelledField } from '../lib/ui.js'
 import { pluralize } from '../lib/format.js'
-import { BLOCKS } from '../lib/dates.js'
+import { BLOCKS, formatDayHeader, isToday } from '../lib/dates.js'
 import { state, setDate } from '../state.js'
 import { navigate } from '../router.js'
 
@@ -89,13 +89,13 @@ export function logScreen() {
           { class: 'flex flex-col gap-[10px]' },
           h(
             'div',
-            { class: 'flex items-end justify-between' },
+            { class: 'section-head' },
             h('div', { class: 'section-label' }, name),
             blockEntries.length
               ? h(
                   'button',
                   {
-                    class: 'section-action underline underline-offset-2',
+                    class: 'chip-sm',
                     onclick: () => promptSaveAsMeal(blockEntries, `Usual ${name.toLowerCase()}`),
                   },
                   'Save as meal'
@@ -127,43 +127,46 @@ export function logScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[30px]' },
+        { class: 'flex flex-col gap-[20px]' },
+
+        // Same day navigation as Today — this is the same day, seen by block
+        // rather than as a summary. Returning to Today is the tab bar, which
+        // already treats Log as part of that tab.
+        // Titled "Log", not the date — Today already owns the date as a title,
+        // and two screens with identical headers is a way to lose your place.
+        // The day moves to the section label directly beneath, where the
+        // chevrons above still read as stepping it.
+        navHeader({
+          title: 'Log',
+          onBack: () => setDate(-1),
+          backLabel: 'Previous day',
+          onForward: isToday(state.date) ? null : () => setDate(1),
+          forwardLabel: 'Next day',
+        }),
 
         h(
-          'div',
-          { class: 'flex items-center justify-between' },
-          h(
-            'button',
-            { class: 'flex items-center gap-[10px] text-[12px] font-medium', onclick: () => navigate('today') },
-            icon('chevronLeft', { size: 18 }),
-            'Today'
-          ),
-          h(
-            'button',
-            {
-              class: 'flex items-center gap-[10px] text-[12px] font-medium text-muted',
-              onclick: () => navigate('history'),
-            },
-            'History',
-            icon('chevronRight', { size: 16 })
-          )
-        ),
-
-        dayHeader({ date: state.date, setDate, title: 'Log' }),
-
-        // The card wraps a row rather than being one: `.card > * + *` draws the
-        // dividers, so a card that is itself a row would rule between its own
-        // two halves.
-        card(
+          'section',
+          { class: 'flex flex-col gap-[10px]' },
           h(
             'div',
-            { class: 'row justify-between' },
+            { class: 'section-head' },
+            h('div', { class: 'section-label' }, formatDayHeader(state.date)),
+            h('button', { class: 'chip-sm', onclick: () => navigate('history') }, 'History')
+          ),
+          // The card wraps a row rather than being one: `.card > * + *` draws
+          // the dividers, so a card that is itself a row would rule between its
+          // own two halves.
+          card(
             h(
-              'span',
-              { class: 'shrink-0 text-[13px] font-semibold text-muted' },
-              pluralize(entries.length, 'item')
-            ),
-            macroLine(totals, { size: 12 })
+              'div',
+              { class: 'row justify-between' },
+              h(
+                'span',
+                { class: 'shrink-0 text-[13px] font-semibold text-muted' },
+                pluralize(entries.length, 'item')
+              ),
+              macroLine(totals, { size: 12 })
+            )
           )
         ),
 

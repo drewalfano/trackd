@@ -6,7 +6,8 @@ import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
 import { toast } from './lib/toast.js'
 import { closeAnySheet } from './lib/sheet.js'
 import { route, startRouter, navigate, currentPath } from './router.js'
-import { rollOverIfNeeded } from './state.js'
+import { rollOverIfNeeded, setDate } from './state.js'
+import { todayStr } from './lib/dates.js'
 
 import { todayScreen } from './screens/today.js'
 import { logScreen } from './screens/log.js'
@@ -14,6 +15,7 @@ import { historyScreen } from './screens/history.js'
 import { weightScreen } from './screens/weight.js'
 import { settingsScreen } from './screens/settings.js'
 import { foodsScreen, foodDetailScreen } from './screens/foods.js'
+import { createOnboarding } from './screens/onboarding.js'
 import { openAddFood } from './sheets/addFood.js'
 
 const app = document.getElementById('app')
@@ -123,14 +125,37 @@ function tabBarFade() {
 }
 
 /**
- * The add button sits outside the pill, to its left, and is always available.
+ * The add button sits outside the pill, to its RIGHT, and is always available.
  * Both float clear of the bottom edge with content scrolling behind them.
+ *
+ * Right rather than left: it is the app's primary action and the only control
+ * on this bar that is not navigation, so it belongs under the thumb rather than
+ * across the hand. The tabs are destinations and can afford the longer reach.
  */
 function tabBar() {
+  /**
+   * The Today tab means today.
+   *
+   * The date is shared across Today and Log on purpose — stepping back on one
+   * and opening the other keeps your place, which is right for that pair. But
+   * History also sets it, so tapping a row there and then reaching for the tab
+   * left you on a past day, on a tab labelled Today, with only the forward
+   * chevron to walk back one day at a time.
+   *
+   * Tapping the tab is the "go home" gesture rather than part of that pairing,
+   * so it resets the day. Everything else about the shared date is unchanged.
+   */
   const tabButtons = TABS.map((tab) =>
     h(
       'button',
-      { class: 'tab', 'data-tab': tab.path, onclick: () => navigate(tab.path) },
+      {
+        class: 'tab',
+        'data-tab': tab.path,
+        onclick: () => {
+          if (tab.path === 'today') setDate(todayStr())
+          navigate(tab.path)
+        },
+      },
       icon(tab.iconName, { size: 22 }),
       h('span', { class: 'text-[11px] font-bold' }, tab.label)
     )
@@ -145,12 +170,12 @@ function tabBar() {
     h(
       'div',
       { class: 'pointer-events-auto mx-auto flex max-w-[430px] items-center gap-[10px]' },
+      h('div', { class: 'tabbar' }, tabButtons),
       h(
         'button',
         { class: 'add-btn', 'aria-label': 'Add food', onclick: () => openAddFood() },
         icon('plus', { size: 28, stroke: 2.25 })
-      ),
-      h('div', { class: 'tabbar' }, tabButtons)
+      )
     )
   )
 }
@@ -285,6 +310,22 @@ async function boot() {
   onChange((scope) => {
     if (scope === 'settings' || scope === 'all') getSettings().then((s) => applyTheme(s.theme))
   })
+
+  /**
+   * First launch: onboarding owns the whole screen, and the shell is not built
+   * until it is done.
+   *
+   * Mounting it over the app instead would mean rendering Today first — an
+   * empty dashboard reading 0 against a target nobody chose — and then covering
+   * it up. Nothing behind means nothing to flash, and no tab bar to tap through
+   * to a version of the app that has not been set up yet.
+   */
+  if (!settings.onboardingComplete) {
+    clear(app)
+    await new Promise((resolve) => {
+      createOnboarding({ onDone: resolve }).then((el) => mount(app, el))
+    })
+  }
 
   clear(app)
   app.appendChild(view)

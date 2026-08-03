@@ -1,4 +1,4 @@
-import { h } from '../lib/dom.js'
+import { h, repaint } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { createScreen } from '../lib/screen.js'
 import { openSheet } from '../lib/sheet.js'
@@ -6,8 +6,11 @@ import { toast, confirm } from '../lib/toast.js'
 import {
   getSettings,
   saveSettings,
+  saveProfile,
   listFoods,
   listMeals,
+  listWeights,
+  putWeight,
   getFood,
   getMeal,
   putMeal,
@@ -22,24 +25,37 @@ import {
 } from '../lib/db.js'
 import { kcalFromMacros } from '../lib/compute.js'
 import {
+  ACTIVITY_LEVELS,
+  GOALS,
+  RATE_PRESETS,
+  ageFrom,
+  belowFloor,
+  canCalculate,
+  computeTargets,
+  describeRate,
+} from '../lib/targets.js'
+import {
   card,
   listRow,
   emptyRow,
   segmentedWide,
   numberInput,
+  heightInput,
   textInput,
   labelledField,
   notice,
 } from '../lib/ui.js'
-import { pluralize, round } from '../lib/format.js'
+import { pluralize, round, kgToUnit, unitToKg } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
+import { openOnboardingOverlay } from './onboarding.js'
 import { VERSION, REPO_URL } from '../config.js'
 
 /**
  * Settings, which is also where the food library and saved meals live because
  * neither earns a tab of its own.
  */
+
 
 /* ------------------------------------------------------------------ sheets */
 
@@ -374,7 +390,10 @@ function openImportSheet(data) {
           )
         )
 
-        body.replaceChildren(
+        // Same null-child trap: an export taken before `exportedAt` existed
+        // would otherwise put the word "null" under the preview.
+        repaint(
+          body,
           segmentedWide({
             options: [
               { value: 'merge', label: 'Merge' },
@@ -442,9 +461,10 @@ export function settingsScreen() {
   return createScreen(
     async ({ rerender }) => {
       const settings = await getSettings()
-      const [foods, meals, estimate] = await Promise.all([
+      const [foods, meals, weights, estimate] = await Promise.all([
         listFoods(),
         listMeals(),
+        listWeights(),
         storageEstimate(),
       ])
 
@@ -460,11 +480,32 @@ export function settingsScreen() {
         onInput: (v) => {
           targets.kcal = Number(v) || 0
           kcalOverridden = true
+          syncFloorHint()
           queueSave()
         },
       })
 
       const derivedHint = h('div', { class: 'px-0 text-[12px] text-muted' })
+
+      /**
+       * Said once, under the field, and never again. A target below the floor
+       * is accepted — this is the user's tool and they may have a reason — but
+       * it should not pass without the app having mentioned it.
+       */
+      const floorHint = h('div')
+      const syncFloorHint = () => {
+        const floor = belowFloor(targets.kcal, settings.profile.sex)
+        repaint(
+          floorHint,
+          floor
+            ? notice(
+                `That is below ${floor} cal, which is the point where this is worth talking ` +
+                  'to someone about rather than typing into an app. Saved either way.',
+                { iconName: 'alert' }
+              )
+            : null
+        )
+      }
 
       const syncDerived = () => {
         const derived = kcalFromMacros(targets)
@@ -495,9 +536,16 @@ export function settingsScreen() {
         )
       }
 
+      /**
+       * Any hand edit flips the source to manual. Typed numbers win over
+       * calculated ones permanently, rather than until the next time the
+       * profile changes and something quietly recomputes over the top.
+       */
       function queueSave() {
         clearTimeout(saveTimer)
-        saveTimer = setTimeout(() => saveSettings({ targets }), 400)
+        saveTimer = setTimeout(() => {
+          saveSettings({ targets, targetsSource: 'manual' }).then(paintCalc)
+        }, 400)
       }
 
       const macroField = (key, label) =>
@@ -515,6 +563,167 @@ export function settingsScreen() {
         })
 
       syncDerived()
+      syncFloorHint()
+
+      /* ------------------------------------------------------ about you */
+
+      const profile = { ...settings.profile }
+      const weightUnit = settings.weightUnit
+      let currentKg = weights.at(-1)?.kg ?? null
+      let profileTimer = null
+      let weightTimer = null
+
+      function queueProfileSave() {
+        clearTimeout(profileTimer)
+        profileTimer = setTimeout(() => saveProfile(profile), 400)
+      }
+
+      /**
+       * For the taps rather than the typing. A choice that changes what else is
+       * on screen has to be written before the screen is rebuilt from it, or
+       * the rebuild reads the value it just replaced.
+       */
+      const saveProfileNow = (patch) => {
+        clearTimeout(profileTimer)
+        Object.assign(profile, patch)
+        return saveProfile(profile)
+      }
+
+      /** Repaints only the calculated block, so typing does not lose focus. */
+      const calcBlock = h('div', { class: 'flex flex-col gap-[10px]' })
+
+      const choiceRow = (selected, title, subtitle, onclick) =>
+        listRow({
+          title,
+          subtitle,
+          onclick,
+          right: selected ? icon('check', { size: 20 }) : null,
+          dim: !selected,
+        })
+
+      const activityCard = h('div')
+      function paintActivity() {
+        activityCard.replaceChildren(
+          card(
+            ACTIVITY_LEVELS.map((level) =>
+              choiceRow(profile.activity === level.value, level.label, level.description, () => {
+                profile.activity = level.value
+                queueProfileSave()
+                paintActivity()
+                paintCalc()
+              })
+            )
+          )
+        )
+      }
+      paintActivity()
+
+      const rateRow = h('div')
+      function paintRate() {
+        const presets = RATE_PRESETS[profile.goal] || RATE_PRESETS.maintain
+        repaint(
+          rateRow,
+          profile.goal === 'maintain'
+            ? null
+            : segmentedWide({
+                // The rate alone. Pairing it with the preset name wrapped to two
+                // lines in a segment, and "Steadily" next to "0.5 kg a week"
+                // was not telling anyone anything the number had not.
+                options: presets.map((p) => ({
+                  value: p.kgPerWeek,
+                  label: describeRate(p.kgPerWeek, weightUnit),
+                })),
+                value: presets.find((p) => p.kgPerWeek === profile.rateKgPerWeek)
+                  ? profile.rateKgPerWeek
+                  : presets[0].kgPerWeek,
+                onChange: (v) => {
+                  profile.rateKgPerWeek = v
+                  queueProfileSave()
+                  paintRate()
+                  paintCalc()
+                },
+              })
+        )
+      }
+      paintRate()
+
+      /**
+       * The calculated figures, always visible and never applied on their own.
+       * Applying is a button, because a target changing underneath someone
+       * because they corrected their height is not a thing an app should do.
+       */
+      function paintCalc() {
+        if (!canCalculate(profile, currentKg)) {
+          repaint(
+            calcBlock,
+            notice(
+              profile.sex === 'unspecified'
+                ? 'The standard formula needs sex as one of its terms, so there is nothing to ' +
+                    'calculate here. Set the targets above by hand instead — they work exactly ' +
+                    'the same once they are set.'
+                : 'Fill in sex, birth year, height, a weigh-in and an activity level and a ' +
+                    'suggested target appears here. Or skip it and type the targets above.'
+            )
+          )
+          return
+        }
+
+        const calc = computeTargets(profile, { weightKg: currentKg })
+        const same = ['kcal', 'protein', 'fat', 'carbs'].every(
+          (k) => Math.round(targets[k]) === calc[k]
+        )
+
+        repaint(
+          calcBlock,
+          card(
+            listRow({
+              title: `${calc.kcal} cal`,
+              subtitle: `${calc.protein} g protein · ${calc.fat} g fat · ${calc.carbs} g carbs`,
+            }),
+            listRow({
+              title: 'How that is worked out',
+              subtitle:
+                `${calc.bmr} at rest, ${calc.maintenance} with activity` +
+                (calc.rateKgPerWeek
+                  ? `, then ${calc.rateKgPerWeek < 0 ? 'less' : 'more'} for ${describeRate(
+                      calc.rateKgPerWeek,
+                      weightUnit
+                    )}`
+                  : ', and no adjustment'),
+            })
+          ),
+          calc.floored
+            ? notice(
+                `The arithmetic came to ${calc.requested} cal. This stops at ${calc.floor} and ` +
+                  'will not calculate anyone below it.',
+                { iconName: 'info' }
+              )
+            : null,
+          same
+            ? h('p', { class: 'px-0 text-[12px] text-muted' }, 'Your targets match this.')
+            : h(
+                'button',
+                {
+                  class: 'btn-primary',
+                  onclick: async () => {
+                    await saveSettings({
+                      targets: {
+                        kcal: calc.kcal,
+                        protein: calc.protein,
+                        fat: calc.fat,
+                        carbs: calc.carbs,
+                      },
+                      targetsSource: 'calculated',
+                    })
+                    toast('Targets updated')
+                    rerender()
+                  },
+                },
+                'Use these targets'
+              )
+        )
+      }
+      paintCalc()
 
       /* ------------------------------------------------------------ rows */
 
@@ -540,13 +749,143 @@ export function settingsScreen() {
           { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Targets'),
           h(
+            'p',
+            { class: 'px-0 text-[12px] leading-snug text-muted' },
+            settings.targetsSource === 'calculated'
+              ? 'Worked out from your profile below. Editing anything here makes them yours instead.'
+              : 'Set by hand. Nothing recalculates these unless you ask it to.'
+          ),
+          h(
             'div',
             { class: 'flex flex-col gap-[10px]' },
             labelledField({ label: 'Calories', children: kcalField }),
             derivedHint,
+            floorHint,
             macroField('protein', 'Protein'),
             macroField('fat', 'Fat'),
             macroField('carbs', 'Carbs')
+          ),
+          h(
+            'p',
+            { class: 'px-0 pt-[10px] text-[12px] leading-snug text-muted' },
+            'Changing a target changes today and everything after it. Days you have already ' +
+              'logged keep the target they were logged against.'
+          )
+        ),
+
+        h(
+          'section',
+          { class: 'flex flex-col gap-[20px]' },
+          h('div', { class: 'section-label' }, 'About you'),
+          h(
+            'p',
+            { class: 'px-0 text-[12px] leading-snug text-muted' },
+            'Only used to suggest a target. None of it leaves this device, and the app works ' +
+              'without any of it.'
+          ),
+
+          card(
+            prefRow(
+              'Sex',
+              segmentedWide({
+                options: [
+                  { value: 'female', label: 'Female' },
+                  { value: 'male', label: 'Male' },
+                  { value: 'unspecified', label: 'Rather not' },
+                ],
+                value: profile.sex,
+                onChange: (v) => saveProfileNow({ sex: v }).then(rerender),
+              })
+            ),
+            prefRow(
+              'Goal',
+              segmentedWide({
+                options: GOALS.map((g) => ({ value: g.value, label: g.label })),
+                value: profile.goal,
+                onChange: (v) =>
+                  saveProfileNow({
+                    goal: v,
+                    // A goal without a rate is a goal at the gentlest one.
+                    rateKgPerWeek: (RATE_PRESETS[v] || RATE_PRESETS.maintain)[0].kgPerWeek,
+                  }).then(rerender),
+              })
+            ),
+            profile.goal === 'maintain' ? null : prefRow('How fast', rateRow)
+          ),
+
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+            labelledField({
+              label: 'Birth year',
+              hint: ageFrom(profile.birthYear) ? `${ageFrom(profile.birthYear)} years old` : null,
+              children: numberInput({
+                value: profile.birthYear ?? '',
+                placeholder: '1994',
+                step: '1',
+                onInput: (v) => {
+                  profile.birthYear = Number(v) || null
+                  queueProfileSave()
+                  paintCalc()
+                },
+              }),
+            }),
+            labelledField({
+              label: 'Height',
+              children: heightInput({
+                cm: profile.heightCm,
+                units: settings.units,
+                onChange: (cm) => {
+                  profile.heightCm = cm
+                  queueProfileSave()
+                  paintCalc()
+                },
+              }),
+            }),
+            labelledField({
+              label: 'Current weight',
+              hint: 'Saved as today’s weigh-in — the Weight tab is the record, not a second copy.',
+              children: numberInput({
+                value: currentKg == null ? '' : round(kgToUnit(currentKg, weightUnit), 1),
+                suffix: weightUnit,
+                step: '0.1',
+                onInput: (v) => {
+                  const entered = Number(v)
+                  if (!(entered > 0)) return
+                  currentKg = unitToKg(entered, weightUnit)
+                  clearTimeout(weightTimer)
+                  weightTimer = setTimeout(() => putWeight(todayStr(), currentKg), 600)
+                  paintCalc()
+                },
+              }),
+            })
+          ),
+
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+            h('div', { class: 'section-label' }, 'How active are you'),
+            activityCard
+          ),
+
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+            h('div', { class: 'section-label' }, 'Suggested target'),
+            calcBlock
+          ),
+
+          // Temporary door onto the first-run flow while it is being built.
+          // Runs as a preview: blank draft, nothing written unless the last
+          // step is taken deliberately, so walking through it cannot cost
+          // someone the profile they already have.
+          card(
+            listRow({
+              title: 'Preview onboarding',
+              subtitle: 'The first-run flow, full screen, as a new person sees it',
+              chevron: true,
+              onclick: () => openOnboardingOverlay({ preview: true }).then(rerender),
+            })
           )
         ),
 

@@ -137,6 +137,40 @@ export function sanityCheck(per100, unit = 'g') {
   return warnings
 }
 
+/**
+ * How many of the last seven days have to be tracked before the app is willing
+ * to call anything an average.
+ *
+ * Four. Below that the mean is dominated by whichever days happen to be in it —
+ * one partial day reads as a 1600-calorie deficit at a glance when it is
+ * actually one lunch and no dinner.
+ */
+export const AVERAGES_MIN_DAYS = 4
+
+/**
+ * The weekly read, or an admission that there isn't one yet.
+ *
+ * `kcal` and `protein` come back as null below the threshold rather than as
+ * numbers the caller is trusted not to render. A wrong number presented
+ * confidently is worse than no number, and the only way to guarantee the screen
+ * cannot show one is to not hand it over.
+ */
+export function weeklyAverages(days, minDays = AVERAGES_MIN_DAYS) {
+  const recent = days.slice(0, 7)
+  const tracked = recent.filter((d) => d.entries?.length)
+  const enough = tracked.length >= minDays
+  const mean = (key) =>
+    tracked.reduce((sum, d) => sum + (d.totals?.[key] || 0), 0) / tracked.length
+
+  return {
+    tracked: tracked.length,
+    of: 7,
+    enough,
+    kcal: enough ? mean('kcal') : null,
+    protein: enough ? mean('protein') : null,
+  }
+}
+
 /** Progress of a value against a target, clamped for the bar, raw for the chip. */
 export function progress(value, target) {
   const t = Number(target) || 0

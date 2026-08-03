@@ -2,7 +2,7 @@ import { h } from './dom.js'
 import { deleteEntry, putEntry, getSettings, uid } from './db.js'
 import { toast } from './toast.js'
 import { openSheet } from './sheet.js'
-import { blockSelector, segmented } from './ui.js'
+import { blockSelector, segmented, macroLine } from './ui.js'
 import { addDays, formatDayLabel, todayStr } from './dates.js'
 
 /**
@@ -89,23 +89,28 @@ export async function openDuplicateSheet(entry) {
         )
       )
 
+      // Spacing and type match the other sheets: 20 between sections, 10 inside
+      // one, and the 16/14/12 steps. This was the only surface built off the
+      // default Tailwind scale (gap-5, py-3, text-[15px]) — close enough to
+      // look intentional, far enough off to look wrong, and impossible to name.
       return h(
         'div',
-        { class: 'flex flex-col gap-5 pb-2' },
+        { class: 'flex flex-col gap-[20px] pb-[10px]' },
         h(
           'div',
-          { class: 'card px-4 py-3' },
-          h('div', { class: 'text-[15px] font-semibold' }, entry.foodName),
-          h(
-            'div',
-            { class: 'mt-0.5 text-[13px] text-muted' },
-            `${Math.round(entry.computed.kcal)} cal`
-          )
+          { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' },
+          h('div', { class: 'text-[16px] font-semibold leading-tight' }, entry.foodName),
+          macroLine(entry.computed, { size: 14 })
         ),
-        h('div', { class: 'flex flex-col gap-2' }, h('div', { class: 'section-label' }, 'Day'), dayRow),
         h(
           'div',
-          { class: 'flex flex-col gap-2' },
+          { class: 'flex flex-col gap-[10px]' },
+          h('div', { class: 'section-label' }, 'Day'),
+          dayRow
+        ),
+        h(
+          'div',
+          { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Block'),
           blockRow
         )

@@ -1,33 +1,38 @@
 @import 'tailwindcss';
 
 /**
- * Inclusive Sans, self-hosted.
+ * Inter, self-hosted.
  *
  * Linking Google Fonts would put a network dependency in front of first paint,
  * which is the one thing this app is not allowed to have. Both files are the
- * variable font — a single 300-700 weight axis covers Regular and SemiBold, so
- * the whole family costs 46 KB.
+ * variable font across the full 100-900 axis, which is 134 KB — about three
+ * times what Inclusive Sans cost. That is the price of the switch and it is
+ * paid once, on first load, into the service worker's precache.
+ *
+ * The thing Inter buys back: real `tnum`. Inclusive Sans shipped none, and this
+ * app is mostly numbers that count up or sit in columns — see `.tnum` below for
+ * the hack that is no longer needed.
  *
  * latin-ext is here on purpose: Open Food Facts returns a lot of French and
  * German product names, and without it they would render in the fallback font
  * mid-list. See src/fonts/LICENSE.txt.
  */
 @font-face {
-  font-family: 'Inclusive Sans';
+  font-family: 'Inter';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('./fonts/inclusive-sans-latin.woff2') format('woff2');
+  src: url('./fonts/inter-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
     U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
     U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Inclusive Sans';
+  font-family: 'Inter';
   font-style: normal;
-  font-weight: 300 700;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('./fonts/inclusive-sans-latin-ext.woff2') format('woff2');
+  src: url('./fonts/inter-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
     U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
     U+2113, U+2C60-2C7F, U+A720-A7FF;
@@ -50,9 +55,24 @@
       macro identity, and never decoration, mood, or state.
    --------------------------------------------------------------------------- */
 @theme {
+  /**
+   * The ground, flipped back — LIGHT MODE ONLY.
+   *
+   * v1.1.0 inverted v1's arrangement so the page was white and cards were grey.
+   * This puts it back: the page is a tint and cards are white, which is the iOS
+   * grouped-list ground and the single biggest reason the mockups read as more
+   * Apple than the build did.
+   *
+   * Same two hex values, swapped — no new colour enters the system.
+   *
+   * Dark mode is deliberately NOT swapped. It was already correct: page
+   * `#141414`, cards `#1E1E1E`, so cards sit LIGHTER than the page, which is
+   * what iOS does in dark. Swapping there would have made cards darker than the
+   * page and inverted the depth cue in one theme only.
+   */
   --color-ink: #232323;
-  --color-canvas: #ffffff;
-  --color-surface: #f0f0f0;
+  --color-canvas: #f0f0f0;
+  --color-surface: #ffffff;
   --color-muted: #6b6b6b;
   --color-outline: #d9d9d9;
 
@@ -89,31 +109,50 @@
 
   /* One family. The system stack is the fallback while the woff2 loads. */
   --font-sans:
-    'Inclusive Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
-    Arial, sans-serif;
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
 
-  /* One radius. 24px on everything that is not a pill. */
+  /* One radius. 24px on everything that is not a pill. Rule intact — the 12px
+     variant this redesign briefly added is gone; the mockups landed back on 24. */
   --radius-card: 24px;
   --radius-sheet: 24px;
 
   /**
    * Five steps, measured off the mockups:
    *   48  the calorie total          SemiBold
-   *   30  screen titles              SemiBold
+   *   26  screen titles              SemiBold  (30 in the mock — see below)
    *   16  section + macro labels,    SemiBold, and body at Regular
    *   14  log row titles and body
    *   12  the macro line
    *
-   * Inclusive Sans carries a large x-height, which is why 12px still holds up
-   * for the macro line where the old system-font scale needed 15px.
+   * Inter carries a large x-height, which is why 12px still holds up for the
+   * macro line where the old system-font scale needed 15px.
    */
   --text-display: 48px;
   --text-display--line-height: 1;
   --text-display--letter-spacing: -0.02em;
 
-  --text-title: 30px;
+  /**
+   * 26, down from the mock's 30.
+   *
+   * 30 was drawn for a narrower face. Inter sets about 8% wider, and at that
+   * size the day header — the tightest line in the app, 227px between two
+   * chevrons — was loud on the screen it appears on most and still needed
+   * `fitText` to stop the longer dates truncating.
+   *
+   * Measured at 26, against the 227 available: "Today, Aug 2" 160,
+   * "Yesterday, Aug 1" 206, "Tomorrow, Aug 12" 225. Every day anyone actually
+   * reads now fits outright, where at 30 all three were over.
+   *
+   * One string still is not: "Wed, Jan 13, 2027" at 230, three pixels long.
+   * That is a date from another year, reached only by paging back months, and
+   * `fitText` takes it down half a step rather than the two it used to need. So
+   * the backstop stays — it just stopped being load-bearing.
+   */
+  --text-title: 26px;
   --text-title--line-height: 1.1;
   --text-title--letter-spacing: -0.02em;
+
 }
 
 /* Dark mode inverts neutrals only. The macro hues do not move — see spec 7. */
@@ -243,11 +282,29 @@
     padding-bottom: calc(var(--nav-height) + var(--nav-inset) + 30px);
   }
 
-  /* Grouped card. Surface plus a 1px outline; the outline is what separates it
-     from the page now that both are light. */
+  /**
+   * Grouped card. Fill only — no outline.
+   *
+   * The outline existed because v1.1.0 put light cards on a light page, where a
+   * surface change alone was too weak to separate them. The ground flip removed
+   * that problem: a white card on a tinted page separates on its own.
+   *
+   * The line this draws for the rest of the system: EVERYTHING is a fill.
+   *
+   * Controls were stroked for a while on the theory that the edge is what says
+   * pressable. It was not doing that job — `--color-outline` on
+   * `--color-surface` is about a 1.1:1 edge, so it read as a slightly dirty
+   * boundary rather than as an affordance, and the shape and the fill were
+   * already carrying the message. Containers and controls now separate the same
+   * way, by tone.
+   *
+   * A stroke left anywhere in here has to be earning it. Two do: `.chip-sm`,
+   * which is transparent and so has no fill to be read from, and the selected
+   * states — segment, chip, tab — where the ink edge is the selection itself
+   * and not decoration.
+   */
   .card {
     background: var(--color-surface);
-    border: 1px solid var(--color-outline);
     border-radius: var(--radius-card);
     overflow: hidden;
   }
@@ -265,7 +322,6 @@
    */
   .panel {
     background: var(--color-surface);
-    border: 1px solid var(--color-outline);
     border-radius: var(--radius-card);
   }
 
@@ -301,21 +357,120 @@
   }
 
   /**
-   * Synthetic tabular figures.
+   * Tabular figures.
    *
-   * Inclusive Sans ships no `tnum` feature, so `font-variant-numeric` is a
-   * no-op in it and its digits vary by 0.165em — about 8px per digit at display
-   * size. Any number that counts up or sits in a column would visibly wobble.
+   * This used to be a synthetic advance: Inclusive Sans shipped no `tnum`, so
+   * `font-variant-numeric` was a no-op in it and every digit got a hand-set
+   * 0.66em box to stop counting numbers from wobbling. Inter has real tabular
+   * figures, and `body` already asks for them, so the font does it properly now
+   * — with the correct advance rather than the widest-glyph approximation.
    *
-   * So digits get a fixed advance instead, set to the widest glyph (`0`, at
-   * 0.6594em) and centred. Applied only where position matters; inline numbers
-   * in running text keep the font's natural proportional spacing, which is what
-   * it was drawn for.
+   * The per-digit spans stay. `countTo` writes through them every frame to
+   * avoid reflowing a text node mid-animation, and that is still worth having;
+   * they simply no longer carry a width. Belt and braces on the declaration
+   * because these spans are also what the count-up animation targets.
    */
-  .tnum > .d {
-    display: inline-block;
-    width: 0.66em;
-    text-align: center;
+  .tnum {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* -------------------------------------------------------------- day card */
+
+  /**
+   * The Today card. Fill only — NO outline.
+   *
+   * This is the "strokes or fills, not both" call from the design notes. v1.1.0
+   * added the outline because "with both grounds light, surface change alone is
+   * too weak to separate a card from the page", and that reasoning is sound for
+   * a component nested inside another component — a bar inside a card. It does
+   * not hold at full-card scale, where a whole page-width tint separates itself
+   * perfectly well. The hairline was buying nothing here and costing the one
+   * thing the notes call the most accurate criticism of this screen: that
+   * nothing recedes.
+   *
+   * No automatic row dividers either — same split, and the same reason, as
+   * `.panel`. `.card > * + *` would rule a line between the parts of a layout.
+   */
+  .day-card {
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+    padding: 20px;
+  }
+
+  /* Equal columns, so the three rings are comparable by position as well as
+     by size. Even distribution is the whole argument for a row over concentric. */
+  .day-rings {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 20px;
+  }
+
+  /**
+   * The calorie bar.
+   *
+   * Deliberately not `.bar-track`. That one is 32px with an outline, a 3px
+   * inset and room for the overage segment inside the fill — it was built to be
+   * the whole gauge. Here it is a supporting mark under a number that has
+   * already said the same thing, so it loses the frame entirely: no outline, no
+   * inset, and a track that is the hue at low opacity rather than a grey
+   * channel. Same treatment as the ring tracks, so the card reads as one system.
+   */
+  .kbar {
+    height: 14px;
+    width: 100%;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-kcal) 20%, transparent);
+    overflow: hidden;
+  }
+
+  .kbar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--color-kcal);
+    transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /**
+   * A chip that sits on a heading row rather than in a scrolling row of its own.
+   *
+   * Ink stroke, not the hairline. Now that containers have lost their outlines,
+   * `--color-outline` on a control against a white card is nearly invisible —
+   * and this is the one control on a section heading, so it has to read as
+   * pressable at a glance. The heavier edge is what earns it that.
+   */
+  .chip-sm {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 34px;
+    padding: 0 16px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    background: transparent;
+    border: 1px solid var(--color-ink);
+    color: var(--color-ink);
+    flex: none;
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 120ms ease-out;
+  }
+  .chip-sm:active {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+
+  /* Section heading with an action on the right. Repeats on every screen that
+     has a list under a label, so it lives here rather than in each of them. */
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .ring-arc {
+    transition: stroke-dashoffset 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /* ------------------------------------------------------------------ bars */
@@ -347,8 +502,11 @@
     justify-content: flex-end;
     /* Clips the overage segment to the fill's own rounded right cap. */
     overflow: hidden;
-    /* Fires once, on value change, then gets out of the way. */
-    transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    /* Fires once, on value change, then gets out of the way. The opacity leg is
+       only ever used on the way back to zero — see progressBar(). */
+    transition:
+      width 250ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   /**
@@ -375,6 +533,18 @@
   /* --------------------------------------------------------------- controls */
 
   /* Circular icon button: chevrons, close, swipe actions. */
+  /**
+   * Controls are fills, not outlined fills.
+   *
+   * The hairline was doing the same job as the surface change and losing —
+   * `--color-outline` against `--color-surface` is a 1.1:1 edge, so it read as
+   * a slightly dirty boundary rather than as structure. Containers already gave
+   * theirs up for the same reason; this finishes the job on the controls.
+   *
+   * Two strokes survive on purpose, and both carry information rather than
+   * decoration: `.chip-sm`, which is a transparent pill with no fill to read
+   * from, and every selected state, where the ink edge IS the selection.
+   */
   .icon-btn {
     display: inline-flex;
     align-items: center;
@@ -383,9 +553,16 @@
     height: 44px;
     border-radius: 999px;
     background: var(--color-surface);
-    border: 1px solid var(--color-outline);
+    border: 0;
     color: var(--color-ink);
     flex: none;
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 120ms ease-out;
+  }
+  .icon-btn:active:not(:disabled) {
+    transform: scale(0.92);
+    opacity: 0.85;
   }
 
   .icon-btn-sm {
@@ -393,35 +570,66 @@
     height: 38px;
   }
 
-  .btn-primary {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 56px;
-    width: 100%;
-    border-radius: var(--radius-card);
-    background: var(--color-ink);
-    border: 1px solid var(--color-ink);
-    color: var(--color-canvas);
-    font-weight: 600;
-    font-size: 16px;
-  }
-  .btn-primary:disabled {
-    opacity: 0.3;
-  }
-
+  /**
+   * Buttons are capsules, not rounded rectangles.
+   *
+   * 24px on a 56px box is the one shape in here that read as someone else's
+   * system — a Material extended FAB, where the corner is a fixed token that
+   * happens to be smaller than half the height. Every other control on the
+   * screen is already a true capsule (the field, the chips, the segments, the
+   * tab bar), so a squarish button sitting in a row with a pill field was the
+   * only thing breaking the family.
+   *
+   * The rest of the treatment is deliberately not Material either: no
+   * elevation, no ripple, no letter-spacing on the label. Press feedback is a
+   * fast scale-and-dim of the whole control, which is what iOS does and what
+   * makes a 56px slab feel like it has physical give.
+   */
+  .btn-primary,
   .btn-secondary {
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 56px;
     width: 100%;
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
-    border: 1px solid var(--color-outline);
-    color: var(--color-ink);
+    border-radius: 999px;
     font-weight: 600;
     font-size: 16px;
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 120ms ease-out;
+  }
+  .btn-primary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled) {
+    transform: scale(0.97);
+    opacity: 0.85;
+  }
+
+  .btn-primary {
+    background: var(--color-ink);
+    border: 0;
+    color: var(--color-canvas);
+  }
+  .btn-primary:disabled {
+    opacity: 0.3;
+  }
+
+  .btn-secondary {
+    background: var(--color-surface);
+    border: 0;
+    color: var(--color-ink);
+  }
+
+  /**
+   * A button that shares a row with a 48px field, rather than owning a footer.
+   * Matching the field's height is what makes the pair read as one control;
+   * 56px next to 48px looked like the button had been dropped in from a sheet.
+   */
+  .btn-compact {
+    min-height: 48px;
+    width: auto;
+    padding-inline: 22px;
+    font-size: 15px;
   }
 
   /* Single-line input row: 48px tall, 24px radius, so it reads as a pill. */
@@ -433,7 +641,7 @@
     min-height: 48px;
     padding: 0 20px;
     background: var(--color-surface);
-    border: 1px solid var(--color-outline);
+    border: 0;
     border-radius: var(--radius-card);
   }
 
@@ -446,26 +654,32 @@
     font-size: 14px;
     font-weight: 600;
     background: var(--color-surface);
-    border: 1px solid var(--color-outline);
+    border: 0;
     color: var(--color-muted);
     flex: none;
   }
   .chip[aria-pressed='true'],
   .chip[data-selected='true'] {
     background: var(--color-ink);
-    border-color: var(--color-ink);
     color: var(--color-canvas);
   }
 
-  /* Segmented control. The selected segment is a white pill with an ink edge,
-     matching the tab bar's treatment of the active tab. */
+  /**
+   * Segmented control. The selected segment is a white pill with an ink edge,
+   * matching the tab bar's treatment of the active tab.
+   *
+   * The track is `canvas` rather than `surface` since the ground flipped —
+   * these mostly sit on white cards and sheets, where a white track would have
+   * no edges at all. The rule is unchanged: the track takes the recessive tone
+   * and the selection pops to white. Only which token is recessive moved.
+   */
   .segmented {
     display: flex;
     gap: 4px;
     padding: 4px;
     border-radius: var(--radius-card);
-    background: var(--color-surface);
-    border: 1px solid var(--color-outline);
+    background: var(--color-canvas);
+    border: 0;
   }
 
   .segment {
@@ -478,7 +692,7 @@
     border: 1px solid transparent;
   }
   .segment[aria-pressed='true'] {
-    background: var(--color-canvas);
+    background: var(--color-surface);
     border-color: var(--color-ink);
     color: var(--color-ink);
   }
@@ -576,9 +790,16 @@
     color: var(--color-muted);
   }
 
-  /* Active tab: a canvas pill with an ink edge inside the grey bar. */
+  /**
+   * Active tab: an ink edge, on the same white as the bar it sits in.
+   *
+   * Was a `canvas` pill inside a `surface` bar, which read as lighter-inside-
+   * darker. After the ground flip that relationship inverted and the ACTIVE tab
+   * became the grey one — the selected state looked recessed. The bar is white
+   * now, so the edge does the work alone, which is what the mockups show.
+   */
   .tab[aria-current='page'] {
-    background: var(--color-canvas);
+    background: var(--color-surface);
     border-color: var(--color-ink);
     color: var(--color-ink);
   }

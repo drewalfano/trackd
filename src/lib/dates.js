@@ -62,6 +62,38 @@ export function formatDayLabel(str) {
   })
 }
 
+/**
+ * A day label that can sit mid-sentence: "remove today's weight", "saved
+ * Tue, 28 Jul".
+ *
+ * `formatDayLabel` returns either a relative word or a real date, and only the
+ * first of those may be lowercased. Calling `.toLowerCase()` on the result
+ * blindly turns "Tue, 28 Jul" into "tue, 28 jul", which is how it first shipped.
+ */
+const RELATIVE_LABELS = new Set(['Today', 'Yesterday', 'Tomorrow'])
+
+export function dayPhrase(str) {
+  const label = formatDayLabel(str)
+  return RELATIVE_LABELS.has(label) ? label.toLowerCase() : label
+}
+
+/**
+ * The Today page header: "Today, Jul 31".
+ *
+ * Relative days carry the short date alongside the word, because "Today" alone
+ * tells you nothing about where you are once you have paged away and back.
+ * Every other day is already a date, so it does not get one twice.
+ */
+export function formatDayHeader(str) {
+  const label = formatDayLabel(str)
+  if (label !== 'Today' && label !== 'Yesterday' && label !== 'Tomorrow') return label
+  const short = fromDateStr(str).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
+  return `${label}, ${short}`
+}
+
 /** The muted line under the screen title: "Tuesday, 29 July". */
 export function formatDateSub(str) {
   const d = fromDateStr(str)

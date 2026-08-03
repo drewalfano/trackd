@@ -38,35 +38,123 @@ const SORTS = {
 
 export function foodsScreen() {
   return createScreen(
-    async ({ rerender }) => {
+    async () => {
       const foods = await listFoods()
 
-      const query = view.query.trim().toLowerCase()
-      const filtered = foods
-        .filter((f) => {
-          if (view.filter === 'custom' && f.source !== 'custom') return false
-          if (view.filter === 'scanned' && f.source !== 'off') return false
-          if (!query) return true
-          return `${f.name} ${f.brand || ''}`.toLowerCase().includes(query)
-        })
-        .sort(SORTS[view.sort])
+      /**
+       * Query, filter and sort repaint the list in place rather than going
+       * through `rerender`.
+       *
+       * `rerender` is `mount()` — it replaces the screen's whole subtree,
+       * including the input the user is typing into. Calling it from `oninput`
+       * destroyed the field on every keystroke: the text survived, because the
+       * replacement was built with the stored query, but the caret did not, and
+       * on a phone the keyboard closes with it. One character per tap on the
+       * field is not a search box.
+       *
+       * The Open Food Facts sheet already worked this way — see
+       * `run()` in sheets/search.js. This makes the two agree.
+       *
+       * No debounce here, unlike that sheet. This filters an array already in
+       * memory, so there is nothing to wait for; a debounce would only add lag.
+       */
+      const listSlot = h('div')
+      const filterSlot = h('div')
+      const sortSlot = h('div')
+
+      function paintList() {
+        const query = view.query.trim().toLowerCase()
+        const filtered = foods
+          .filter((f) => {
+            if (view.filter === 'custom' && f.source !== 'custom') return false
+            if (view.filter === 'scanned' && f.source !== 'off') return false
+            if (!query) return true
+            return `${f.name} ${f.brand || ''}`.toLowerCase().includes(query)
+          })
+          .sort(SORTS[view.sort])
+
+        listSlot.replaceChildren(
+          filtered.length
+            ? card(
+                filtered.map((food) =>
+                  listRow({
+                    title: food.name,
+                    subtitle: [food.brand, servingLabel(food), `used ${food.useCount || 0}×`]
+                      .filter(Boolean)
+                      .join(' · '),
+                    chevron: true,
+                    onclick: () => navigate(`foods/${encodeURIComponent(food.id)}`),
+                  })
+                )
+              )
+            : card(
+                emptyRow(
+                  foods.length ? 'Nothing matches those filters.' : 'Nothing in the library yet.'
+                )
+              )
+        )
+      }
+
+      // The segmented controls repaint themselves too, since `aria-pressed` is
+      // what draws the selection and it is set at construction.
+      function paintFilter() {
+        filterSlot.replaceChildren(
+          segmented({
+            options: [
+              { value: 'all', label: 'All' },
+              { value: 'custom', label: 'Custom' },
+              { value: 'scanned', label: 'Scanned' },
+            ],
+            value: view.filter,
+            onChange: (v) => {
+              view.filter = v
+              paintFilter()
+              paintList()
+            },
+          })
+        )
+      }
+
+      function paintSort() {
+        sortSlot.replaceChildren(
+          segmented({
+            options: [
+              { value: 'used', label: 'Most used' },
+              { value: 'alpha', label: 'A–Z' },
+              { value: 'added', label: 'Recently added' },
+            ],
+            value: view.sort,
+            onChange: (v) => {
+              view.sort = v
+              paintSort()
+              paintList()
+            },
+          })
+        )
+      }
 
       const search = h(
         'div',
-        { class: 'field flex items-center gap-[10px]' },
+        { class: 'field' },
         icon('search', { size: 18, class: 'shrink-0 text-muted' }),
         h('input', {
-          class: 'w-full text-[16px]',
+          class: 'w-full min-w-0 text-[16px]',
           type: 'search',
           placeholder: 'Search your foods',
           value: view.query,
           autocomplete: 'off',
+          autocorrect: 'off',
+          spellcheck: 'false',
           oninput: (e) => {
             view.query = e.target.value
-            rerender()
+            paintList()
           },
         })
       )
+
+      paintFilter()
+      paintSort()
+      paintList()
 
       return h(
         'div',
@@ -88,51 +176,9 @@ export function foodsScreen() {
         ),
 
         search,
-
-        segmented({
-          options: [
-            { value: 'all', label: 'All' },
-            { value: 'custom', label: 'Custom' },
-            { value: 'scanned', label: 'Scanned' },
-          ],
-          value: view.filter,
-          onChange: (v) => {
-            view.filter = v
-            rerender()
-          },
-        }),
-
-        segmented({
-          options: [
-            { value: 'used', label: 'Most used' },
-            { value: 'alpha', label: 'A–Z' },
-            { value: 'added', label: 'Recently added' },
-          ],
-          value: view.sort,
-          onChange: (v) => {
-            view.sort = v
-            rerender()
-          },
-        }),
-
-        filtered.length
-          ? card(
-              filtered.map((food) =>
-                listRow({
-                  title: food.name,
-                  subtitle: [food.brand, servingLabel(food), `used ${food.useCount || 0}×`]
-                    .filter(Boolean)
-                    .join(' · '),
-                  chevron: true,
-                  onclick: () => navigate(`foods/${encodeURIComponent(food.id)}`),
-                })
-              )
-            )
-          : card(
-              emptyRow(
-                foods.length ? 'Nothing matches those filters.' : 'Nothing in the library yet.'
-              )
-            )
+        filterSlot,
+        sortSlot,
+        listSlot
       )
     },
     { watch: ['foods'], watchDate: false }

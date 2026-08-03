@@ -7,10 +7,39 @@ import { openDB } from 'idb'
 import { todayStr } from './dates.js'
 
 export const DB_NAME = 'macro-tracker'
-export const DB_VERSION = 1
+export const DB_VERSION = 2
+
+/**
+ * What onboarding fills in. Every field is null until someone says otherwise,
+ * because a default here is a number the app made up and then drew rings
+ * against — and `sex: 'male'` as a fallback would be exactly that.
+ *
+ * Height and weight are canonical metric and converted at display time. Weight
+ * is not stored here at all: the `weights` store is already the record of what
+ * someone weighs, and a second copy would be a second answer.
+ */
+export const DEFAULT_PROFILE = {
+  /** 'female' | 'male' | 'unspecified'. Unspecified means manual targets. */
+  sex: null,
+  /** The year, not the age — an age is wrong from the next birthday onwards. */
+  birthYear: null,
+  heightCm: null,
+  activity: null,
+  goal: 'maintain',
+  /** Signed kg per week. Negative loses. Clamped on the way into the maths. */
+  rateKgPerWeek: 0,
+}
 
 export const DEFAULT_SETTINGS = {
   targets: { kcal: 2837, protein: 180, fat: 80, carbs: 300 },
+  /**
+   * 'calculated' follows the profile; 'manual' does not, and wins. Any hand
+   * edit of a target flips this, so the app never quietly overwrites a number
+   * somebody typed on purpose.
+   */
+  targetsSource: 'manual',
+  profile: { ...DEFAULT_PROFILE },
+  onboardingComplete: false,
   units: 'metric',
   weightUnit: 'kg',
   blockNames: ['Morning', 'Afternoon', 'Night'],
@@ -21,6 +50,12 @@ export const DEFAULT_SETTINGS = {
   favourites: [],
   firstRunSeen: false,
 }
+
+/** Everything that travels in an export. Order matters only for readability. */
+const DATA_STORES = ['foods', 'entries', 'meals', 'weights', 'dayTargets']
+
+/** Two stores are keyed by date rather than by a generated id. */
+const keyPathFor = (store) => (store === 'weights' || store === 'dayTargets' ? 'date' : 'id')
 
 export const uid = () =>
   crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
@@ -66,23 +101,33 @@ export function db() {
       return Promise.reject(new StorageUnavailableError())
     }
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(database) {
-        const foods = database.createObjectStore('foods', { keyPath: 'id' })
-        foods.createIndex('barcode', 'barcode')
-        foods.createIndex('lastUsedAt', 'lastUsedAt')
-        foods.createIndex('useCount', 'useCount')
-        foods.createIndex('nameLower', 'nameLower')
+      // Stepped rather than unconditional: an existing v1 database runs only
+      // the v2 block, and re-creating a store that is already there throws.
+      upgrade(database, oldVersion) {
+        if (oldVersion < 1) {
+          const foods = database.createObjectStore('foods', { keyPath: 'id' })
+          foods.createIndex('barcode', 'barcode')
+          foods.createIndex('lastUsedAt', 'lastUsedAt')
+          foods.createIndex('useCount', 'useCount')
+          foods.createIndex('nameLower', 'nameLower')
 
-        const entries = database.createObjectStore('entries', { keyPath: 'id' })
-        entries.createIndex('date', 'date')
-        entries.createIndex('dateBlock', ['date', 'block'])
-        entries.createIndex('foodId', 'foodId')
+          const entries = database.createObjectStore('entries', { keyPath: 'id' })
+          entries.createIndex('date', 'date')
+          entries.createIndex('dateBlock', ['date', 'block'])
+          entries.createIndex('foodId', 'foodId')
 
-        const meals = database.createObjectStore('meals', { keyPath: 'id' })
-        meals.createIndex('useCount', 'useCount')
+          const meals = database.createObjectStore('meals', { keyPath: 'id' })
+          meals.createIndex('useCount', 'useCount')
 
-        database.createObjectStore('weights', { keyPath: 'date' })
-        database.createObjectStore('settings')
+          database.createObjectStore('weights', { keyPath: 'date' })
+          database.createObjectStore('settings')
+        }
+        if (oldVersion < 2) {
+          // What the target was on a given day. Not backfilled — days logged
+          // before this shipped have no record and fall back to the current
+          // target, because inventing one would be worse than admitting it.
+          database.createObjectStore('dayTargets', { keyPath: 'date' })
+        }
       },
       blocked() {
         console.warn('Another tab is holding an old version of the database open.')
@@ -127,6 +172,7 @@ export async function getSettings() {
     ...DEFAULT_SETTINGS,
     ...stored,
     targets: { ...DEFAULT_SETTINGS.targets, ...(stored.targets || {}) },
+    profile: { ...DEFAULT_PROFILE, ...(stored.profile || {}) },
     blockThresholds: { ...DEFAULT_SETTINGS.blockThresholds, ...(stored.blockThresholds || {}) },
     blockNames: stored.blockNames || [...DEFAULT_SETTINGS.blockNames],
     favourites: stored.favourites || [],
@@ -135,11 +181,102 @@ export async function getSettings() {
 }
 
 export async function saveSettings(patch) {
-  const next = { ...(await getSettings()), ...patch }
+  const previous = await getSettings()
+  const next = { ...previous, ...patch }
   await write(async () => (await db()).put('settings', next, 'settings'))
   settingsCache = next
+
+  // Today is not history yet, so a target changed now applies to the day in
+  // progress. Past days keep whatever was in force when they were logged —
+  // that is the whole point of the snapshot, and re-stamping them here would
+  // undo it.
+  if (patch.targets && JSON.stringify(patch.targets) !== JSON.stringify(previous.targets)) {
+    await putDayTargets(todayStr(), next.targets)
+  }
+
   emit('settings')
   return next
+}
+
+/** Shallow-merges into `profile` rather than replacing it, unlike saveSettings. */
+export async function saveProfile(patch) {
+  const settings = await getSettings()
+  return saveSettings({ profile: { ...settings.profile, ...patch } })
+}
+
+/* --------------------------------------------------------------- the plate */
+
+/**
+ * The staging area: foods assembled but not yet logged.
+ *
+ * Stored under its own key in the `settings` store, which is a plain keyval —
+ * so this needs no schema change, and `getSettings` and `exportAll` both only
+ * ever read the `'settings'` key, which keeps a draft out of the settings
+ * object and out of backups by construction. A backup of something you have not
+ * logged yet is noise.
+ *
+ * Persisted rather than held in memory because a plate outlives the sheet. The
+ * phone locks mid-assembly, a notification steals focus, you go and check what
+ * is left on Today — none of those should throw away four taps of work.
+ */
+export const EMPTY_PLATE = { items: [], date: null, block: null, startedAt: null }
+
+export async function getPlate() {
+  const stored = await (await db()).get('settings', 'plate')
+  return stored?.items ? stored : { ...EMPTY_PLATE }
+}
+
+export async function savePlate(plate) {
+  await write(async () => (await db()).put('settings', plate, 'plate'))
+  emit('plate')
+  return plate
+}
+
+export async function clearPlate() {
+  await write(async () => (await db()).delete('settings', 'plate'))
+  emit('plate')
+}
+
+/* --------------------------------------------------------------- day targets */
+
+/**
+ * A day's row in History should read against the target that was in force when
+ * it was logged, not against whatever the target happens to be today. Changing
+ * a goal in August must not silently rewrite how March went.
+ */
+export async function putDayTargets(date, targets) {
+  const record = { date, targets: { ...targets }, savedAt: Date.now() }
+  await write(async () => (await db()).put('dayTargets', record))
+  emit('dayTargets')
+  return record
+}
+
+/**
+ * Stamp the day the first time anything is logged into it. First write wins:
+ * the target in force when you started logging is the one the day is judged by.
+ */
+export async function ensureDayTargets(date) {
+  if (!date) return null
+  const existing = await (await db()).get('dayTargets', date)
+  if (existing) return existing
+  const { targets } = await getSettings()
+  return putDayTargets(date, targets)
+}
+
+/** Falls back to the current target for days that were never stamped. */
+export async function getDayTargets(date) {
+  const stored = await (await db()).get('dayTargets', date)
+  if (stored?.targets) return stored.targets
+  return (await getSettings()).targets
+}
+
+/**
+ * Bulk read for History, which needs one target per row and should not do a
+ * round trip per day to get them.
+ */
+export async function dayTargetsInRange(from, to) {
+  const rows = await (await db()).getAll('dayTargets', IDBKeyRange.bound(from, to))
+  return new Map(rows.map((r) => [r.date, r.targets]))
 }
 
 /* ------------------------------------------------------------------- foods */
@@ -251,6 +388,7 @@ export async function getEntry(id) {
 export async function putEntry(entry) {
   const record = { createdAt: Date.now(), ...entry, id: entry.id || uid() }
   await write(async () => (await db()).put('entries', record))
+  await ensureDayTargets(record.date)
   emit('entries')
   return record
 }
@@ -264,15 +402,18 @@ export async function countEntriesForFood(id) {
   return (await db()).countFromIndex('entries', 'foodId', id)
 }
 
-/** Distinct dates that have at least one entry, ascending. */
-export async function loggedDates() {
-  const dates = new Set()
-  let cursor = await (await db()).transaction('entries').store.index('date').openKeyCursor()
-  while (cursor) {
-    dates.add(cursor.key)
-    cursor = await cursor.continue()
-  }
-  return [...dates].sort()
+/**
+ * The earliest date with an entry, or null if nothing has ever been logged.
+ *
+ * History only ever needed these two facts, and used to get them by cursoring
+ * over every entry key in the database to build a set of distinct dates — then
+ * reading the same range again for the entries themselves. Two full passes per
+ * visit to learn where to start. The `date` index is already sorted, so the
+ * first key is one read.
+ */
+export async function firstLoggedDate() {
+  const cursor = await (await db()).transaction('entries').store.index('date').openKeyCursor()
+  return cursor ? cursor.key : null
 }
 
 /* ------------------------------------------------------------------- meals */
@@ -356,22 +497,14 @@ export const EXPORT_FORMAT = 'macro-tracker-export'
 
 export async function exportAll() {
   const d = await db()
-  const [foods, entries, meals, weights] = await Promise.all([
-    d.getAll('foods'),
-    d.getAll('entries'),
-    d.getAll('meals'),
-    d.getAll('weights'),
-  ])
+  const rows = await Promise.all(DATA_STORES.map((store) => d.getAll(store)))
   return {
     format: EXPORT_FORMAT,
     version: DB_VERSION,
     exportedAt: new Date().toISOString(),
     exportedOn: todayStr(),
     settings: await getSettings(),
-    foods,
-    entries,
-    meals,
-    weights,
+    ...Object.fromEntries(DATA_STORES.map((store, i) => [store, rows[i]])),
   }
 }
 
@@ -380,7 +513,8 @@ export function validateImport(data) {
   if (data.format !== EXPORT_FORMAT) {
     throw new Error('That file was not exported from Macro Tracker.')
   }
-  for (const key of ['foods', 'entries', 'meals', 'weights']) {
+  // A store missing entirely is fine — an export taken before it existed.
+  for (const key of DATA_STORES) {
     if (data[key] && !Array.isArray(data[key])) throw new Error(`The "${key}" data is malformed.`)
   }
   return true
@@ -391,10 +525,10 @@ export async function previewImport(data, mode) {
   validateImport(data)
   const d = await db()
   const counts = {}
-  for (const store of ['foods', 'entries', 'meals', 'weights']) {
+  for (const store of DATA_STORES) {
     const incoming = data[store] || []
     const existingKeys = new Set(await d.getAllKeys(store))
-    const key = store === 'weights' ? 'date' : 'id'
+    const key = keyPathFor(store)
     const overlapping = incoming.filter((r) => existingKeys.has(r?.[key])).length
     counts[store] = {
       existing: existingKeys.size,
@@ -411,14 +545,14 @@ export async function previewImport(data, mode) {
 export async function importAll(data, mode = 'merge') {
   validateImport(data)
   const d = await db()
-  const stores = ['foods', 'entries', 'meals', 'weights', 'settings']
+  const stores = [...DATA_STORES, 'settings']
 
   await write(async () => {
     const tx = d.transaction(stores, 'readwrite')
     if (mode === 'replace') {
       for (const store of stores) tx.objectStore(store).clear()
     }
-    for (const store of ['foods', 'entries', 'meals', 'weights']) {
+    for (const store of DATA_STORES) {
       const rows = data[store] || []
       for (const row of rows) {
         if (!row || typeof row !== 'object') continue
@@ -439,7 +573,7 @@ export async function importAll(data, mode = 'merge') {
 
 export async function clearAll() {
   const d = await db()
-  const stores = ['foods', 'entries', 'meals', 'weights', 'settings']
+  const stores = [...DATA_STORES, 'settings']
   const tx = d.transaction(stores, 'readwrite')
   for (const store of stores) tx.objectStore(store).clear()
   await tx.done

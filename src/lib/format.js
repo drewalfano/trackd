@@ -25,6 +25,37 @@ export const unitToKg = (v, unit) => (unit === 'lb' ? v * KG_PER_LB : v)
 /** Weights carry one decimal — the trend moves in tenths. */
 export const weight = (kg, unit = 'kg') => kgToUnit(kg, unit).toFixed(1)
 
+export const CM_PER_IN = 2.54
+
+/**
+ * Height is stored in centimetres and shown in whatever the units preference
+ * says. Imperial is feet and inches, in two fields.
+ *
+ * This was one field of total inches for a while, on the argument that two
+ * coupled fields is a lot of form for a number typed once. That was wrong in
+ * the way that matters: nobody knows their height in inches. Asking for 71
+ * instead of 5 and 11 makes the person do the conversion the app is for.
+ */
+export const cmToHeightUnit = (cm, units) => (units === 'imperial' ? cm / CM_PER_IN : cm)
+export const heightUnitToCm = (v, units) => (units === 'imperial' ? v * CM_PER_IN : v)
+
+/** Rounds to the nearest whole inch, then carries — 5 ft 12 in is 6 ft. */
+export function cmToFtIn(cm) {
+  const totalIn = Math.round((Number(cm) || 0) / CM_PER_IN)
+  return { ft: Math.floor(totalIn / 12), in: totalIn % 12 }
+}
+
+/** Tolerates an out-of-range inches value rather than silently clamping it. */
+export const ftInToCm = (ft, inches) =>
+  ((Number(ft) || 0) * 12 + (Number(inches) || 0)) * CM_PER_IN
+
+export function heightLabel(cm, units = 'metric') {
+  if (!(Number(cm) > 0)) return '—'
+  if (units !== 'imperial') return `${Math.round(cm)} cm`
+  const { ft, in: inches } = cmToFtIn(cm)
+  return `${ft}′ ${inches}″`
+}
+
 /** Signed, for rate-of-change readouts. "+0.3", "-0.4", "0.0". */
 export const signed = (n, dp = 1) => {
   const v = round(n, dp)

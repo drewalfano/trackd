@@ -1,7 +1,7 @@
-import { h, countTo, setTabularText } from './dom.js'
+import { h, countTo, setTabularText, fitText } from './dom.js'
 import { icon } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
-import { g, kcal } from './format.js'
+import { g, kcal, round, cmToFtIn, ftInToCm } from './format.js'
 import { formatDateSub, formatDayLabel, isFuture } from './dates.js'
 
 /**
@@ -124,6 +124,41 @@ export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle
   )
 }
 
+/**
+ * The page header the redesign settled on: a circular button, a centred title,
+ * a circular button. Either side may be absent and leaves a spacer, so the
+ * title stays optically centred whether it is flanked by two controls, one, or
+ * none.
+ *
+ * Both chevrons are the same shape and mean different things by screen — on a
+ * day view they step the date, on a pushed screen they go back. That ambiguity
+ * is in the design; the `aria-label` is what keeps it unambiguous to anything
+ * that is not looking at it.
+ */
+export function navHeader({ title, onBack, backLabel = 'Back', onForward, forwardLabel = 'Forward' }) {
+  const spacer = () => h('div', { class: 'w-11 shrink-0' })
+  const btn = (label, handler, name) =>
+    h(
+      'button',
+      { class: 'icon-btn', 'aria-label': label, onclick: handler },
+      icon(name, { size: 20, stroke: 2 })
+    )
+
+  // `truncate` stays as the backstop for anything `fitText` cannot shrink to
+  // fit by the floor — better a clipped title than one at 14px.
+  const heading = fitText(
+    h('h1', { class: 'min-w-0 flex-1 truncate text-center text-title font-semibold' }, title)
+  )
+
+  return h(
+    'header',
+    { class: 'mb-[16px] flex items-center gap-[10px]' },
+    onBack ? btn(backLabel, onBack, 'chevronLeft') : spacer(),
+    heading,
+    onForward ? btn(forwardLabel, onForward, 'chevronRight') : spacer()
+  )
+}
+
 /** Header for a date-navigating screen. Title doubles as the relative day. */
 export function dayHeader({ date, setDate, title }) {
   return screenHeader({
@@ -201,35 +236,45 @@ const lastPct = new Map()
  * A track and an inset fill. Going over fills the track and shows the excess as
  * a chip inside the fill — no colour change, no error state. Over is
  * information.
+ *
+ * Zero draws no fill at all. A zero-width fill is not invisible: its own 1px
+ * stroke collapses into a 2px coloured tick against the left cap, and four of
+ * those stacked up on a fresh day read as a rendering fault rather than as
+ * "nothing logged". The empty track is the zero state.
  */
 export function progressBar({ value, target, macro, animate = true, key = macro }) {
   const { pct, over } = progress(value, target)
   const from = animate ? (lastPct.get(key) ?? 0) : pct
   lastPct.set(key, pct)
 
-  const fill = h(
-    'div',
-    {
-      class: 'bar-fill',
-      style: {
-        width: `${from}%`,
-        background: MACRO_VAR[macro],
-        borderColor: MACRO_EDGE[macro],
-        // A 2% sliver would render as a broken-looking nub; below the width of
-        // its own cap the fill is better shown as nothing at all.
-        minWidth: pct > 0 ? '24px' : '0px',
-      },
-    },
-    // A full-height segment of the darker shade, butted against the fill's
-    // right end and clipped to its cap by the fill's own overflow:hidden.
-    over > 0
+  // Kept when it has somewhere to animate FROM, so deleting the last entry
+  // still shrinks the bar away instead of snapping.
+  const fill =
+    pct > 0 || from > 0
       ? h(
-          'span',
-          { class: 'bar-over', style: { background: MACRO_EDGE[macro] } },
-          `+${Math.round(over)}`
+          'div',
+          {
+            class: 'bar-fill',
+            style: {
+              width: `${from}%`,
+              background: MACRO_VAR[macro],
+              borderColor: MACRO_EDGE[macro],
+              // A 2% sliver would render as a broken-looking nub; below the
+              // width of its own cap the fill is better shown as nothing at all.
+              minWidth: pct > 0 ? '24px' : '0px',
+            },
+          },
+          // A full-height segment of the darker shade, butted against the fill's
+          // right end and clipped to its cap by the fill's own overflow:hidden.
+          over > 0
+            ? h(
+                'span',
+                { class: 'bar-over', style: { background: MACRO_EDGE[macro] } },
+                `+${Math.round(over)}`
+              )
+            : null
         )
       : null
-  )
 
   const track = h(
     'div',
@@ -243,7 +288,14 @@ export function progressBar({ value, target, macro, animate = true, key = macro 
     fill
   )
 
-  if (animate && from !== pct) requestAnimationFrame(() => (fill.style.width = `${pct}%`))
+  if (fill && animate && from !== pct) {
+    requestAnimationFrame(() => {
+      fill.style.width = `${pct}%`
+      // Fades the stroke out with the width, so the shrink does not land on the
+      // same 2px tick the zero state exists to avoid.
+      if (pct === 0) fill.style.opacity = '0'
+    })
+  }
   return track
 }
 
@@ -454,6 +506,92 @@ export function numberInput({ value, onInput, placeholder, suffix, step = 'any',
   // 2 servings into 60 g) need the field itself, not the wrapper.
   wrapper.input = input
   return wrapper
+}
+
+/**
+ * A day. Native `type="date"` rather than a hand-rolled calendar: it is the one
+ * control where the platform picker is unambiguously better than anything worth
+ * building here, and it comes with the locale's own date order for free.
+ */
+export function dateInput({ value, max, min, onChange }) {
+  const input = h('input', {
+    class: 'w-full min-w-0 bg-transparent text-[16px] font-semibold',
+    type: 'date',
+    value: value ?? '',
+    max: max ?? null,
+    min: min ?? null,
+    onchange: (e) => onChange?.(e.target.value, e),
+  })
+  const wrapper = h('div', { class: 'field' }, input)
+  wrapper.input = input
+  return wrapper
+}
+
+/**
+ * Height, in one field or two depending on the units preference.
+ *
+ * The two imperial fields are one measurement, so they report a single value in
+ * centimetres and the caller never sees feet or inches at all. Inches over 11
+ * are accepted while typing and carried on blur — normalising mid-keystroke
+ * would move the digits under the finger, and 5 ft 13 in is a legible thing to
+ * be halfway through typing.
+ */
+export function heightInput({ cm, units, onChange }) {
+  if (units !== 'imperial') {
+    return numberInput({
+      value: cm == null ? '' : round(cm, 1),
+      suffix: 'cm',
+      onInput: (v) => onChange(v === '' ? null : Number(v)),
+    })
+  }
+
+  const start = cm == null ? { ft: '', in: '' } : cmToFtIn(cm)
+  let ft = String(start.ft)
+  let inches = String(start.in)
+
+  const emit = () =>
+    onChange(ft === '' && inches === '' ? null : ftInToCm(ft, inches))
+
+  const normalise = () => {
+    if (ft === '' && inches === '') return
+    const carried = cmToFtIn(ftInToCm(ft, inches))
+    ft = String(carried.ft)
+    inches = String(carried.in)
+    ftField.input.value = ft
+    inField.input.value = inches
+    emit()
+  }
+
+  const ftField = numberInput({
+    value: ft,
+    suffix: 'ft',
+    step: '1',
+    placeholder: '5',
+    onInput: (v) => {
+      ft = v
+      emit()
+    },
+    onblur: normalise,
+  })
+
+  const inField = numberInput({
+    value: inches,
+    suffix: 'in',
+    step: '1',
+    placeholder: '11',
+    onInput: (v) => {
+      inches = v
+      emit()
+    },
+    onblur: normalise,
+  })
+
+  return h(
+    'div',
+    { class: 'flex gap-[10px]' },
+    h('div', { class: 'min-w-0 flex-1' }, ftField),
+    h('div', { class: 'min-w-0 flex-1' }, inField)
+  )
 }
 
 export function textInput({ value, onInput, placeholder, ...rest }) {

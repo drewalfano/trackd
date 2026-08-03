@@ -9,6 +9,7 @@ import {
   sanityCheck,
 } from '../lib/compute.js'
 import { segmentedWide, numberInput, textInput, labelledField, notice } from '../lib/ui.js'
+import { labelPhotoField } from '../lib/labelPhoto.js'
 import { round, UNITS, unitLabel } from '../lib/format.js'
 import { pushServing } from './serving.js'
 
@@ -21,6 +22,11 @@ import { pushServing } from './serving.js'
  * table is where logging gets abandoned. And the calorie override, because
  * Atwater almost never reproduces the rounded number on the package — when they
  * disagree, the label wins.
+ *
+ * The label photo sits at the top for the same reason both of those exist: this
+ * form is where someone is copying numbers off a packet, and every route that
+ * ends in a packet ends here — an unknown barcode, a search that found nothing,
+ * or Custom picked outright.
  */
 
 const emptyValues = () => ({ kcal: '', protein: '', fat: '', carbs: '', sodium: '' })
@@ -47,6 +53,11 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
   let basis = 'serving'
   let values = emptyValues()
   let kcalOverridden = false
+
+  // Outside render() for the same reason the draft is: switching the basis
+  // re-renders the panel, and a photo you just took must not be thrown away by
+  // a toggle. The node is reused across renders rather than rebuilt.
+  const labelPhoto = labelPhotoField()
 
   if (initial.per100) {
     const perServing = per100ToPerServing(initial.per100, draft.servingSize)
@@ -210,6 +221,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
       paintBasis()
 
       ctx.setFooter(saveBtn)
+      ctx.onDispose(() => labelPhoto.release())
       syncCalories()
       validate()
 
@@ -220,6 +232,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
       return h(
         'div',
         { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        labelPhoto.node,
         draft.barcode
           ? notice(`Barcode ${draft.barcode} will be saved with this food.`, {
               iconName: 'barcode',

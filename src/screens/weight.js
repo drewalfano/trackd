@@ -2,10 +2,20 @@ import { h, s } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import { listWeights, getWeight, putWeight, deleteWeight, getSettings } from '../lib/db.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
-import { card, segmentedWide, numberInput, notice, emptyState, tnum, digits } from '../lib/ui.js'
+import {
+  card,
+  segmentedWide,
+  numberInput,
+  notice,
+  emptyState,
+  tnum,
+  digits,
+  navHeader,
+} from '../lib/ui.js'
 import { kgToUnit, unitToKg, weight as fmtWeight, signed } from '../lib/format.js'
 import { formatDayLabel, todayStr } from '../lib/dates.js'
 import { toast, confirm } from '../lib/toast.js'
+import { openWeighInSheet } from '../sheets/weighIn.js'
 
 /**
  * Weight.
@@ -57,7 +67,7 @@ function chart(points, unit) {
         x2: CHART_W - PAD.right,
         y1: y(v).toFixed(1),
         y2: y(v).toFixed(1),
-        stroke: 'var(--color-hairline)',
+        stroke: 'var(--color-outline)',
         'stroke-width': '1',
       }),
       s(
@@ -128,7 +138,7 @@ export function weightScreen() {
       const saveBtn = h(
         'button',
         {
-          class: 'btn-primary',
+          class: 'btn-primary btn-compact',
           disabled: !draft,
           onclick: async () => {
             const value = Number(draft)
@@ -156,13 +166,13 @@ export function weightScreen() {
         { class: 'flex flex-col gap-[10px]' },
         h(
           'div',
-          { class: 'flex items-end justify-between' },
+          { class: 'section-head' },
           h('div', { class: 'section-label' }, 'Today’s weight'),
           todayEntry
             ? h(
                 'button',
                 {
-                  class: 'section-action underline underline-offset-2',
+                  class: 'chip-sm',
                   onclick: async () => {
                     const ok = await confirm({
                       title: 'Remove today’s weight?',
@@ -176,14 +186,31 @@ export function weightScreen() {
               )
             : null
         ),
-        h('div', { class: 'flex items-center gap-[10px]' }, h('div', { class: 'flex-1' }, input), h('div', { class: 'w-[104px]' }, saveBtn)),
+        h(
+          'div',
+          { class: 'flex items-center gap-[10px]' },
+          h('div', { class: 'min-w-0 flex-1' }, input),
+          saveBtn
+        ),
         todayEntry
           ? h(
               'p',
               { class: 'px-0 text-[12px] text-muted' },
               'Saving again replaces today’s value rather than adding a second one.'
             )
-          : null
+          : null,
+
+        // The back door for a morning you missed, and the only way to correct
+        // or remove any reading other than today's. Kept out of the main path
+        // on purpose — weighing in is a daily habit, not a form.
+        h(
+          'button',
+          {
+            class: 'self-start px-0 text-[12px] font-semibold underline underline-offset-2',
+            onclick: () => openWeighInSheet(),
+          },
+          'Add or edit another day'
+        )
       )
 
       if (!weights.length) {
@@ -224,7 +251,7 @@ export function weightScreen() {
 
         h(
           'section',
-          { class: 'panel flex flex-col gap-[20px] px-[20px] py-[20px]' },
+          { class: 'day-card flex flex-col gap-[20px]' },
           h(
             'div',
             { class: 'flex items-end justify-between' },
@@ -288,10 +315,8 @@ export function weightScreen() {
   )
 }
 
+/** Root tab, so no chevrons — the spacers keep the title optically centred
+    against Today and Log, which do have them. */
 function heading() {
-  return h(
-    'div',
-    { class: 'px-0 pt-[10px]' },
-    h('h1', { class: 'text-title font-semibold leading-tight' }, 'Weight')
-  )
+  return navHeader({ title: 'Weight' })
 }

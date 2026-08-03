@@ -64,3 +64,39 @@ export async function saveEntriesAsMeal(name, entries) {
     items: entries.map((e) => ({ foodId: e.foodId, quantity: e.quantity, unit: e.unit })),
   })
 }
+
+/**
+ * Commit a plate. Same walk as `logMeal` — deliberately, since a plate and a
+ * meal are the same list of items with different lifespans.
+ */
+export async function logPlate(plate) {
+  const entries = []
+  for (const item of plate.items) {
+    const food = await getFood(item.foodId)
+    if (!food) continue // deleted mid-assembly; skip rather than fail the plate
+    entries.push(
+      await logFood({
+        food,
+        quantity: item.quantity,
+        unit: item.unit,
+        date: plate.date,
+        block: plate.block,
+      })
+    )
+  }
+  return entries
+}
+
+/**
+ * The prospective path to a saved meal: name a plate you have not logged.
+ *
+ * Until this existed a meal could only be born by logging its items first and
+ * saving the block afterwards, so building a template for something you were
+ * not eating right now meant logging it and then deleting four entries.
+ */
+export async function saveDraftAsMeal(name, items) {
+  return putMeal({
+    name,
+    items: items.map(({ foodId, quantity, unit }) => ({ foodId, quantity, unit })),
+  })
+}

@@ -15,6 +15,7 @@ import { logFood, defaultServing } from '../lib/logging.js'
 import { blockSelector, macroLine, segmentedWide, numberInput, labelledField } from '../lib/ui.js'
 import { unitLabel, servingLabel, round } from '../lib/format.js'
 import { blockForTime, formatDayLabel, addDays, todayStr } from '../lib/dates.js'
+import { QUICK_ADD_SOURCE } from './quickAdd.js'
 
 /**
  * The serving sheet, shared by scan, search, custom, recents and favourites.
@@ -118,8 +119,18 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
         )
       }
 
-      // Only the edit path exposes the date. Spec 9: a meal eaten at 1 AM
-      // belongs to the day the user says it does.
+      /**
+       * The day is on screen when it matters and out of the way when it does
+       * not.
+       *
+       * Editing always shows it — spec 9, a meal eaten at 1 AM belongs to the
+       * day the user says it does. Adding shows it only when the target is not
+       * today, which is the case that used to be silent: "Log this" from the
+       * food library passes `state.date`, and because History moves that shared
+       * date, it can be a day you were only looking at. You would find out when
+       * Today did not change.
+       */
+      const showDate = mode === 'edit' || date !== todayStr()
       const dateRow = h('div')
       const paintDate = () => {
         const opts = [
@@ -225,7 +236,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
           blockRow
         ),
 
-        mode === 'edit'
+        showDate
           ? h(
               'div',
               { class: 'flex flex-col gap-[10px]' },
@@ -283,9 +294,17 @@ export async function openServingSheet({ food, date, block }) {
  * Edit an existing entry. If the underlying food has been deleted the entry is
  * still valid — `computed` was snapshotted — so we offer what can still be
  * changed rather than a dead end.
+ *
+ * A quick add lands in the same branch, because it never had a food to begin
+ * with. Same controls, different reason, so it must not be told its food was
+ * deleted — nothing was.
  */
 export async function openEditEntry(entry) {
-  const [food, settings] = await Promise.all([getFood(entry.foodId), getSettings()])
+  const [food, settings] = await Promise.all([
+    entry.foodId ? getFood(entry.foodId) : null,
+    getSettings(),
+  ])
+  const isQuickAdd = entry.source === QUICK_ADD_SOURCE || !entry.foodId
 
   if (!food) {
     return openSheet({
@@ -345,8 +364,15 @@ export async function openEditEntry(entry) {
           h(
             'div',
             { class: 'card px-[20px] py-[20px]' },
-            h('div', { class: 'text-[12px] leading-snug text-muted' },
-              'This food was deleted from your library, so the amount can no longer be recalculated. The numbers below are the ones recorded when you logged it.'),
+            h(
+              'div',
+              { class: 'text-[12px] leading-snug text-muted' },
+              isQuickAdd
+                ? 'A quick add has no food behind it, so there is no amount to change. ' +
+                    'These are the numbers you entered.'
+                : 'This food was deleted from your library, so the amount can no longer be ' +
+                    'recalculated. The numbers below are the ones recorded when you logged it.'
+            ),
             h('div', { class: 'mt-[10px]' }, macroLine(entry.computed, { size: 14 }))
           ),
           h('div', { class: 'flex flex-col gap-[10px]' }, h('div', { class: 'section-label' }, 'Block'), blockRow)

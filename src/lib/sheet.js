@@ -89,8 +89,17 @@ export function openSheet({ title, render, footer = null }) {
   const panel = h(
     'div',
     {
-      // Capped so a tall sheet stops clear of the notch or Dynamic Island
-      // rather than running its header underneath them.
+      /**
+       * Capped so a tall sheet stops clear of the notch or Dynamic Island
+       * rather than running its header underneath them.
+       *
+       * `border-t` is the one stroke left after controls and containers went to
+       * fills, and it is kept deliberately. Measured against the scrim, the
+       * sheet's own edge is 2.41:1 in light — which carries it alone — but
+       * 1.05:1 in dark, where the top edge would simply disappear. This is not
+       * a card on a page; it is a surface meeting a dimmed one, and in dark mode
+       * the hairline is the only thing drawing it.
+       */
       class:
         'sheet-panel absolute inset-x-0 bottom-0 flex flex-col rounded-t-[24px] border-t border-outline bg-canvas safe-b',
       style: {
