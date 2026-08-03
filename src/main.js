@@ -1,6 +1,6 @@
 import './styles.css'
 
-import { h, mount, clear } from './lib/dom.js'
+import { h, mount, clear, pressable } from './lib/dom.js'
 import { icon } from './lib/icons.js'
 import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
 import { toast } from './lib/toast.js'
@@ -165,6 +165,17 @@ function tabBar() {
     )
   )
 
+  // The one control on this bar that does something rather than going
+  // somewhere, so it is the one that most wants to feel like it was pressed.
+  // `pressable` rather than `:active` alone because iOS will not give `:active`
+  // to a plain element on touch — see the note on the helper.
+  const addButton = h(
+    'button',
+    { class: 'add-btn', 'aria-label': 'Add food', onclick: () => openAddFood() },
+    icon('plus', { size: 28, stroke: 2.25 })
+  )
+  pressable(addButton)
+
   return h(
     'nav',
     {
@@ -175,11 +186,7 @@ function tabBar() {
       'div',
       { class: 'pointer-events-auto mx-auto flex max-w-[430px] items-center gap-[10px]' },
       h('div', { class: 'tabbar' }, tabPill, tabButtons),
-      h(
-        'button',
-        { class: 'add-btn', 'aria-label': 'Add food', onclick: () => openAddFood() },
-        icon('plus', { size: 28, stroke: 2.25 })
-      )
+      addButton
     )
   )
 }

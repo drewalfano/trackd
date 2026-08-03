@@ -323,6 +323,336 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
   }
 }
 
+/**
+ * Page a deck sideways with the finger, one page per gesture.
+ *
+ * Same bones as `swipeToReveal` — `pan-y`, passive listeners, one axis
+ * decision — and deliberately the same feel, because they are the same hand
+ * doing the same thing eight pixels apart on the same screen. What differs is
+ * what a release means: the row above SETTLES into a state and stays there,
+ * this one COMMITS to a change and hands the result back.
+ *
+ * The commit fires on `transitionend`, not on release. The caller's job is to
+ * replace what is on screen with the day it just paged to, and the honest
+ * moment for that is when the incoming page has finished arriving — the track
+ * is then already sitting exactly where a freshly built deck sits, so the swap
+ * has nothing to animate and nothing to correct.
+ *
+ * `reach` decides whether a direction exists at all. Where it does not, the
+ * drag is damped to a quarter rather than frozen: a page that will not move is
+ * indistinguishable from a page that did not receive the gesture, and one of
+ * those is a bug. The give says "there is nothing that way" — the same thing a
+ * rubber band says at the end of a scroll.
+ */
+export function swipePages(deck, { track, pageWidth, reach, onCommit, duration = 220 }) {
+  let startX = 0
+  let startY = 0
+  let dx = 0
+  let dragging = false
+  let decided = false
+  let committing = false
+
+  deck.style.touchAction = 'pan-y'
+
+  const setX = (x, animate) => {
+    track.style.transition = animate ? `transform ${duration}ms cubic-bezier(0.16,1,0.3,1)` : 'none'
+    track.style.transform = `translateX(${x}px)`
+  }
+
+  const onStart = (e) => {
+    if (committing || e.touches?.length > 1) return
+    const p = e.touches ? e.touches[0] : e
+    startX = p.clientX
+    startY = p.clientY
+    dx = 0
+    dragging = true
+    decided = false
+  }
+
+  const onMove = (e) => {
+    if (!dragging) return
+    const p = e.touches ? e.touches[0] : e
+    const deltaX = p.clientX - startX
+    const deltaY = p.clientY - startY
+
+    if (!decided) {
+      // Same threshold and ratio as a row swipe. A deck that captured gestures
+      // more eagerly than the rows beneath it would make the same flick of the
+      // thumb do different things depending on where it landed.
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < SWIPE_AXIS_THRESHOLD) return
+      if (Math.abs(deltaX) <= Math.abs(deltaY) * SWIPE_AXIS_RATIO) {
+        dragging = false
+        return
+      }
+      decided = true
+      deck.dataset.paging = 'true'
+    }
+    // A drag to the RIGHT reveals what is to the left, which is the previous
+    // day — so the sign of the movement and the sign of the step are opposite.
+    const dir = deltaX > 0 ? -1 : 1
+    dx = reach(dir) ? deltaX : deltaX * 0.25
+    setX(dx, false)
+  }
+
+  const onEnd = () => {
+    if (!dragging) return
+    dragging = false
+    if (!decided) return
+    const w = pageWidth()
+    // A quarter of a page, or 60px, whichever is further. The floor is what
+    // stops a small flick on a large phone from being read as indecision.
+    const enough = Math.abs(dx) > Math.max(60, w * 0.25)
+    const dir = dx > 0 ? -1 : 1
+
+    if (!enough || !reach(dir)) {
+      delete deck.dataset.paging
+      setX(0, true)
+      return
+    }
+
+    committing = true
+    setX(dir === -1 ? w : -w, true)
+    const done = (e) => {
+      if (e.target !== track) return
+      track.removeEventListener('transitionend', done)
+      onCommit(dir)
+    }
+    track.addEventListener('transitionend', done)
+  }
+
+  /**
+   * A page gesture ends with a click, and the deck's contents are tappable.
+   *
+   * Swallowed here, in the capture phase, rather than by asking every handler
+   * inside the deck to check whether a swipe just happened. Anything the deck
+   * ever contains gets the guard for free, and none of it has to know this
+   * gesture exists.
+   *
+   * The flag is CONSUMED, not just read. Leaving it set until the next
+   * `touchstart` works on a phone, where every tap starts with one — and fails
+   * on a trackpad, where the click after a swipe is the only event that
+   * arrives, so the flag would still be standing and the next real click would
+   * be eaten instead.
+   */
+  const onClickCapture = (e) => {
+    if (!decided && !committing) return
+    e.stopPropagation()
+    e.preventDefault()
+    decided = false
+  }
+
+  deck.addEventListener('touchstart', onStart, { passive: true })
+  deck.addEventListener('touchmove', onMove, { passive: true })
+  deck.addEventListener('touchend', onEnd)
+  deck.addEventListener('touchcancel', onEnd)
+  deck.addEventListener('click', onClickCapture, true)
+
+  return () => {
+    deck.removeEventListener('touchstart', onStart)
+    deck.removeEventListener('touchmove', onMove)
+    deck.removeEventListener('touchend', onEnd)
+    deck.removeEventListener('touchcancel', onEnd)
+    deck.removeEventListener('click', onClickCapture, true)
+  }
+}
+
+/**
+ * Drag a bottom sheet down to close it.
+ *
+ * The whole difficulty is that the sheet is mostly a scrolling list, and pulling
+ * down is what you do to scroll a list back up. The rule that separates them is
+ * the one every native sheet uses: the drag is only yours if the content has
+ * nothing left to scroll. Start on the header and it is yours immediately;
+ * start on the list and you get it only once the list is at the top, which is
+ * exactly when a downward pull has stopped meaning "scroll".
+ *
+ * That is also why the `touchmove` listener is the one non-passive listener in
+ * this file. Every other gesture here declares its axis up front with
+ * `touch-action` and never has to cancel anything; this one cannot, because the
+ * same axis belongs to the scroller until the moment it does not. Claiming it
+ * means calling `preventDefault`, and calling it means the listener has to be
+ * cancellable.
+ *
+ * Velocity counts as well as distance. A short sharp flick is a dismissal —
+ * requiring it to also travel a third of the screen makes the sheet feel like
+ * it is resisting, and resistance from a sheet reads as it being stuck rather
+ * than as it being sure.
+ */
+export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 200 } = {}) {
+  let startY = 0
+  let startX = 0
+  let dy = 0
+  let lastY = 0
+  let lastT = 0
+  let velocity = 0
+  let dragging = false
+  let decided = false
+  let fromScroller = false
+  let done = false
+
+  const setY = (y, animate) => {
+    panel.style.transition = animate
+      ? `transform ${duration}ms cubic-bezier(0.16,1,0.3,1)`
+      : 'none'
+    panel.style.transform = y ? `translateY(${y}px)` : ''
+    if (!scrim) return
+    scrim.style.transition = animate ? `opacity ${duration}ms ease-out` : 'none'
+    // Down to a third at a full sheet-height pull, never past it. The scrim
+    // lifting as the sheet leaves is what makes the page behind feel like it
+    // was there all along rather than being rebuilt.
+    scrim.style.opacity = y ? String(Math.max(0.35, 1 - y / panel.offsetHeight)) : ''
+  }
+
+  const onStart = (e) => {
+    if (done || e.touches.length > 1) return
+    const p = e.touches[0]
+    startY = lastY = p.clientY
+    startX = p.clientX
+    lastT = e.timeStamp
+    dy = 0
+    velocity = 0
+    dragging = true
+    decided = false
+    fromScroller = !!scroller && scroller.contains(e.target)
+  }
+
+  const onMove = (e) => {
+    if (!dragging) return
+    const p = e.touches[0]
+    const deltaY = p.clientY - startY
+    const deltaX = p.clientX - startX
+
+    if (!decided) {
+      if (Math.max(Math.abs(deltaY), Math.abs(deltaX)) < SWIPE_AXIS_THRESHOLD) return
+      // Downward, and decidedly vertical — the same ratio a row swipe demands
+      // of horizontal, pointed the other way.
+      if (deltaY <= 0 || Math.abs(deltaY) <= Math.abs(deltaX) * SWIPE_AXIS_RATIO) {
+        dragging = false
+        return
+      }
+      // The list still has somewhere to go, so this pull belongs to it.
+      if (fromScroller && scroller.scrollTop > 0) {
+        dragging = false
+        return
+      }
+      decided = true
+    }
+
+    // Claimed. Without this the sheet moves AND the page behind it scrolls.
+    if (e.cancelable) e.preventDefault()
+
+    const dt = e.timeStamp - lastT
+    if (dt > 0) velocity = (p.clientY - lastY) / dt
+    lastY = p.clientY
+    lastT = e.timeStamp
+
+    dy = Math.max(0, deltaY)
+    setY(dy, false)
+  }
+
+  const onEnd = () => {
+    if (!dragging) return
+    dragging = false
+    if (!decided) return
+
+    const far = dy > Math.min(120, panel.offsetHeight * 0.3)
+    const fast = velocity > 0.6
+    if (!far && !fast) {
+      setY(0, true)
+      return
+    }
+
+    done = true
+    /**
+     * Finish under our own transition, from where the finger left it.
+     *
+     * `data-closing` runs a keyframe exit that starts at `translateY(0)`, and a
+     * CSS animation outranks an inline transform — so handing over to it would
+     * snap the sheet back up to closed-position and then play it out. The flag
+     * turns those keyframes off; the CSS rule for it is declared after the
+     * closing rules so it wins when both are set.
+     */
+    panel.dataset.dismissing = 'true'
+    if (scrim) scrim.dataset.dismissing = 'true'
+    if (reduceMotion()) {
+      onDismiss?.()
+      return
+    }
+    panel.style.transition = `transform ${duration}ms ease-in`
+    panel.style.transform = 'translateY(100%)'
+    if (scrim) {
+      scrim.style.transition = `opacity ${duration}ms ease-in`
+      scrim.style.opacity = '0'
+    }
+    onDismiss?.()
+  }
+
+  panel.addEventListener('touchstart', onStart, { passive: true })
+  panel.addEventListener('touchmove', onMove, { passive: false })
+  panel.addEventListener('touchend', onEnd)
+  panel.addEventListener('touchcancel', onEnd)
+
+  return () => {
+    panel.removeEventListener('touchstart', onStart)
+    panel.removeEventListener('touchmove', onMove)
+    panel.removeEventListener('touchend', onEnd)
+    panel.removeEventListener('touchcancel', onEnd)
+  }
+}
+
+/**
+ * Hold a `data-pressed` flag on an element for as long as a finger is on it.
+ *
+ * `:active` is what draws the press on a desktop pointer, and on iOS it is
+ * close to useless: Safari only applies it to a non-native element if the
+ * element or an ancestor carries a touch listener, and even where that is
+ * satisfied it can hang on after the finger has gone. So touch gets its own
+ * flag and the CSS honours either.
+ *
+ * The press RELEASES at 10px of travel, two pixels under the threshold at which
+ * `swipePages` claims the gesture. That ordering is deliberate: the card must
+ * have stopped looking pressed before it starts moving, or the first frame of
+ * every page turn is a card that is both dipped and sliding — which reads as
+ * the tap having gone wrong rather than as a swipe having begun.
+ */
+export function pressable(el, { slop = 10 } = {}) {
+  let startX = 0
+  let startY = 0
+  let down = false
+
+  const set = (on) => {
+    down = on
+    if (on) el.dataset.pressed = 'true'
+    else delete el.dataset.pressed
+  }
+
+  const onStart = (e) => {
+    if (e.touches.length > 1) return
+    const p = e.touches[0]
+    startX = p.clientX
+    startY = p.clientY
+    set(true)
+  }
+  const onMove = (e) => {
+    if (!down) return
+    const p = e.touches[0]
+    if (Math.abs(p.clientX - startX) > slop || Math.abs(p.clientY - startY) > slop) set(false)
+  }
+  const onEnd = () => set(false)
+
+  el.addEventListener('touchstart', onStart, { passive: true })
+  el.addEventListener('touchmove', onMove, { passive: true })
+  el.addEventListener('touchend', onEnd)
+  el.addEventListener('touchcancel', onEnd)
+
+  return () => {
+    el.removeEventListener('touchstart', onStart)
+    el.removeEventListener('touchmove', onMove)
+    el.removeEventListener('touchend', onEnd)
+    el.removeEventListener('touchcancel', onEnd)
+  }
+}
+
 /** Long press without swallowing taps or fighting the swipe handler. */
 export function longPress(el, handler, ms = 500) {
   let timer = null

@@ -1,22 +1,46 @@
 import { h, repaint } from '../lib/dom.js'
-import { putEntry, getSettings } from '../lib/db.js'
-import { kcalFromMacros, MACRO_META } from '../lib/compute.js'
-import { blockSelector, macroLine, numberInput, textInput, labelledField, notice } from '../lib/ui.js'
-import { round } from '../lib/format.js'
+import { putEntry, putFood, getSettings } from '../lib/db.js'
+import { kcalFromMacros, perServingToPer100, MACRO_META } from '../lib/compute.js'
+import {
+  blockSelector,
+  macroLine,
+  numberInput,
+  textInput,
+  labelledField,
+  notice,
+  segmentedWide,
+  switchRow,
+} from '../lib/ui.js'
+import { logFood } from '../lib/logging.js'
+import { round, UNITS, unitLabel } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
 
 /**
- * Calories and macros, with no food behind them.
+ * The front door for typing numbers in yourself.
  *
- * Every other route ends by creating a library entry, which is right for
- * anything eaten twice. It is ceremony for a restaurant meal eaten once — and
- * worse than ceremony, because that one-off then ranks in Recents and search
- * forever, crowding out the foods that are actually staples.
+ * By default it writes an entry and nothing else. `foodId` is null on purpose:
+ * there is no food, and pretending otherwise would put a phantom in the
+ * library. A restaurant meal eaten once should not rank in Recents and search
+ * forever, crowding out the things that are actually staples — that is the
+ * whole reason this route exists separately from authoring a food.
  *
- * So this writes an entry and nothing else. `foodId` is null on purpose: there
- * is no food, and pretending otherwise would put a phantom in the library. The
- * entry still carries `computed`, which is the only thing any total ever reads,
- * so a quick add behaves exactly like every other entry everywhere downstream.
+ * The switch at the bottom is the escape hatch for when it IS a staple. It was
+ * a second front-door button called "Custom", and the two read as duplicates
+ * from the sheet: both are "type it in". They were never duplicates — they
+ * produce different objects, one an entry and one a reusable food — but that
+ * difference lived in the label, and "Custom" does not say "creates a food".
+ * Now it is a decision inside one form, stated in the words of the consequence:
+ * save it, or do not.
+ *
+ * Turning it on is the ONE case that needs more than four numbers. A food is
+ * defined per 100g, so it needs to know what one serving is; and it needs a
+ * name, which is optional for an entry and cannot be for something you will go
+ * looking for later. Both appear only when the switch is on, because a form
+ * that asks for them up front is the form this one replaced.
+ *
+ * The full editor still exists — brand, barcode, label photo, per-100 basis,
+ * sodium — and is still where a scan with no nutrition data lands and where a
+ * food is edited. It is just no longer a front door.
  */
 
 export const QUICK_ADD_SOURCE = 'quick'
@@ -36,6 +60,10 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
       let kcal = ''
       /** True once the calorie field is typed in directly. */
       let kcalOverridden = false
+      /** Off writes an entry; on also writes a food. */
+      let keep = false
+      let servingSize = '100'
+      let servingUnit = 'g'
 
       const kcalField = numberInput({
         value: '',
@@ -94,7 +122,55 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
               )
             : null
         )
-        saveBtn.disabled = !(current.kcal > 0 || current.protein || current.fat || current.carbs)
+        const hasNumbers = current.kcal > 0 || current.protein || current.fat || current.carbs
+        // A food you cannot name is a food you will never find again, so the
+        // name stops being optional the moment the switch goes on.
+        const nameable = !keep || label.trim().length > 0
+        saveBtn.disabled = !(hasNumbers && nameable)
+        saveBtn.textContent = keep ? 'Save and add' : 'Add'
+      }
+
+      /**
+       * Everything the switch reveals, in one block that is either there or is
+       * not — rather than fields that grey out. A disabled field still occupies
+       * the form and still has to be read past to know it does not apply.
+       */
+      const keepFields = h('div', { class: 'flex flex-col gap-[20px] empty:hidden' })
+
+      const paintKeep = () => {
+        if (!keep) {
+          keepFields.replaceChildren()
+          return
+        }
+        keepFields.replaceChildren(
+          labelledField({
+            label: 'One serving is',
+            hint: 'What the numbers above describe. Foods are stored per 100, so this is how it converts.',
+            // Size above, unit below, the same shape the full editor uses for
+            // the same pair. Side by side, the segments get squeezed to about
+            // a third of the row and stop reading as a segmented control.
+            children: h(
+              'div',
+              { class: 'flex flex-col gap-[10px]' },
+              numberInput({
+                value: servingSize,
+                placeholder: '100',
+                onInput: (v) => {
+                  servingSize = v
+                  sync()
+                },
+              }),
+              segmentedWide({
+                options: UNITS.map((u) => ({ value: u, label: u === 'item' ? 'items' : u })),
+                value: servingUnit,
+                onChange: (v) => {
+                  servingUnit = v
+                  paintKeep()
+                },
+              })
+            ),
+          })
+        )
       }
 
       const saveBtn = h(
@@ -104,6 +180,35 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           onclick: async () => {
             saveBtn.disabled = true
             const t = totals()
+
+            if (keep) {
+              /**
+               * Create the food, then log it through `logFood` rather than
+               * writing the entry here.
+               *
+               * That is the one path that keeps `computed` and the recency bump
+               * from drifting apart, and it means this entry is indistinguishable
+               * from one logged off the same food tomorrow. The numbers make the
+               * round trip — typed per serving, stored per 100, recomputed back
+               * for one serving — and land where they started, which is the
+               * point: the food IS what was typed, not an approximation of it.
+               */
+              const size = Number(servingSize) || 0
+              const food = await putFood({
+                name: label.trim(),
+                brand: null,
+                barcode: null,
+                servingSize: size,
+                servingUnit,
+                servingLabel: `${round(size, 2)} ${unitLabel(servingUnit, size)}`,
+                source: 'custom',
+                per100: perServingToPer100(t, size),
+              })
+              await logFood({ food, quantity: 1, unit: 'serving', date, block })
+              onDone?.()
+              return
+            }
+
             await putEntry({
               date,
               block,
@@ -156,7 +261,29 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           }),
         })
 
+      const nameRow = h('div')
+      const paintName = () =>
+        repaint(
+          nameRow,
+          labelledField({
+            label: keep ? 'Name' : 'What was it',
+            hint: keep
+              ? 'Required — this is what you will search for.'
+              : 'Optional. Shows in the log so the day still reads back.',
+            children: textInput({
+              value: label,
+              placeholder: keep ? 'Overnight oats' : 'Quick add',
+              onInput: (v) => {
+                label = v
+                sync()
+              },
+            }),
+          })
+        )
+
       paintBlock()
+      paintName()
+      paintKeep()
       sync()
       ctx.setFooter(saveBtn)
 
@@ -166,15 +293,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
 
         h('div', { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' }, preview),
 
-        labelledField({
-          label: 'What was it',
-          hint: 'Optional. Shows in the log so the day still reads back.',
-          children: textInput({
-            value: '',
-            placeholder: 'Quick add',
-            onInput: (v) => (label = v),
-          }),
-        }),
+        nameRow,
 
         labelledField({ label: 'Calories', children: kcalField }),
         derived,
@@ -193,9 +312,24 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           ? notice(`This goes onto ${formatDayLabel(date)}, not today.`)
           : null,
 
-        notice(
-          'Nothing is saved to your food library. This is one entry on one day — ' +
-            'if you will eat it again, use Custom instead.'
+        // The one decision this form makes beyond the numbers, and it sits at
+        // the bottom because it is about what happens AFTER — everything above
+        // is the same either way.
+        h(
+          'div',
+          { class: 'panel flex flex-col gap-[20px] px-[20px] py-[20px]' },
+          switchRow({
+            label: 'Save to my foods',
+            hint: 'Keep it for next time. Off, this is one entry on one day and nothing else.',
+            checked: keep,
+            onChange: (v) => {
+              keep = v
+              paintName()
+              paintKeep()
+              sync()
+            },
+          }),
+          keepFields
         )
       )
     },

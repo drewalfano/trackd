@@ -319,10 +319,14 @@ export async function openAddFood({ date = state.date, block } = {}) {
           label: 'Search',
           onclick: () => pushSearch(ctx, { date, block: targetBlock }),
         }),
+        // Quick add rather than the full editor, because over a month you type
+        // numbers in far more often than you author a food — and the two read
+        // as duplicates side by side. The editor is still one tap away, from
+        // inside Quick add or from the link below.
         actionButton({
           iconName: 'custom',
-          label: 'Custom',
-          onclick: () => pushCustom(ctx, { date, block: targetBlock }),
+          label: 'Quick add',
+          onclick: () => pushQuickAdd(ctx, { date, block: targetBlock }),
         })
       )
 
@@ -339,13 +343,17 @@ export async function openAddFood({ date = state.date, block } = {}) {
         // taller than wide — wrong for a 24px radius — and a 2×2 grid would
         // push Favourites below the fold, which is the one thing this sheet's
         // layout exists to prevent.
+        // The full editor — brand, barcode, label photo, per-100 basis, sodium.
+        // A link rather than a button because authoring a food from scratch is
+        // the rarest way into this sheet: most foods arrive by scan or search,
+        // and the ones you type get typed through Quick add.
         h(
           'button',
           {
             class: 'self-start px-0 text-[13px] font-semibold underline underline-offset-2',
-            onclick: () => pushQuickAdd(ctx, { date, block: targetBlock }),
+            onclick: () => pushCustom(ctx, { date, block: targetBlock }),
           },
-          'Quick add calories'
+          'New food, with all the details'
         )
       )
     },

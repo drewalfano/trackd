@@ -14,8 +14,13 @@ import { round, UNITS, unitLabel } from '../lib/format.js'
 import { pushServing } from './serving.js'
 
 /**
- * Custom food entry, also used to edit an existing food and to finish a scan
+ * The full food editor, also used to edit an existing food and to finish a scan
  * that came back with a barcode but no nutrition data.
+ *
+ * No longer a front-door button on the Add sheet — Quick add took that slot,
+ * and the two read as duplicates side by side. What is left here is everything
+ * Quick add's switch does not need: brand, barcode, label photo, the per-100
+ * basis and sodium.
  *
  * Two things earn their complexity here. The per-serving / per-100 toggle,
  * because labels are printed both ways and retyping arithmetic at a restaurant
@@ -73,7 +78,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
   }
 
   return {
-    title: mode === 'edit' ? 'Edit food' : 'Custom food',
+    title: mode === 'edit' ? 'Edit food' : 'New food',
     render: (ctx) => {
       const warningsEl = h('div')
       const kcalHint = h('div', { class: 'text-[12px] leading-snug text-muted' })

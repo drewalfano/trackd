@@ -1,4 +1,4 @@
-import { h, clear } from './dom.js'
+import { h, clear, swipeToDismiss } from './dom.js'
 import { icon } from './icons.js'
 
 /**
@@ -238,6 +238,16 @@ export function openSheet({ title, render, footer = null }) {
   function onKey(e) {
     if (e.key === 'Escape') closeAll()
   }
+
+  /**
+   * Pull the sheet down to close it.
+   *
+   * `closeAll()` rather than `teardown()` on purpose: the sheet's exit is
+   * history-driven, and every panel it pushed has an entry to unwind. Tearing
+   * down directly would leave those behind, so the next hardware back would
+   * step through a sheet that is no longer on screen.
+   */
+  swipeToDismiss(panel, { scroller: body, scrim, onDismiss: () => closeAll() })
 
   window.addEventListener('popstate', onPop)
   document.addEventListener('keydown', onKey)

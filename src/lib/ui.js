@@ -501,6 +501,49 @@ export function labelledField({ label, hint, children }) {
   )
 }
 
+/**
+ * A labelled on/off row.
+ *
+ * The app's other binary is `segmented`, which names both sides and demands a
+ * choice — right for "per serving or per 100", where neither is a default and
+ * getting it wrong changes what the numbers mean. This is for the other kind:
+ * one side is the ordinary case and the other is an opt-in, and the control
+ * should be quiet about it rather than asking every time.
+ *
+ * A real `role="switch"` rather than a checkbox, because "off" here is not
+ * "unticked, please tick" — it is a complete, correct answer.
+ */
+export function switchRow({ label, hint, checked = false, onChange }) {
+  const knob = h('span', { class: 'switch-knob' })
+  const control = h(
+    'button',
+    {
+      type: 'button',
+      class: 'switch',
+      role: 'switch',
+      'aria-checked': String(checked),
+      onclick: () => {
+        const next = control.getAttribute('aria-checked') !== 'true'
+        control.setAttribute('aria-checked', String(next))
+        onChange?.(next)
+      },
+    },
+    knob
+  )
+
+  return h(
+    'div',
+    { class: 'flex items-center gap-[20px]' },
+    h(
+      'div',
+      { class: 'flex min-w-0 flex-1 flex-col gap-[2px]' },
+      h('span', { class: 'text-[14px] font-semibold' }, label),
+      hint ? h('span', { class: 'text-[12px] leading-snug text-muted' }, hint) : null
+    ),
+    control
+  )
+}
+
 export function numberInput({ value, onInput, placeholder, suffix, step = 'any', ...rest }) {
   const input = h('input', {
     class: 'w-full min-w-0 text-[16px] font-semibold',

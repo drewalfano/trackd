@@ -480,9 +480,76 @@
       transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
       opacity 120ms ease-out;
   }
-  .day-card-toggle:active {
+  /* `:active` is the desktop pointer; `data-pressed` is touch, held by
+     `pressable` in dom.js because iOS applies `:active` to a plain element only
+     under conditions it is not worth depending on. Same dip either way. */
+  .day-card-toggle:active,
+  .day-card-toggle[data-pressed='true'] {
     transform: scale(0.99);
     opacity: 0.9;
+  }
+  /* Not during a drag. The press dip is feedback for a tap, and a card that
+     shrinks as it slides reads as the swipe having gone wrong. */
+  .day-deck[data-paging='true'] .day-card-toggle:active,
+  .day-deck[data-paging='true'] .day-card-toggle[data-pressed='true'] {
+    transform: none;
+    opacity: 1;
+  }
+
+  /**
+   * The deck. Yesterday parked to the left, tomorrow to the right.
+   *
+   * `--deck-gap` is the space BETWEEN two cards, and what is left of the 20px
+   * gutter after it is how much of the neighbour shows: 10 in, 10 showing. The
+   * gutter is the whole budget — the live card is inset 20px like everything
+   * else on the screen, and moving it would buy peek by breaking the one
+   * alignment the page has, so the two numbers are always each other's
+   * remainder.
+   *
+   * Which is the whole reason this is 10 and not 6. A wider peek sounds like
+   * the better end of the trade — more of yesterday visible, a clearer signal —
+   * but it is bought entirely out of the channel between the two cards, and at
+   * 6px that channel had stopped reading as a gap and started reading as a
+   * seam. The peek only says "another card" if there is unmistakably nothing
+   * between them. 10 and 10 also puts the gap on the same step as every other
+   * 10 in the app.
+   *
+   * The deck spans the full screen by cancelling `.screen`'s gutter and putting
+   * it back as padding, so `overflow` clips at the true screen edge and the
+   * neighbours come from off-screen rather than from a line 20px in.
+   *
+   * `clip` rather than `hidden`: `hidden` makes a scroll container, which would
+   * let a stray horizontal scroll land inside the deck, and forces the other
+   * axis to compute to `auto`. `clip` does neither, so the y-axis can stay
+   * `visible` and nothing here can ever become scrollable.
+   */
+  .day-deck {
+    --deck-gap: 10px;
+    position: relative;
+    margin-inline: -20px;
+    padding-inline: 20px;
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+
+  /* The height comes from the live card alone — the neighbours are out of flow,
+     so a day with different content cannot change how tall the deck is. */
+  .day-deck-track {
+    position: relative;
+    will-change: transform;
+  }
+
+  .day-deck-track > [data-day='prev'],
+  .day-deck-track > [data-day='next'] {
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+  .day-deck-track > [data-day='prev'] {
+    right: calc(100% + var(--deck-gap));
+  }
+  .day-deck-track > [data-day='next'] {
+    left: calc(100% + var(--deck-gap));
   }
 
   /**
@@ -952,6 +1019,49 @@
    * no edges at all. The rule is unchanged: the track takes the recessive tone
    * and the selection pops to white. Only which token is recessive moved.
    */
+  /**
+   * The on/off switch.
+   *
+   * Ink when on, and the recessive tone when off — the same pair the selected
+   * chip uses, so "on" means one thing across the app. Deliberately not a
+   * coloured switch: colour here only ever means macro identity, and an opt-in
+   * is not a macro.
+   *
+   * 51×31 with a 27px knob is the iOS metric, and it is used because this is the
+   * one control in the app most likely to be read as a system control rather
+   * than an app one — the reflex is to look for the shape you already know.
+   */
+  /* Off is a TINT OF INK, not `--color-canvas`. This control's usual home is a
+     sheet, and a sheet's ground is canvas — a canvas track would be a switch
+     you could only find by the knob. A tint adapts to either theme without a
+     second value, the same trick the ring tracks use. */
+  .switch {
+    position: relative;
+    flex: none;
+    width: 51px;
+    height: 31px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-ink) 20%, transparent);
+    border: 0;
+    transition: background-color 160ms ease-out;
+  }
+  .switch[aria-checked='true'] {
+    background: var(--color-ink);
+  }
+  .switch-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 27px;
+    height: 27px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .switch[aria-checked='true'] .switch-knob {
+    transform: translateX(20px);
+  }
+
   .segmented {
     display: flex;
     gap: 4px;
@@ -1129,6 +1239,18 @@
     border-radius: 999px;
     background: var(--color-ink);
     color: var(--color-canvas);
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 120ms ease-out;
+  }
+  /* The same 0.92 and 0.85 `.icon-btn` uses, not the card's 0.99. A 68px circle
+     and a 44px circle are the same kind of object and should give by the same
+     proportion; the card is quiet because it is nearly the whole screen, where
+     that much movement would read as the page lurching rather than a press. */
+  .add-btn:active,
+  .add-btn[data-pressed='true'] {
+    transform: scale(0.92);
+    opacity: 0.85;
   }
 }
 
@@ -1199,6 +1321,19 @@
 }
 .sheet-scrim[data-closing='true'] {
   animation: scrim-out 200ms ease-in forwards;
+}
+/**
+ * A sheet the finger is already carrying out finishes under its own transition.
+ *
+ * The keyframe exits above start at `translateY(0)` and `opacity: 1`, and a CSS
+ * animation outranks an inline style — so handing over to them mid-drag would
+ * snap the sheet back up to closed-position, and the scrim back to full, before
+ * playing the exit. Declared AFTER the closing rules so it wins when `swipeToDismiss`
+ * and `teardown` have both set their flag, which they always both do.
+ */
+.sheet-panel[data-dismissing='true'],
+.sheet-scrim[data-dismissing='true'] {
+  animation: none;
 }
 .toast-in {
   animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);

@@ -387,3 +387,128 @@ is what would settle whether anyone finds it.
 entry spent "every value exactly once" to buy a number that agreed with its arc,
 and this buys it back without giving that up, because the second reading moved
 into a gesture rather than onto the card.
+
+---
+
+## 11 · The dashboard is a deck of days
+
+**What moved**
+
+- **Swipe the card sideways to change day**, alongside the header chevrons —
+  which are unchanged, and which remain the only keyboard route.
+- **14px of yesterday shows past the left gutter, and that is the whole
+  affordance.** No arrow, no hint text: a card visibly one of a row is already
+  saying it is one of a row, and it says it in the same breath as showing that
+  yesterday exists and has been filled in. `--deck-gap` is 6, and what is left
+  of the 20px gutter is the peek. The gutter is the entire budget — the live
+  card stays inset 20px like everything else, and moving it would buy peek by
+  breaking the one alignment the page has.
+- **Neighbours are real cards with real numbers**, read alongside the day
+  itself rather than lazily. At rest a cheap stand-in would pass; a drag brings
+  the whole card into view, and anything less than the real one is a lie that
+  resolves into the truth halfway through the gesture. A gesture that waits on
+  IndexedDB before it can show what it is dragging in stutters exactly once, on
+  first use, which is the worst possible time.
+- **Absolutely positioned, not a scroller.** A scroll container would have to be
+  scrolled to the middle on every build, and `createScreen` builds a fresh tree
+  on every data change — so there would be a frame of yesterday under the header
+  before the correction landed. That is the exact failure `show()` was written
+  to avoid. Here rest IS `transform: none`, so a newly built deck is already
+  where it belongs. It is also why the commit fires at the END of the slide: the
+  animation parks the incoming card precisely where the rebuild will draw it, so
+  the swap has nothing to move.
+- `overflow-x: clip`, not `hidden` — `hidden` makes a scroll container and
+  forces the other axis to `auto`. `clip` does neither.
+- **Forward off today is damped to a quarter, not frozen.** A page that will not
+  move is indistinguishable from a page that did not receive the gesture, and
+  one of those is a bug. The give says "nothing that way".
+- Same axis threshold and ratio as a log row's swipe. A deck that captured
+  gestures more eagerly than the rows beneath it would make the same flick of
+  the thumb do different things depending on where it landed.
+- Commit threshold: a quarter of a page or 60px, whichever is further. The floor
+  stops a small flick on a large phone reading as indecision.
+- **Ring arc memory is keyed per card**, or three cards would fight over one
+  memory and every render would replay somebody's entrance. Likewise `lastKcal`:
+  only the live card writes to it, or paging would tick from a neighbour's total
+  rather than from what the number on screen actually said.
+- The toggle repaints **all three** cards. A card that changed its mind about
+  what it was showing while sliding into view would be worse than one that never
+  offered the choice.
+- Neighbours are `aria-hidden`. Three days of numbers announced as one card
+  would be unreadable.
+
+**The click guard.** A page gesture ends with a click, and the card underneath
+is tappable — so a swipe would also flip consumed/remaining on the way past.
+Swallowed in the capture phase by `swipePages` itself, so anything the deck ever
+contains gets the guard for free. The flag is CONSUMED rather than held until
+the next `touchstart`: holding it works on a phone, where every tap starts with
+one, and fails on a trackpad, where the click after a swipe is the only event
+that arrives and the next real click would be eaten instead.
+
+**Worth resolving before this ships.** Targets are `settings.targets` for every
+card in the deck. That is what Today already did for a day reached by chevron,
+so the deck is not inventing a rule — but the deck makes yesterday much easier
+to reach, and `dayTargets` (the target actually active that day) exists and is
+what History uses. The two screens now disagree more visibly than they did.
+
+**The reason — yours.** The interesting half is the peek, not the swipe. The
+swipe is a convenience for something the chevrons already do; the peek changes
+what the screen is *about* — one day with controls, versus a run of days you
+happen to be standing on one of.
+
+---
+
+## 12 · Quick add absorbs the front door; the editor keeps the details
+
+**What moved**
+
+- **Quick add takes the third route button**, where Custom was. Over a month you
+  type numbers in far more often than you author a food, and the two read as
+  duplicates side by side.
+- **"Custom" is now "New food"**, demoted to the link under the lists, and
+  retitled inside — "Custom" never said what it makes.
+- **A `switchRow` at the bottom of Quick add: "Save to my foods."** Off (the
+  default) it behaves exactly as before: one entry, `foodId: null`, nothing in
+  the library. On, it also writes a food.
+- Turning it on reveals the only two things a food needs beyond four numbers:
+  **a serving size** (foods are stored per 100, so it has to know what the
+  numbers describe) and **a name**, which goes from optional to required. Both
+  appear only when it is on — a form that asks up front is the form this
+  replaced. Revealed, not disabled: a greyed field still occupies the form and
+  still has to be read past to learn it does not apply.
+- The save button relabels itself `Add` → `Save and add`.
+
+**The thing that made this worth doing carefully.** These were never two UIs
+over one action — they produce different objects. Quick add writes an entry;
+Custom called `putFood` and created a reusable food. That difference lived
+entirely in a label, which is why they read as duplicates. Collapsing them into
+one form with "optional extra fields" would have had to pick one save target and
+silently drop the other. The switch keeps both and states the choice in the
+words of its consequence.
+
+**Verified end to end, both paths.**
+
+- On: typed `500 cal · 14 P · 11 F · 42 C` at a 250 g serving → stored
+  `per100 {200, 5.6, 4.4, 16.8}` → logged back as **exactly** 500/14/11/42.
+  The food is searchable and appears in Recents, and the entry carries its
+  `foodId`.
+- The calorie override survives the round trip. Atwater on those macros is 323,
+  and 500 is what came back — which is the whole point of the override existing,
+  since labels rarely reproduce the arithmetic.
+- Off: four number fields, `foodId: null`, `source: 'quick'`, nothing added to
+  the library.
+
+**New control.** `switchRow` — a real `role="switch"`, because "off" here is a
+complete answer rather than an unticked box. Ink when on, a 20% ink tint when
+off; NOT `--color-canvas`, since this control's home is a sheet whose ground is
+canvas and that would be a switch you could only find by the knob. iOS 51×31
+metrics on purpose: it is the control most likely to be read as a system one.
+
+**Not done.** The full editor is still reachable only from the Add sheet link,
+a scan with no data, or editing an existing food. If Quick add's switch turns
+out to cover most authoring, the link is the next thing to question.
+
+**The reason — yours.** Worth being explicit that the problem was never that
+there were two forms — it was that the Add sheet named them by their mechanism
+("Custom") instead of their outcome ("save it for next time"), so the only way
+to tell them apart was to have already learnt the difference.
