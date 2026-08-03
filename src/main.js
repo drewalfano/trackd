@@ -145,6 +145,10 @@ function tabBar() {
    * Tapping the tab is the "go home" gesture rather than part of that pairing,
    * so it resets the day. Everything else about the shared date is unchanged.
    */
+  // Purely decorative — the aria-current on each tab is what announces the
+  // selection, so this is hidden from assistive tech rather than doubled up.
+  const tabPill = h('span', { class: 'tab-pill', 'aria-hidden': 'true' })
+
   const tabButtons = TABS.map((tab) =>
     h(
       'button',
@@ -170,7 +174,7 @@ function tabBar() {
     h(
       'div',
       { class: 'pointer-events-auto mx-auto flex max-w-[430px] items-center gap-[10px]' },
-      h('div', { class: 'tabbar' }, tabButtons),
+      h('div', { class: 'tabbar' }, tabPill, tabButtons),
       h(
         'button',
         { class: 'add-btn', 'aria-label': 'Add food', onclick: () => openAddFood() },
@@ -183,7 +187,10 @@ function tabBar() {
 const nav = tabBar()
 const fade = tabBarFade()
 
-/** The active tab gets a canvas pill with an ink edge; the rest stay muted. */
+/** Whether the pill has been placed once. The first placement must not slide. */
+let pillPlaced = false
+
+/** The active tab gets the pill; the rest stay muted. */
 function syncTabs(path) {
   const root = path.split('/')[0]
   const active =
@@ -191,6 +198,23 @@ function syncTabs(path) {
   for (const btn of nav.querySelectorAll('[data-tab]')) {
     btn.setAttribute('aria-current', btn.dataset.tab === active ? 'page' : 'false')
   }
+
+  const index = TABS.findIndex((tab) => tab.path === active)
+  if (index < 0) return
+
+  const pill = nav.querySelector('.tab-pill')
+  // Opening straight onto Settings should find the pill already there, not
+  // watch it travel across the bar on first paint. Suppress the transition for
+  // that one placement, forcing a reflow so the next move still animates.
+  if (!pillPlaced) {
+    pill.style.transition = 'none'
+    pill.style.transform = `translateX(${index * 100}%)`
+    void pill.offsetWidth
+    pill.style.transition = ''
+    pillPlaced = true
+    return
+  }
+  pill.style.transform = `translateX(${index * 100}%)`
 }
 
 /* ----------------------------------------------------------------- routing */

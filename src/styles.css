@@ -768,6 +768,7 @@
   }
 
   .tabbar {
+    position: relative;
     display: flex;
     height: var(--nav-height);
     flex: 1;
@@ -778,7 +779,36 @@
     border: 1px solid var(--color-outline);
   }
 
+  /**
+   * The selection is one pill that slides, not a background switched on and off
+   * per tab.
+   *
+   * Switching it per tab made the indicator disappear from one place and appear
+   * in another, which reads as two separate things rather than one moving. A
+   * single element that travels says the selection went somewhere, and the
+   * direction of travel says where you came from.
+   *
+   * Width is a third of the track inside its padding, so `translateX` in
+   * multiples of 100% lands exactly on each tab. Three tabs is baked in here —
+   * a fourth would need this divisor and the JS to agree.
+   */
+  .tab-pill {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px) / 3);
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-ink);
+    pointer-events: none;
+    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
   .tab {
+    /* Above the pill, so the label and icon are never covered by it. */
+    position: relative;
+    z-index: 1;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -788,6 +818,7 @@
     border-radius: 999px;
     border: 1px solid transparent;
     color: var(--color-muted);
+    transition: color 200ms ease-out;
   }
 
   /**
@@ -798,9 +829,8 @@
    * became the grey one — the selected state looked recessed. The bar is white
    * now, so the edge does the work alone, which is what the mockups show.
    */
+  /* The pill draws the fill and the edge now; the tab only changes ink. */
   .tab[aria-current='page'] {
-    background: var(--color-surface);
-    border-color: var(--color-ink);
     color: var(--color-ink);
   }
 
