@@ -175,6 +175,17 @@ export function countTo(el, to, { duration = 200, format = (n) => Math.round(n) 
     write(to)
     return
   }
+  /**
+   * Paint the starting value NOW, not on the first animation frame.
+   *
+   * Everything below is scheduled, so between this call and the first frame the
+   * element held nothing at all. That was invisible while the only caller was a
+   * screen render — the element was not in the document yet — but Today's card
+   * now rebuilds this number on a tap, in place, and a frame of blank where a
+   * 48px number was reads as the card breaking. It is also however long a
+   * backgrounded tab takes to run a frame, which is unbounded.
+   */
+  write(from)
   const start = performance.now()
   const step = (now) => {
     const t = Math.min(1, (now - start) / duration)
@@ -227,6 +238,7 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
     dx = 0
     setX(0, animate)
     el.dataset.open = 'false'
+    delete el.dataset.swiping
     onClose?.()
   }
 
@@ -270,6 +282,13 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
         return
       }
       decided = true
+      /**
+       * Announce the gesture the moment it is judged horizontal, so anything
+       * styling the open row can start with the movement rather than after it.
+       * Set once here and cleared on close — `onEnd` leaves it in place when
+       * the row settles open, since open is where it is meant to stay.
+       */
+      el.dataset.swiping = 'true'
     }
     dx = Math.max(-width - 24, Math.min(0, (open ? -width : 0) + deltaX))
     setX(dx, false)

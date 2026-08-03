@@ -81,33 +81,63 @@
    *
    * Each macro is three values. `--color-X` is the FILL. `--color-X-edge` is a
    * darker shade of it, used for the stroke on that fill and as the background
-   * of the overage segment — white clears AA on all four edges (4.74:1 on gold
-   * up to 6.54:1 on blue), which it does not on the fills.
+   * of the overage segment — white clears AA on all four edges (5.13:1 on
+   * orange up to 7.90:1 on blue), which it does not on the fills.
    *
    * `--color-X-text` is the macro as type, and aliases the edge, because the
    * ground that matters is the grey card and not the white page. The P/F/C
    * letters mostly appear inside log rows, and against #F0F0F0 every fill lands
-   * between 2.69:1 and 3.98:1 — all four fail. The edges clear 4.5:1 there.
+   * between 2.70:1 and 3.42:1 — all four fail. The edges clear 4.5:1 there.
    *
    * A fill still has a floor of its own: it is a MARK, and WCAG 1.4.11 asks 3:1
    * of anything you have to see to read the screen. On the white card the arcs
-   * and bars now run 3.06:1 (carbs) to 4.54:1 (protein).
+   * and bars now run 3.08:1 (fat) to 3.90:1 (protein).
    *
    * Nothing in this block is a stylistic choice. `npm test` measures all of it
    * against both grounds and both themes; change a hex and it will tell you.
    *
-   * Carbs are not red, and fat is darker than it was. Both are measured moves —
-   * see the note under the dark block.
+   * ---
+   *
+   * v1.1.6 raises the saturation. The four hues moved to the ones drawn in the
+   * mockup — blue, orange, magenta, and a green pulled off the teal that was
+   * drawn with them — and the chroma rose on all four, most of all on carbs
+   * (0.118 → 0.224 in OKLCH) and protein (0.121 → 0.173). The old set was not
+   * sitting at the limit of anything; it was drawn cooler than it had to be.
+   *
+   * What is NOT free is lightness, and that is the whole story of this block.
+   * A fill has to clear 3:1 against a white card AND against the #262626 dark
+   * card, which pins its relative luminance into **0.158 … 0.300** — a band of
+   * about one and a half stops for every colour in the app. Hue and chroma are
+   * free inside it. Lightness is spent the moment you pick a hue.
+   *
+   * So each fill holds the drawn hue and chroma, and only its lightness moved
+   * until it landed in that band. The drawn colours themselves survive as the
+   * TEXT shade, where the band is different and they fit as they are:
+   *
+   *   `--color-protein-edge` IS #2049b2, the hand-picked blue, unmodified
+   *   `--color-carbs-edge`   #c2138e against the mockup's #c2158f
+   *
+   * What could not survive is those same values as fills. #2049b2 sits at
+   * 0.083 luminance — **1.91:1 on the dark card**, well under the 3:1 a mark
+   * owes. Blue carries 7.2% of luminance against green's 71.5%, so a saturated
+   * blue is dark whether you want it to be or not, and no amount of picking
+   * gets a blue that deep to show against near-black.
+   *
+   * The fills are therefore lighter siblings of the drawn colours — same hue to
+   * the tenth of a degree, same chroma, lightness raised until the mark is
+   * visible in both themes. Protein is the clearest case: #2049b2 → #4d7cea,
+   * h=-95.8 and C=0.173 in both, and the pair reads as one blue at two
+   * strengths rather than as two blues.
    */
-  --color-kcal: #44a057;
-  --color-protein: #5075be;
-  --color-fat: #9c7d1c;
-  --color-carbs: #cc79a7;
+  --color-kcal: #1aa06b;
+  --color-protein: #4d7cea;
+  --color-fat: #df7807;
+  --color-carbs: #e13da9;
 
-  --color-kcal-edge: #2a7340;
-  --color-protein-edge: #3d5c9c;
-  --color-fat-edge: #7a6200;
-  --color-carbs-edge: #b34482;
+  --color-kcal-edge: #027d51;
+  --color-protein-edge: #2049b2;
+  --color-fat-edge: #a85901;
+  --color-carbs-edge: #c2138e;
 
   --color-kcal-text: var(--color-kcal-edge);
   --color-protein-text: var(--color-protein-edge);
@@ -155,9 +185,18 @@
    * That is a date from another year, reached only by paging back months, and
    * `fitText` takes it down half a step rather than the two it used to need. So
    * the backstop stays — it just stopped being load-bearing.
+   *
+   * Line height is 1.25, not the 1.1 it was drawn at. Inter's own box is
+   * 1.211em tall (0.969 up, 0.242 down), so a 1.1 line box is shorter than the
+   * font it holds — and every title that truncates also hides its overflow,
+   * which turned that shortfall into a visible cut across the bottom of the
+   * descenders. "Today, Aug 3" lost the tail of its g. 1.25 is the first step
+   * that clears the metrics, and it is what every non-truncating title was
+   * already setting by hand with `leading-tight`, so this makes the token say
+   * what the screens were saying over it.
    */
   --text-title: 26px;
-  --text-title--line-height: 1.1;
+  --text-title--line-height: 1.25;
   --text-title--letter-spacing: -0.02em;
 
 }
@@ -183,13 +222,15 @@
   --color-surface: #262626;
   --color-muted: #949494;
   --color-outline: #333333;
-  /* The darker shades go the wrong way against a dark ground: protein and
-     carbs only reach 3.66:1 on the old card. Macro text lifts to a tint here.
+  /* The darker shades go the wrong way against a dark ground — the light-mode
+     blue is 1.91:1 on this card. Macro text lifts to a tint here, at the same
+     hue and near enough the same chroma, so the palette reads as one set across
+     both themes rather than as two. 5.51:1 (carbs) to 7.14:1 (kcal).
      The FILLS are untouched — those still never move between themes. */
-  --color-kcal-text: #44a057;
-  --color-protein-text: #7e9fd6;
-  --color-fat-text: #d2b02a;
-  --color-carbs-text: #cb74a4;
+  --color-kcal-text: #50c78f;
+  --color-protein-text: #6b9aff;
+  --color-fat-text: #f48b2d;
+  --color-carbs-text: #ff5ec4;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -200,10 +241,10 @@
     --color-surface: #262626;
     --color-muted: #949494;
     --color-outline: #333333;
-    --color-kcal-text: #44a057;
-    --color-protein-text: #7e9fd6;
-    --color-fat-text: #d2b02a;
-    --color-carbs-text: #cb74a4;
+    --color-kcal-text: #50c78f;
+    --color-protein-text: #6b9aff;
+    --color-fat-text: #f48b2d;
+    --color-carbs-text: #ff5ec4;
   }
 }
 
@@ -416,12 +457,59 @@
     padding: 20px;
   }
 
-  /* Equal columns, so the three rings are comparable by position as well as
-     by size. Even distribution is the whole argument for a row over concentric. */
+  /**
+   * The card is tappable, and nothing on it says so.
+   *
+   * There is no icon and no label, on purpose — a chevron or a "remaining"
+   * chip would be a fourth thing on a card that just had two removed, and it
+   * would sit there permanently to advertise a gesture you either know or do
+   * not need. What it gets instead is a press: the same fast scale-and-dim
+   * every other control in the app uses, which says "that was a control" at the
+   * moment it matters rather than all day.
+   *
+   * The trade is real and is worth stating plainly — a press only answers the
+   * question after you have already asked it. It costs nothing to find out and
+   * nothing to undo, so the floor on being wrong is low, but a first-click test
+   * is what would settle whether anyone finds it at all.
+   */
+  .day-card-toggle {
+    cursor: pointer;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 120ms ease-out;
+  }
+  .day-card-toggle:active {
+    transform: scale(0.99);
+    opacity: 0.9;
+  }
+
+  /**
+   * Equal columns, so the three rings are comparable by position as well as by
+   * size. Even distribution is the whole argument for a row over concentric.
+   *
+   * The outer two align to the outer edges of their columns rather than to
+   * their centres, which puts the left edge of the protein ring and the right
+   * edge of the carbs ring on the ends of the calorie bar directly above them.
+   * Centring all three left the card's one full-width mark overhanging the row
+   * beneath it by about ten pixels a side — a near-miss, which reads as worse
+   * than either a real inset or a true alignment. The middle ring stays centred
+   * in its own column, so the row is still symmetrical and the gaps still even;
+   * only the slack that used to sit outside the outer rings has moved between
+   * them.
+   */
   .day-rings {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    justify-items: center;
     margin-top: 20px;
+  }
+  .day-rings > :first-child {
+    justify-self: start;
+  }
+  .day-rings > :last-child {
+    justify-self: end;
   }
 
   /**
@@ -605,6 +693,163 @@
   }
 
   /**
+   * The ink variant. Same fill and same reversal as a selected chip.
+   *
+   * Every other icon button in the app sits on a surface and is read by its
+   * icon alone. These two are uncovered by a gesture, on the page tint, with
+   * nothing above them to say a control has appeared — so they carry the fill
+   * instead, and they are the only thing on an open row at full strength.
+   */
+  .icon-btn-ink {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+
+  /* ---------------------------------------------------------- swipe actions */
+
+  /**
+   * A log row that swipes to reveal edit and delete.
+   *
+   * The wrapper stays the card's own white, so what a swipe uncovers is the
+   * card the row was sitting in rather than a second, darker ground appearing
+   * underneath it. The tint goes on the moving part instead — see below — which
+   * is the half of the pair that is actually doing something. Clipping happens
+   * here so the surface can travel the whole reveal without escaping the card.
+   */
+  .swipe-row {
+    position: relative;
+    overflow: hidden;
+    background: var(--color-surface);
+  }
+
+  /**
+   * The log's outer inset.
+   *
+   * Rows carry `10px 20px`, which already gives 20 down the sides and 10 either
+   * side of a divider — so between two entries the gap is 10, rule, 10, and
+   * that is the number that was right. What was wrong is that the same 10 was
+   * also doing the job at the top and bottom of the card, where there is no
+   * divider to share it with and the neighbour is the card's own edge.
+   *
+   * A gap between two rows is split between them; a gap at the edge is not, so
+   * it has to be drawn at full width or it reads as half of one. 20 top and
+   * bottom is the same 20 the sides use, which makes the inset one number in
+   * all four directions rather than one number and a special case.
+   *
+   * Scoped to `.swipe-row` because that is what an entry is. Settings and the
+   * food library use `.row-single` in a card, which is a fixed 48px row on
+   * purpose and is not asking for this.
+   */
+  .card > .swipe-row:first-child .row {
+    padding-top: 20px;
+  }
+  .card > .swipe-row:last-child .row {
+    padding-bottom: 20px;
+  }
+
+  /**
+   * The revealed controls centre on the wrapper, and the wrapper is what just
+   * grew — so on the first and last rows the circles sat 5px off the text they
+   * belong to. They take the same edge padding the row does, which puts both
+   * back on one centreline.
+   */
+  .card > .swipe-row:first-child .swipe-actions {
+    padding-top: 10px;
+  }
+  .card > .swipe-row:last-child .swipe-actions {
+    padding-bottom: 10px;
+  }
+
+  /**
+   * The divider is inset to the text, not to the card.
+   *
+   * `.card > * + *` rules edge to edge, which is correct for a list whose rows
+   * are the full width of the card. These rows are not: their content starts
+   * 20px in and stops 20px short, and a rule running past that on both sides
+   * was drawing a box the entries do not fill. Pulling it back to the same 20
+   * makes it a separator between two blocks of text rather than a line across
+   * a card, which is the thing it actually is.
+   *
+   * A pseudo-element rather than a border, because a border cannot be inset.
+   * It stays IN FLOW — a 1px block with 20px margins — so it occupies the pixel
+   * the border used to, and the 10 above and 10 below stay exactly 10 rather
+   * than quietly becoming 9.
+   */
+  .card > .swipe-row + .swipe-row {
+    border-top: 0;
+  }
+  .card > .swipe-row + .swipe-row::before {
+    content: '';
+    display: block;
+    height: 1px;
+    margin: 0 20px;
+    background: var(--color-outline);
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /**
+   * The two rules touching an open row leave with it.
+   *
+   * A divider is a statement about two rows that are next to each other, and an
+   * open row has stopped being next to anything — it is out of the list, on the
+   * ground, with two controls beside it. Holding the rules in place while the
+   * row slid out from between them drew the row as a gap in a list that was
+   * still running, which is the opposite of what the gesture just did.
+   *
+   * They travel rather than fade, on the row's own curve and duration, so the
+   * whole thing is one movement: the row goes left and takes its edges with it.
+   * `overflow: hidden` on the wrapper takes care of the rest.
+   *
+   * The distance is `-100% - 20px`, not `-100%`. A percentage translate is of
+   * the element's own width, and the divider starts 20px in from the left — so
+   * its own width lands its trailing end exactly on the card's edge and leaves
+   * a 20px stub of rule sitting there. The extra 20 is the left margin it has
+   * to clear before it is actually gone.
+   *
+   * Both selectors are needed and they are not the same rule: `[data-open]`
+   * on the row hides the divider ABOVE it, and the sibling combinator reaches
+   * forward to hide the one BELOW. `data-swiping` starts it with the gesture,
+   * for the same reason the tint does — a divider that waits for release pops
+   * out after the row has already moved.
+   */
+  .card > .swipe-row[data-open='true']::before,
+  .card > .swipe-row[data-swiping='true']::before,
+  .card > .swipe-row[data-open='true'] + .swipe-row::before,
+  .card > .swipe-row[data-swiping='true'] + .swipe-row::before {
+    transform: translateX(calc(-100% - 20px));
+  }
+
+  .swipe-row [data-swipe-surface] {
+    background: var(--color-surface);
+    transition:
+      background-color 160ms ease-out,
+      border-radius 160ms ease-out;
+  }
+
+  /**
+   * Open, or on its way there.
+   *
+   * The surface drops to the page tint and rounds its trailing end, so the row
+   * becomes a pill that has slid out of the card — a shape with two ends, one
+   * of them off-screen. White on white had no trailing edge to see at all,
+   * which is why the old version read as a hole in the card rather than as a
+   * row that had moved. Losing the white also settles which of the things on
+   * screen is the one you are meant to hit: the row drops to the recessive
+   * tone, and the ink circles are the only thing at full strength.
+   *
+   * `data-swiping` is what makes it a gesture rather than a state change. Held
+   * until release, the surface would go white → white → grey the instant your
+   * thumb left the glass, which is the wrong causal order: the row is supposed
+   * to be following the finger, not reacting to it.
+   */
+  .swipe-row[data-open='true'] [data-swipe-surface],
+  .swipe-row[data-swiping='true'] [data-swipe-surface] {
+    background: var(--color-canvas);
+    border-top-right-radius: var(--radius-card);
+    border-bottom-right-radius: var(--radius-card);
+  }
+
+  /**
    * Buttons are capsules, not rounded rectangles.
    *
    * 24px on a 56px box is the one shape in here that read as someone else's
@@ -764,6 +1009,12 @@
     height: var(--nav-fade);
     z-index: 30;
     pointer-events: none;
+  }
+
+  /* Nothing scrolls under the bar on this screen, so there is nothing for the
+     band to do but tint the page. `syncFade` in main.js sets the flag. */
+  .tabbar-fade[data-active='false'] {
+    display: none;
   }
 
   .tabbar-fade > span {

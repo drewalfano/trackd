@@ -122,29 +122,43 @@ function ringSvg({ pct, macro, key, animate }) {
 }
 
 /**
- * Ring with `consumed / target` in its centre, macro name and the gap beneath.
+ * Ring with a number in its centre and the macro name beneath.
  *
- * The ring used to hold the gap alone, as a negative: `-159g`. Two things were
- * wrong with that. A minus sign reads as debt or as an error even when it means
- * "still to eat" — and the same sign carried opposite valences, `-32g` on
- * protein being 32 to go while `-46g` on fat is 46 of headroom, with nothing on
- * screen to say which. And the number ran the wrong way: it was largest on an
- * empty morning and counted down while the arc filled up, so the two halves of
- * the same mark moved in opposite directions all day.
+ * The centre states ONE of two readings, and which one is the card's business
+ * rather than the ring's — `mode` comes down from Today, where a tap flips the
+ * whole card at once. Consumed reads `115` over `/ 180`; remaining reads `65`
+ * over `left`. Both are the same shape: the value at full size, its qualifier
+ * small and muted beneath, which is what the calorie row does too.
  *
- * Consumed over target is what the calorie row already does, and it is stated
- * the way the calorie row states it: the value at full size, the target small
- * and muted beneath. Two lines rather than one because `180 / 300` measures
- * 68.4px in Inter at 15px and the hole gives 62.2px across at that height —
- * every three-digit pair is exactly that wide, the figures being tabular.
+ * Two lines rather than one because `180 / 300` measures 68.4px in Inter at
+ * 15px and the hole gives 62.2px across at that height — every three-digit pair
+ * is exactly that wide, the figures being tabular.
  *
- * The over state needs no special form: `320 / 300` carries magnitude past the
- * target by itself, where the old centre needed a `+` to do it.
+ * ---
+ *
+ * Remaining used to be the only reading, as a negative in the centre: `-159g`.
+ * Two things were wrong with it, and neither is a reason not to offer it now.
+ *
+ * A minus sign reads as debt or as an error even when it means "still to eat",
+ * and the same sign carried opposite valences — `-32g` on protein being 32 to
+ * go while `-46g` on fat is 46 of headroom, with nothing on screen to say
+ * which. That is fixed by the word: `left` and `over` say which, and no sign is
+ * needed.
+ *
+ * And the number ran the wrong way — largest on an empty morning, counting down
+ * while the arc filled up, the two halves of one mark moving in opposite
+ * directions all day. That is still true of remaining, and it is why consumed
+ * is the default. What has changed is that it is now a reading you asked for
+ * rather than one the card chose for you, and a number that disagrees with its
+ * arc is a very different thing when you were the one who turned it on.
+ *
+ * The over state needs no special form in either mode: `320 / 300` carries
+ * magnitude past the target by itself, and remaining says `20` over `over`.
  *
  * Both the number and the name take the TEXT shade, not the fill — a fill is
  * never used as type.
  */
-export function macroRing({ macro, value, target, animate = true, key = macro }) {
+export function macroRing({ macro, value, target, animate = true, key = macro, mode = 'consumed' }) {
   const { pct } = progress(value, target)
   // Round the operands, then difference. Rounding the difference of two raw
   // floats is what put a number on screen that did not match its own operands.
@@ -154,21 +168,20 @@ export function macroRing({ macro, value, target, animate = true, key = macro })
   const isOver = remaining < 0
   const colour = macroTextColor(macro)
 
+  const remainingMode = mode === 'remaining'
+  const big = remainingMode ? g(Math.abs(remaining)) : g(consumed)
+  const small = remainingMode ? (isOver ? 'over' : 'left') : `/ ${g(goal)}`
+
   const centre = h(
     'div',
     {
       class: 'absolute inset-0 flex flex-col items-center justify-center leading-none',
       style: { color: colour },
     },
-    h('div', { class: 'tnum text-[15px] font-semibold' }, ...digits(g(consumed))),
-    h('div', { class: 'tnum mt-[3px] text-[11px] font-medium text-muted' }, ...digits(`/ ${g(goal)}`))
+    h('div', { class: 'tnum text-[15px] font-semibold' }, ...digits(big)),
+    h('div', { class: 'tnum mt-[3px] text-[11px] font-medium text-muted' }, ...digits(small))
   )
 
-  /**
-   * The gap moves here rather than disappearing. It is the answer to "how much
-   * protein is left", which is the question the card exists to answer, and
-   * subtracting two numbers in your head at 8am is not an answer.
-   */
   const gap = isOver ? `${g(-remaining)} over` : `${g(remaining)} left`
 
   return h(
@@ -176,6 +189,8 @@ export function macroRing({ macro, value, target, animate = true, key = macro })
     {
       class: 'flex flex-col items-center gap-[10px]',
       role: 'group',
+      // Both readings, whichever one is drawn. A screen reader should not have
+      // to toggle the card to hear the other half.
       'aria-label': `${MACRO_META[macro].label}, ${g(consumed)} of ${g(goal)} grams, ${gap}`,
     },
     h(
@@ -186,13 +201,8 @@ export function macroRing({ macro, value, target, animate = true, key = macro })
     ),
     h(
       'div',
-      { class: 'flex flex-col items-center gap-[2px]' },
-      h(
-        'div',
-        { class: 'text-[16px] font-semibold leading-tight', style: { color: colour } },
-        MACRO_META[macro].label
-      ),
-      h('div', { class: 'tnum text-[12px] leading-tight text-muted' }, ...digits(gap))
+      { class: 'text-[16px] font-semibold leading-tight', style: { color: colour } },
+      MACRO_META[macro].label
     )
   )
 }

@@ -187,6 +187,34 @@ function tabBar() {
 const nav = tabBar()
 const fade = tabBarFade()
 
+/**
+ * The fade only exists for content passing under the bar. On a screen short
+ * enough not to scroll, nothing ever does — and what is left is a grey band
+ * across the bottom of the page with nothing behind it to justify itself. An
+ * empty Today, Settings on a large phone, and a one-item log all land there.
+ *
+ * Turned off with `display: none` rather than opacity, so the three
+ * backdrop-filter layers stop compositing as well as stop showing. That cost is
+ * paid every frame while the band exists, which is exactly the note above
+ * `BLUR_RAMP` — this is the case where the right number of layers is zero.
+ *
+ * Measured against the document rather than any one screen: `.screen` already
+ * reserves the bar's height as bottom padding, so "does the page scroll at all"
+ * and "can anything reach the bar" are the same question. 1px of slack because
+ * a fractional viewport height reports as scrollable when it is not.
+ */
+function syncFade() {
+  const scrollable = document.documentElement.scrollHeight > window.innerHeight + 1
+  fade.dataset.active = String(scrollable)
+}
+
+// Content height changes on every data load, not just on navigation, so this
+// watches the box rather than hooking the router.
+if (typeof ResizeObserver === 'function') {
+  new ResizeObserver(syncFade).observe(document.body)
+}
+window.addEventListener('resize', syncFade)
+
 /** Whether the pill has been placed once. The first placement must not slide. */
 let pillPlaced = false
 
@@ -368,6 +396,7 @@ async function boot() {
   app.appendChild(view)
   app.appendChild(fade)
   app.appendChild(nav)
+  syncFade()
 
   defineRoutes()
   startRouter((path) => {
