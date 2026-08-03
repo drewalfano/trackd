@@ -125,10 +125,17 @@ function ringSvg({ pct, macro, key, animate }) {
  * Ring with a number in its centre and the macro name beneath.
  *
  * The centre states ONE of two readings, and which one is the card's business
- * rather than the ring's — `mode` comes down from Today, where a tap flips the
- * whole card at once. Consumed reads `115` over `/ 180`; remaining reads `65`
- * over `left`. Both are the same shape: the value at full size, its qualifier
- * small and muted beneath, which is what the calorie row does too.
+ * rather than the ring's — `mode` comes down from Today, where one switch flips
+ * the whole card at once. Consumed reads `115` over `/ 180g`; remaining reads
+ * `65g` over `left`. Both are the same shape: the value at full size, its
+ * qualifier small and muted beneath, which is what the calorie row does too.
+ *
+ * The `g` lands once per reading, never twice. In consumed mode that is on the
+ * target, because `115 / 180g` is one measurement with one unit and `115g /
+ * 180g` is the unit stuttering; in remaining there is only one number, so it
+ * takes the suffix itself. Calories never take one in either mode — a bare
+ * number under a label that says Calories is not ambiguous about its unit, and
+ * `cal` there would be the same stutter.
  *
  * Two lines rather than one because `180 / 300` measures 68.4px in Inter at
  * 15px and the hole gives 62.2px across at that height — every three-digit pair
@@ -152,8 +159,11 @@ function ringSvg({ pct, macro, key, animate }) {
  * rather than one the card chose for you, and a number that disagrees with its
  * arc is a very different thing when you were the one who turned it on.
  *
- * The over state needs no special form in either mode: `320 / 300` carries
- * magnitude past the target by itself, and remaining says `20` over `over`.
+ * The over state needs no special form in either mode: `320 / 300g` carries
+ * magnitude past the target by itself, and remaining says `20g` over `over`.
+ * No sign is added in either case — a `+` or a `-` in front of these would be
+ * the third notation for one fact, on a card whose whole argument is that it
+ * states each fact once.
  *
  * Both the number and the name take the TEXT shade, not the fill — a fill is
  * never used as type.
@@ -169,8 +179,8 @@ export function macroRing({ macro, value, target, animate = true, key = macro, m
   const colour = macroTextColor(macro)
 
   const remainingMode = mode === 'remaining'
-  const big = remainingMode ? g(Math.abs(remaining)) : g(consumed)
-  const small = remainingMode ? (isOver ? 'over' : 'left') : `/ ${g(goal)}`
+  const big = remainingMode ? `${g(Math.abs(remaining))}g` : g(consumed)
+  const small = remainingMode ? (isOver ? 'over' : 'left') : `/ ${g(goal)}g`
 
   const centre = h(
     'div',

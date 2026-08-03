@@ -504,6 +504,38 @@ export function segmentedWide({ options, value, onChange }) {
   )
 }
 
+/**
+ * The same control, small enough to live in the corner of a card.
+ *
+ * Two differences beyond size. It stops its own clicks, because its only home
+ * so far is inside a surface that is itself tappable — without that, choosing
+ * a segment would set the mode and then have the card underneath flip it
+ * straight back. And it carries a `role="group"` with a name, so the pair
+ * announces as one control rather than as two loose buttons that happen to be
+ * adjacent; the card around it deliberately has no button role of its own.
+ */
+export function segmentedSmall({ options, value, onChange, label }) {
+  return h(
+    'div',
+    { class: 'segmented-xs', role: 'group', 'aria-label': label },
+    options.map((opt) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'segment-xs',
+          'aria-pressed': String(opt.value === value),
+          onclick: (e) => {
+            e.stopPropagation()
+            onChange(opt.value)
+          },
+        },
+        opt.label
+      )
+    )
+  )
+}
+
 export function labelledField({ label, hint, children }) {
   return h(
     'label',

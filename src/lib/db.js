@@ -47,6 +47,20 @@ export const DEFAULT_SETTINGS = {
   blockThresholds: { afternoon: 12, night: 17 },
   theme: 'system',
   trendWindow: 7,
+  /**
+   * Which reading the Today card leads with: 'consumed' or 'remaining'.
+   *
+   * Stored rather than held in memory because the control that sets it is now
+   * visible and permanent, which makes it a preference. An invisible gesture
+   * could argue it was only a way of looking at today; a labelled switch sitting
+   * on the card all day cannot, and a setting that forgets what you told it is
+   * worse than one that was never offered.
+   *
+   * 'consumed' is the first-run default, and the internal name stays 'consumed'
+   * while the control reads "Eaten" — the value is what `macroRing` and
+   * `calorieBlock` have always spoken.
+   */
+  cardMode: 'consumed',
   /** Ordered and manual. These do not re-sort themselves — that is the point. */
   favourites: [],
   firstRunSeen: false,
@@ -210,6 +224,30 @@ export async function saveSettings(patch) {
   }
 
   emit('settings')
+  return next
+}
+
+/**
+ * The Today card's reading, written on its own and WITHOUT an emit.
+ *
+ * Every other setting goes through `saveSettings`, and the emit is the point
+ * there: a target changed in Settings has to reach a Today that is already
+ * built. This one is the opposite case. The only screen that reads `cardMode`
+ * is the one whose own control just set it, and it has already repainted from
+ * the value in hand — so an emit would be telling a screen something it told
+ * us.
+ *
+ * It would not be free, either. Today watches the `settings` scope, so an emit
+ * here re-runs its build: three days of entries re-read from IndexedDB, and a
+ * fresh calorie bar that restarts its fill from zero, on every tap of a control
+ * whose entire job is to be cheap enough to flick back and forth.
+ */
+export async function saveCardMode(mode) {
+  const previous = await getSettings()
+  if (previous.cardMode === mode) return previous
+  const next = derive({ ...previous, cardMode: mode })
+  await write(async () => (await db()).put('settings', next, 'settings'))
+  settingsCache = next
   return next
 }
 

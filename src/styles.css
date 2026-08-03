@@ -1086,6 +1086,62 @@
     color: var(--color-ink);
   }
 
+  /**
+   * The same control at card-corner scale, for the Eaten/Remaining switch on
+   * Today.
+   *
+   * Same token pair as `.segmented`, deliberately: the track takes the recessive
+   * tone and the selection pops to surface with an ink edge. That pair is what
+   * makes it survive the theme flip without a second value — in light it is
+   * #f0f0f0 track inside a #ffffff card, in dark #141414 inside #262626, and
+   * both are the same relationship rather than two hand-tuned greys.
+   *
+   * Everything else here is subtraction. 24px tall against the 44px of a real
+   * control, 11px type against the 16px of the "Calories" label it sits beside,
+   * and the padding pulled in to match. It has to be findable and it must not
+   * argue with the number underneath it — the hero is 40-odd pixels of ink two
+   * lines down, and anything that reads as a primary action up here is
+   * competing with the one thing the card exists to say.
+   *
+   * Not a `.chip-sm`, which is the other small control on a heading row: that
+   * one is a transparent ink-stroked pill because it is a button that GOES
+   * somewhere. This is a state, and states in this app are a track with a
+   * selection inside it.
+   */
+  .segmented-xs {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    border-radius: 999px;
+    background: var(--color-canvas);
+    border: 0;
+    flex: none;
+  }
+
+  .segment-xs {
+    min-height: 24px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    color: var(--color-muted);
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .segment-xs[aria-pressed='true'] {
+    background: var(--color-surface);
+    border-color: var(--color-ink);
+    color: var(--color-ink);
+  }
+
+  /* The neighbours in the deck draw the control so a drag reveals the real
+     card, but only the live day's is reachable. Belt and braces with the
+     `aria-hidden` and `tabindex` the neighbour cards already carry. */
+  .day-card[aria-hidden='true'] .segmented-xs {
+    pointer-events: none;
+  }
+
   /* ------------------------------------------------------------- tab bar */
 
   /**

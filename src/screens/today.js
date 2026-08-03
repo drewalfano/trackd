@@ -1,9 +1,9 @@
 import { h, countTo, haptic, swipePages, pressable } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
-import { listEntries, getSettings } from '../lib/db.js'
+import { listEntries, getSettings, saveCardMode } from '../lib/db.js'
 import { sumEntries, progress, MACRO_META } from '../lib/compute.js'
 import { macroRing } from '../lib/ring.js'
-import { tnum, card, macroTextColor, navHeader } from '../lib/ui.js'
+import { tnum, card, macroTextColor, navHeader, segmentedSmall } from '../lib/ui.js'
 import { kcal } from '../lib/format.js'
 import { formatDayHeader, isToday, addDays } from '../lib/dates.js'
 import { entryRow } from '../lib/entryRow.js'
@@ -22,8 +22,8 @@ import { navigate } from '../router.js'
  *
  * ---
  *
- * The card states every value exactly once, and a tap on it changes WHICH
- * value that is: consumed, or remaining, everywhere at once.
+ * The card states every value exactly once, and one switch changes WHICH value
+ * that is: eaten, or remaining, everywhere at once.
  *
  * It used to say each one three times over. Calories read `1105`, then
  * `/ 2837`, then `-1732` at the end of the row; each ring read `115 / 180` and
@@ -31,27 +31,73 @@ import { navigate } from '../router.js'
  * eaten some of a number — and the third statement of a fact is not emphasis,
  * it is noise. The gap and the `left` line are gone.
  *
- * What makes that affordable is the tap. Saying it once is only economy if the
- * other reading is still reachable, and it is: one touch anywhere on the card,
- * both readings one gesture apart, neither of them permanently occupying space
- * to say what the other already said.
+ * What makes that affordable is that the other reading stays reachable. Saying
+ * it once is only economy if you can still ask for the half that is not on
+ * screen, and both readings are one touch apart, neither permanently occupying
+ * space to say what the other already said.
  *
- * Which one leads is not arbitrary. Consumed runs with its own arc — the number
+ * Which one leads is not arbitrary. Eaten runs with its own arc — the number
  * grows as the ring fills — where remaining runs against it, counting down all
  * day while the mark beside it counts up. That disagreement is the reason
- * remaining is not the default, and it stops being a problem the moment it is
- * the reading you asked for rather than the one you were handed.
+ * remaining is not the first-run default, and it stops being a problem the
+ * moment it is the reading you asked for rather than the one you were handed.
+ *
+ * ---
+ *
+ * The switch is new; the two readings are not. For a while the only way to the
+ * other one was a tap anywhere on the card, with nothing on screen to say so —
+ * the argument being that a chip or a chevron would be a fourth thing on a card
+ * that had just had two removed. That argument was about DECORATION, and it
+ * held right up until the choice needed to be a stated one. A control that
+ * names both readings and marks which is live is not a hint about a gesture; it
+ * is the setting itself, visible, which is the only form in which a setting can
+ * be found by someone who does not already know it is there.
+ *
+ * The tap survives underneath it. Anyone who learned the gesture keeps it, and
+ * it costs nothing to leave in — but the card no longer claims a button role,
+ * because the control is now where the state is announced and a button wrapping
+ * two buttons announces it twice, in two voices, one of them unnamed.
  */
 
 /**
  * Which reading the card is showing. Module scope, not screen scope, because
  * `createScreen` rebuilds the whole tree on every data change — logging a
- * banana would otherwise snap the card back to consumed under your thumb.
+ * banana would otherwise snap the card back under your thumb.
  *
- * Deliberately not persisted to settings. It is a way of looking at today, not
- * a preference about the app, and it costs one tap to get back.
+ * Seeded from settings on every build, so the stored preference wins on first
+ * paint and the module copy is what every render in between reads. There is no
+ * frame of the wrong mode to fix afterwards: the build already awaits
+ * `getSettings` for the targets, and nothing mounts until that resolves.
  */
 let cardMode = 'consumed'
+
+const MODE_OPTIONS = [
+  { value: 'consumed', label: 'Eaten' },
+  { value: 'remaining', label: 'Remaining' },
+]
+
+/**
+ * Seeded from the store ONCE per session, on the first build, and not read from
+ * settings again after that.
+ *
+ * The module copy is authoritative from then on, and it has to be: a build can
+ * be triggered by a date swipe milliseconds after the switch was pressed, while
+ * the write is still in flight, and re-reading settings there would hand back
+ * the value the tap just replaced and snap the card under the thumb. The write
+ * is one-way traffic — this screen is the only thing that sets `cardMode` and
+ * the only thing that reads it.
+ *
+ * The cost is that a data import does not adopt the imported reading until the
+ * next launch, which is the smallest thing in a backup and the one nobody
+ * restores a backup for.
+ */
+let modeSeeded = false
+
+function seedMode(settings) {
+  if (modeSeeded) return
+  modeSeeded = true
+  if (MODE_OPTIONS.some((o) => o.value === settings.cardMode)) cardMode = settings.cardMode
+}
 
 /**
  * Count up from wherever the number last was, so logging one more thing ticks
@@ -62,7 +108,7 @@ let cardMode = 'consumed'
  */
 let lastKcal = 0
 
-function calorieBlock({ value, target, mode, live = true }) {
+function calorieBlock({ value, target, mode, live = true, control = null }) {
   const { pct } = progress(value, target)
   // Round the operands, then difference — same rule the rings use.
   const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
@@ -86,14 +132,36 @@ function calorieBlock({ value, target, mode, live = true }) {
   return h(
     'div',
     {},
+    // The label and the switch share a top edge, and the switch — the taller of
+    // the two — is what the band is as tall as. The hero then starts at the
+    // bottom of that band, so the number clears the control instead of running
+    // up alongside it.
+    //
+    // `items-start` rather than `items-center` for exactly that reason: centred,
+    // the switch hangs 4px below the label and the digits crowd it from
+    // underneath. And no gap under the band at all — the label and the number
+    // are one typographic unit, and the space the switch already contributes is
+    // the only separation they need.
+    //
+    // The switch is opposite the label rather than under the number because the
+    // label is the only thing up here at its own weight; anything nearer the
+    // hero would argue with the one mark the card exists to show.
     h(
       'div',
-      { class: 'text-[16px] font-semibold leading-tight', style: { color: macroTextColor('kcal') } },
-      MACRO_META.kcal.label
+      { class: 'flex items-start justify-between gap-[10px]' },
+      h(
+        'div',
+        {
+          class: 'text-[16px] font-semibold leading-tight',
+          style: { color: macroTextColor('kcal') },
+        },
+        MACRO_META.kcal.label
+      ),
+      control
     ),
     h(
       'div',
-      { class: 'mt-[4px] flex items-baseline gap-[8px]' },
+      { class: 'flex items-baseline gap-[8px]' },
       number,
       // The qualifier the rings use, in the row's own size: the target in
       // consumed mode, the word in remaining.
@@ -130,24 +198,37 @@ function calorieBlock({ value, target, mode, live = true }) {
  * focus stop, and being visible to a screen reader at all. Three days of
  * numbers announced as one card would be unreadable.
  */
-function dayCard({ totals, targets, live = false, position = 'current' }) {
+function dayCard({ totals, targets, live = false, position = 'current', onMode }) {
   const el = h('div', {
     class: live ? 'day-card day-card-toggle' : 'day-card',
     'data-day': position,
-    ...(live ? { role: 'button', tabindex: '0' } : { 'aria-hidden': 'true' }),
+    // `inert` as well as `aria-hidden` on the neighbours. Hiding a subtree from
+    // assistive tech while leaving real buttons inside it focusable is the one
+    // way to make a card that is not on screen answer the Tab key, and the
+    // switch put buttons in there for the first time.
+    ...(live ? {} : { 'aria-hidden': 'true', inert: true }),
   })
 
   const paint = () => {
-    const remaining = cardMode === 'remaining'
-    if (live) {
-      el.setAttribute('aria-pressed', String(remaining))
-      // Names the ACTION, not the state — aria-pressed already carries the
-      // state, and "showing remaining" as a label makes the button announce
-      // itself as the thing it just did.
-      el.setAttribute('aria-label', remaining ? 'Show consumed' : 'Show remaining')
-    }
     el.replaceChildren(
-      calorieBlock({ value: totals.kcal, target: targets.kcal, mode: cardMode, live }),
+      calorieBlock({
+        value: totals.kcal,
+        target: targets.kcal,
+        mode: cardMode,
+        live,
+        // Drawn on the neighbours too, not just the live card. They are the
+        // real card at rest and a drag brings them fully into view — one that
+        // arrived without the control, or with it in the other position, would
+        // be a lie that resolves halfway through the gesture. `inert` is what
+        // keeps them from being operable; it is not their job to look
+        // different.
+        control: segmentedSmall({
+          options: MODE_OPTIONS,
+          value: cardMode,
+          onChange: onMode,
+          label: 'Show eaten or remaining',
+        }),
+      }),
       // Fixed order: protein, fat, carbs. Equal diameter, evenly distributed —
       // comparable to each other, which is the one thing concentric rings
       // cannot do.
@@ -197,36 +278,49 @@ function dayCard({ totals, targets, live = false, position = 'current' }) {
  * so the rebuild has nothing to move.
  */
 function dayDeck({ current, prev, next }) {
+  /**
+   * Set the reading, everywhere, and remember it.
+   *
+   * Paints first and writes after, without waiting: the switch answers on the
+   * frame it was pressed, and the trip to IndexedDB is bookkeeping for the next
+   * launch rather than something the finger should be held up for. A failed
+   * write costs the preference, not the interaction — the card in front of you
+   * is already showing what you asked for.
+   *
+   * Every card repaints, not just the live one. The neighbours are two thirds
+   * of what a drag reveals, and a card that changed its mind about what it was
+   * showing while sliding into view would be worse than one that never offered
+   * the choice.
+   */
+  const setMode = (next) => {
+    if (next === cardMode) return
+    cardMode = next
+    haptic()
+    for (const c of cards) c.paint()
+    saveCardMode(next).catch(() => {})
+  }
+
   const cards = [
-    prev && dayCard({ ...prev, position: 'prev' }),
-    dayCard({ ...current, live: true, position: 'current' }),
-    next && dayCard({ ...next, position: 'next' }),
+    prev && dayCard({ ...prev, position: 'prev', onMode: setMode }),
+    dayCard({ ...current, live: true, position: 'current', onMode: setMode }),
+    next && dayCard({ ...next, position: 'next', onMode: setMode }),
   ].filter(Boolean)
 
   const live = cards.find((c) => c.el.dataset.day === 'current')
   const track = h('div', { class: 'day-deck-track' }, ...cards.map((c) => c.el))
   const deck = h('div', { class: 'day-deck' }, track)
 
-  const toggle = () => {
-    cardMode = cardMode === 'consumed' ? 'remaining' : 'consumed'
-    haptic()
-    // Every card, not just the live one. The neighbours are two thirds of what
-    // a drag reveals, and a card that changed its mind about what it was
-    // showing while sliding into view would be worse than one that never
-    // offered the choice.
-    for (const c of cards) c.paint()
-  }
-
+  // The tap that predates the switch, kept for the hands that learned it. It
+  // goes through the same setter, so the control it did not come from still
+  // ends up marking the right segment.
+  //
   // No guard against a swipe landing here as a tap — `swipePages` swallows that
-  // click in the capture phase before it reaches this.
-  live.el.addEventListener('click', toggle)
-  pressable(live.el)
-  live.el.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter' && e.key !== ' ') return
-    // Space scrolls the page otherwise, and this card is most of the viewport.
-    e.preventDefault()
-    toggle()
+  // click in the capture phase before it reaches this. The switch's own clicks
+  // stop short of here on their own; see `segmentedSmall`.
+  live.el.addEventListener('click', () => {
+    setMode(cardMode === 'consumed' ? 'remaining' : 'consumed')
   })
+  pressable(live.el)
 
   swipePages(deck, {
     track,
@@ -263,6 +357,10 @@ export function todayScreen() {
       ])
       const totals = sumEntries(entries)
       const t = settings.targets
+      // Before anything is built, so the first card drawn is already in the
+      // stored reading. `createScreen` does not mount until this build resolves,
+      // which is what makes that a guarantee rather than a fast correction.
+      seedMode(settings)
 
       return h(
         'div',
