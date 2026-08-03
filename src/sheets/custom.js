@@ -8,7 +8,7 @@ import {
   per100ToPerServing,
   sanityCheck,
 } from '../lib/compute.js'
-import { segmentedWide, numberInput, textInput, labelledField, notice } from '../lib/ui.js'
+import { segmentedWide, numberInput, textInput, labelledField, notice, slot } from '../lib/ui.js'
 import { labelPhotoField } from '../lib/labelPhoto.js'
 import { round, UNITS, unitLabel } from '../lib/format.js'
 import { pushServing } from './serving.js'
@@ -80,7 +80,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
   return {
     title: mode === 'edit' ? 'Edit food' : 'New food',
     render: (ctx) => {
-      const warningsEl = h('div')
+      const warningsEl = slot()
       const kcalHint = h('div', { class: 'text-[12px] leading-snug text-muted' })
       let kcalInput
 
@@ -236,7 +236,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
         labelPhoto.node,
         draft.barcode
           ? notice(`Barcode ${draft.barcode} will be saved with this food.`, {

@@ -2,7 +2,7 @@ import { h, repaint } from '../lib/dom.js'
 import { openSheet } from '../lib/sheet.js'
 import { toast, confirm } from '../lib/toast.js'
 import { getWeight, putWeight, deleteWeight, getSettings } from '../lib/db.js'
-import { dateInput, numberInput, labelledField, notice } from '../lib/ui.js'
+import { dateInput, numberInput, labelledField, notice, slot } from '../lib/ui.js'
 import { kgToUnit, unitToKg } from '../lib/format.js'
 import { dayPhrase, formatDayLabel, todayStr } from '../lib/dates.js'
 
@@ -42,7 +42,7 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
         },
       })
 
-      const status = h('div')
+      const status = slot()
 
       const saveBtn = h(
         'button',
@@ -113,7 +113,7 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
         labelledField({
           label: 'Day',
           // No future weigh-ins. You cannot have stood on the scales tomorrow.

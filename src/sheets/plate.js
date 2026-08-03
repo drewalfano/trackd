@@ -312,7 +312,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
 
             return h(
               'div',
-              { class: 'flex flex-col gap-[20px] pb-[10px]' },
+              { class: 'flex flex-col gap-[20px]' },
               h('div', { class: 'panel px-[20px] py-[20px]' }, previewEl),
               labelledField({
                 label: 'Amount',
@@ -346,7 +346,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
             c.setFooter(save)
             return h(
               'div',
-              { class: 'flex flex-col gap-[20px] pb-[10px]' },
+              { class: 'flex flex-col gap-[20px]' },
               labelledField({
                 label: 'Name',
                 hint: 'Saved meals are reusable. The plate stays as it is — saving does not log it.',
@@ -386,7 +386,20 @@ export function plateBar({ rows, onOpen, onLog }) {
 
   return h(
     'div',
-    { class: 'flex items-center gap-[10px] rounded-[24px] bg-ink px-[20px] py-[15px] text-canvas' },
+    /**
+     * 10 on three sides, 20 on the left.
+     *
+     * The `Log` pill is what the padding has to answer to, and a uniform 20
+     * gave it 10 above and below (its own height sets the bar's) against 20 to
+     * the right — sitting in a slot it did not fill. Its inset is now equal on
+     * the three edges it touches. The left keeps 20 because that side is text,
+     * and a glyph needs the gutter every other row in the app gives it; a
+     * filled pill carries its own padding and does not.
+     */
+    {
+      class:
+        'flex items-center gap-[10px] rounded-[24px] bg-ink py-[10px] pl-[20px] pr-[10px] text-canvas',
+    },
     h(
       'button',
       { class: 'min-w-0 flex-1 text-left', onclick: onOpen, 'aria-label': 'Open your plate' },
@@ -404,7 +417,7 @@ export function plateBar({ rows, onOpen, onLog }) {
     h(
       'button',
       {
-        class: 'shrink-0 rounded-[999px] bg-canvas px-[16px] py-[10px] text-[13px] font-semibold text-ink',
+        class: 'shrink-0 rounded-[999px] bg-canvas px-[20px] py-[10px] text-[13px] font-semibold text-ink',
         onclick: onLog,
       },
       `Log ${count}`

@@ -95,7 +95,7 @@ export async function openDuplicateSheet(entry) {
       // look intentional, far enough off to look wrong, and impossible to name.
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
         h(
           'div',
           { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' },

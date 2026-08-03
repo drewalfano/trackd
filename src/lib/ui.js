@@ -391,6 +391,19 @@ export function card(...children) {
   return h('div', { class: 'card' }, children)
 }
 
+/**
+ * A container whose contents get painted in later, and may stay empty.
+ *
+ * `empty:hidden` is the whole point. Panels lay out in a `gap` column, and an
+ * empty flex child still takes a full gap — so an offline notice that is not
+ * showing, or a hint line with nothing to say, silently spends 20px it has no
+ * content to justify. Left alone, the sheet's rhythm depends on state nobody
+ * can see. Anything painted unconditionally can stay a plain div.
+ */
+export function slot(className = '') {
+  return h('div', { class: `empty:hidden ${className}`.trim() })
+}
+
 export function sectionLabel(text, right) {
   return h(
     'div',
@@ -686,7 +699,10 @@ export function blockSelector({ value, onChange, blockNames }) {
 export function notice(text, { iconName = 'info', action, onAction } = {}) {
   return h(
     'div',
-    { class: 'panel flex items-start gap-[10px] px-[20px] py-[15px]' },
+    /* Same box as a `.row` — 10/20 inset, 48 minimum — so a notice sitting
+       above a card lines up with the rows inside it. The 15 it used to carry
+       hit the same height by a number the app uses nowhere else. */
+    { class: 'panel flex min-h-[48px] items-start gap-[10px] px-[20px] py-[10px]' },
     icon(iconName, { size: 20, class: 'mt-px shrink-0 text-muted' }),
     h(
       'div',

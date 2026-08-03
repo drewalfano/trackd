@@ -5,6 +5,7 @@ import { icon } from './lib/icons.js'
 import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
 import { toast } from './lib/toast.js'
 import { closeAnySheet } from './lib/sheet.js'
+import { setThemeIsDark } from './lib/statusBar.js'
 import { route, startRouter, navigate, currentPath } from './router.js'
 import { rollOverIfNeeded, setDate } from './state.js'
 import { todayStr } from './lib/dates.js'
@@ -32,10 +33,10 @@ export function applyTheme(theme) {
   const dark =
     theme === 'dark' ||
     (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-  for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.remove()
-  document.head.appendChild(
-    h('meta', { name: 'theme-color', content: dark ? '#141414' : '#F0F0F0' })
-  )
+  /* The two media-scoped tags from index.html both match once a theme is forced
+     against the system; drop them and let statusBar own the single live tag. */
+  for (const meta of document.querySelectorAll('meta[name="theme-color"][media]')) meta.remove()
+  setThemeIsDark(dark)
 }
 
 /* --------------------------------------------------------------- app shell */

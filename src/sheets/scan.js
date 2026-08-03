@@ -21,7 +21,7 @@ export function pushScan(ctx, { date, block }) {
   ctx.push({
     title: 'Scan',
     render: (c) => {
-      const stage = h('div', { class: 'flex flex-col gap-[20px] pb-[10px]' })
+      const stage = h('div', { class: 'flex flex-col gap-[20px]' })
       let controls = null
       let stopped = false
 

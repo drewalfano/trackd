@@ -3,7 +3,7 @@ import { icon } from '../lib/icons.js'
 import { searchFoods, putFood, findFoodByBarcode } from '../lib/db.js'
 import { searchProducts, isOnline } from '../lib/off.js'
 import { computeMacros } from '../lib/compute.js'
-import { card, emptyRow, notice, macroLine } from '../lib/ui.js'
+import { card, emptyRow, notice, macroLine, slot } from '../lib/ui.js'
 import { servingLabel } from '../lib/format.js'
 import { pushServing } from './serving.js'
 import { pushCustom } from './custom.js'
@@ -62,7 +62,7 @@ export function pushSearch(ctx, { date, block }) {
       let query = ''
 
       const results = h('div', { class: 'flex flex-col gap-[20px]' })
-      const offlineNotice = h('div')
+      const offlineNotice = slot()
 
       const input = h('input', {
         class: 'w-full min-w-0 text-[16px] font-semibold',
@@ -203,7 +203,7 @@ export function pushSearch(ctx, { date, block }) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
         field,
         offlineNotice,
         results,

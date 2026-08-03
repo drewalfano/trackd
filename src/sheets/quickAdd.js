@@ -10,6 +10,7 @@ import {
   notice,
   segmentedWide,
   switchRow,
+  slot,
 } from '../lib/ui.js'
 import { logFood } from '../lib/logging.js'
 import { round, UNITS, unitLabel } from '../lib/format.js'
@@ -76,7 +77,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
         },
       })
 
-      const derived = h('div', { class: 'px-0 text-[12px] leading-snug text-muted' })
+      const derived = slot('px-0 text-[12px] leading-snug text-muted')
       const preview = h('div')
 
       const totals = () => ({
@@ -289,7 +290,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
 
         h('div', { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' }, preview),
 

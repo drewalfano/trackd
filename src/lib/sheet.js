@@ -1,5 +1,6 @@
 import { h, clear, swipeToDismiss } from './dom.js'
 import { icon } from './icons.js'
+import { setScrimmed } from './statusBar.js'
 
 /**
  * Bottom sheet with a panel stack.
@@ -59,6 +60,7 @@ export function openSheet({ title, render, footer = null }) {
 
   const panels = []
   let closing = false
+  let destroyed = false
 
   const titleEl = h('h2', {
     class: 'flex-1 truncate text-title font-semibold',
@@ -81,6 +83,14 @@ export function openSheet({ title, render, footer = null }) {
     titleEl,
     closeBtn
   )
+  /**
+   * The body owns every edge inset a panel gets: 20 on all four sides, the
+   * same gutter the sheet's header and footer hold. Panels used to add a
+   * further 10 of their own, which put their last element at 30 from the
+   * bottom while sitting at 20 from the sides — and 30 from a footer button
+   * that already has its own 20. Panels lay out their content; the chrome
+   * decides where the content stops.
+   */
   const body = h('div', {
     class: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-[20px] pb-[20px]',
   })
@@ -196,6 +206,11 @@ export function openSheet({ title, render, footer = null }) {
   }
 
   function destroy() {
+    /* Idempotent: opening a sheet over a live one destroys it early, and that
+       sheet's own teardown timer still fires afterwards. */
+    if (destroyed) return
+    destroyed = true
+    setScrimmed(false)
     for (const entry of panels) runDisposers(entry)
     window.removeEventListener('popstate', onPop)
     document.removeEventListener('keydown', onKey)
@@ -252,6 +267,7 @@ export function openSheet({ title, render, footer = null }) {
   window.addEventListener('popstate', onPop)
   document.addEventListener('keydown', onKey)
   document.body.appendChild(scrim)
+  setScrimmed(true)
   lockScroll(true)
 
   active = { scrim, destroy, closeAll }

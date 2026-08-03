@@ -197,7 +197,7 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
         h(
           'div',
           { class: 'flex items-start gap-[10px]' },
@@ -359,7 +359,7 @@ export async function openEditEntry(entry) {
 
         return h(
           'div',
-          { class: 'flex flex-col gap-[20px] pb-[10px]' },
+          { class: 'flex flex-col gap-[20px]' },
           h('div', { class: 'text-[16px] font-semibold' }, entry.foodName || 'Deleted food'),
           h(
             'div',

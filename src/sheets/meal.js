@@ -81,7 +81,7 @@ export function mealPanel({ meal, rows, settings, date, block: initialBlock, onL
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[10px]' },
+        { class: 'flex flex-col gap-[20px]' },
 
         // Same shape as the serving sheet's preview: the total first, at
         // display weight, then the breakdown.

@@ -21,7 +21,7 @@ import {
   resolvePlate,
   plateLoggedToast,
 } from './plate.js'
-import { macroLine, card, emptyRow } from '../lib/ui.js'
+import { macroLine, card, emptyRow, slot } from '../lib/ui.js'
 import { servingLabel, qty, unitLabel, pluralize } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
 import { state } from '../state.js'
@@ -128,7 +128,9 @@ export async function openAddFood({ date = state.date, block } = {}) {
     render: (ctx) => {
       const favouritesCard = h('div')
       const recentsCard = h('div')
-      const plateSlot = h('div')
+      // With no plate staged this took a full section gap for no height, so
+      // the sheet opened with a 50px void under its header.
+      const plateSlot = slot()
 
       const logAndClose = async (fn, label) => {
         const entries = await fn()
@@ -332,7 +334,16 @@ export async function openAddFood({ date = state.date, block } = {}) {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[30px] pb-[10px]' },
+        /**
+         * One step of the scale between sections, half a step inside them: 20
+         * here, 10 between a label and its card. The 30 this used to carry read
+         * as a third value with nothing else in the sheet at 30 — every row,
+         * card and gutter is already on 10/20 — so sections floated instead of
+         * grouping. The bottom padding is the body's own 20; a further 10 here
+         * put the last link at 30 from the edge, out of step with the 20 the
+         * gutters hold on every other side.
+         */
+        { class: 'flex flex-col gap-[20px]' },
         // Above the routes rather than below the lists: it is the state of an
         // action in progress, and it should not have to be scrolled to.
         plateSlot,
