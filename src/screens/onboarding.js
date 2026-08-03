@@ -21,7 +21,7 @@ import {
   labelledField,
   notice,
 } from '../lib/ui.js'
-import { kgToUnit, unitToKg, round } from '../lib/format.js'
+import { kgToUnit, unitToKg, round, weightUnitFor } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 
 /**
@@ -38,12 +38,19 @@ import { todayStr } from '../lib/dates.js'
  * is only where: straight into `#app` before the shell exists at first launch,
  * or as a fixed overlay above a running app for the Settings preview.
  *
+ * Owning the chrome does not mean owning the only way back. Every step is a
+ * history entry, so the phone's back gesture walks the flow exactly as the
+ * chevron does — see `go` and `onPop` below.
+ *
  * Nothing is written until the last step. Every screen before it edits a draft,
  * so leaving at any point costs nothing — which matters most for the preview,
  * reachable by someone who already has a profile worth not destroying.
  */
 
 const STEP_COUNT = 5
+
+/** Marks the history entries this flow owns, the way the sheet marks its own. */
+const HISTORY_KEY = 'mt-onboarding'
 
 /* ------------------------------------------------------------------- steps */
 
@@ -60,9 +67,7 @@ function unitsStep(draft, { repaintStep }) {
         value: draft.units,
         onChange: (v) => {
           draft.units = v
-          // One preference drives both. The canonical-unit rule is about
-          // storage, not display, and nobody wants centimetres with pounds.
-          draft.weightUnit = v === 'imperial' ? 'lb' : 'kg'
+          draft.weightUnit = weightUnitFor(v)
           paint()
         },
       })
@@ -410,9 +415,12 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
   /** 0 is the welcome screen; 1..5 are the steps. */
   let index = 0
 
+  // Back is the gesture, and the chevron is a second way to perform it — not a
+  // parallel path. Both go through history, so they cannot disagree about where
+  // "back" is.
   const backBtn = h(
     'button',
-    { class: 'icon-btn', 'aria-label': 'Back', onclick: () => go(index - 1) },
+    { class: 'icon-btn', 'aria-label': 'Back', onclick: () => history.back() },
     icon('chevronLeft', { size: 20, stroke: 2 })
   )
 
@@ -434,9 +442,10 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
 
   /**
    * Safe-area padding is composed into one value rather than layered as a
-   * second utility class. `.safe-t` and `pt-[20px]` are both plain padding-top
-   * utilities, so one silently wins and the header ends up flush against the
-   * notch — which is the same `calc()` the `.screen` rule already does.
+   * second utility class: a `padding-top` utility and a `pt-[20px]` set the same
+   * property, so one silently wins and the header ends up flush against the
+   * notch. This is the same `calc()` the `.screen` rule does, and the reason
+   * there is a `.safe-b` utility but no `.safe-t` one to reach for.
    */
   const header = h(
     'header',
@@ -472,7 +481,57 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     footer
   )
 
-  const finish = async (save) => {
+  /**
+   * How many history entries this flow has pushed at the current step.
+   *
+   * The overlay owns one for the welcome screen as well, so a back gesture on
+   * the first screen closes the preview exactly as it closes a sheet. At first
+   * launch there is nothing behind the app to return to, so step 0 pushes
+   * nothing and the gesture leaves the app — which is what it does on every
+   * other root screen, and the right answer for a screen with nothing behind it.
+   */
+  const baseDepth = preview ? 1 : 0
+  const pushedDepth = () => index + baseDepth
+
+  let finishing = false
+
+  /**
+   * Drop the entries this flow pushed, so a back gesture *after* it is done
+   * does not walk into a flow that is no longer on screen — and, at first
+   * launch, does not land on the welcome screen of an app that is already set
+   * up. One `history.go` fires one popstate for the whole jump.
+   *
+   * The timeout is a floor for the case where it fires none: boot waits on this
+   * promise, and a tidy back stack is worth less than an app that starts.
+   */
+  function unwindHistory() {
+    const depth = pushedDepth()
+    if (!depth) return Promise.resolve()
+    return new Promise((resolve) => {
+      let timer
+      const done = () => {
+        clearTimeout(timer)
+        window.removeEventListener('popstate', done)
+        resolve()
+      }
+      timer = setTimeout(done, 300)
+      window.addEventListener('popstate', done)
+      history.go(-depth)
+    })
+  }
+
+  /**
+   * `popped` says the browser has already walked back out of this flow, which
+   * is the one path that must not unwind again — doing so would eat an entry
+   * belonging to the app underneath and send Settings somewhere nobody asked
+   * for.
+   */
+  const finish = async (save, { popped = false } = {}) => {
+    if (finishing) return
+    finishing = true
+    window.removeEventListener('popstate', onPop)
+    if (!popped) await unwindHistory()
+
     if (save) {
       await saveSettings({
         units: draft.units,
@@ -523,7 +582,31 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     headerSpacer.style.display = index === 0 ? 'none' : ''
   }
 
+  /** Forward: one new entry per step, so one back gesture undoes exactly one. */
   function go(next) {
+    history.pushState({ [HISTORY_KEY]: next }, '')
+    render(next)
+  }
+
+  function onPop(event) {
+    if (finishing) return
+    const next = event.state?.[HISTORY_KEY]
+    if (typeof next === 'number') {
+      render(next)
+      return
+    }
+    /**
+     * Popped past the entries this flow owns. In the preview that is a back
+     * gesture on the welcome screen, which closes it — the same thing the
+     * scrim does for a sheet, and the reason the overlay pushes an entry for
+     * step 0 at all. At first launch step 0 owns no entry, so this is the boot
+     * entry being restored and the flow simply stays where it is.
+     */
+    if (preview) finish(false, { popped: true })
+    else render(0)
+  }
+
+  function render(next) {
     index = Math.max(0, Math.min(STEPS.length, next))
     paintProgress()
     body.scrollTop = 0
@@ -549,7 +632,8 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
       return
     }
 
-    const step = STEPS[index - 1](draft, { repaintStep: () => go(index) })
+    // A step repainting itself is not navigation, so it never touches history.
+    const step = STEPS[index - 1](draft, { repaintStep: () => render(index) })
     const last = index === STEPS.length
 
     repaint(
@@ -611,7 +695,11 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     )
   }
 
-  go(0)
+  window.addEventListener('popstate', onPop)
+  // The overlay's own entry, pushed before the first paint so the flow is
+  // never on screen without a history entry standing behind it.
+  if (preview) history.pushState({ [HISTORY_KEY]: 0 }, '')
+  render(0)
   return root
 }
 

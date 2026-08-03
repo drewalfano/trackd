@@ -18,7 +18,14 @@
     <meta name="theme-color" content="#141414" media="(prefers-color-scheme: dark)" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Macros" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!--
+      The pairing `viewport-fit=cover` needs. `default` insets the web view below
+      an opaque status bar, which on a notched device leaves the layout extending
+      up while `env(safe-area-inset-top)` reports 0 — so the inset `.screen`
+      already asks for never fires. `black-translucent` puts the content under
+      the status bar and makes that inset real.
+    -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
 
     <script>

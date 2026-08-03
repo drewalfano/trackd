@@ -84,6 +84,41 @@ export function logScreen() {
         const blockEntries = entries.filter((e) => e.block === block)
         const name = settings.blockNames[i]
 
+        /**
+         * An empty block is its own heading, and nothing else.
+         *
+         * It used to be a heading plus a card holding one 48px row — 102px of
+         * screen with the 20px gap, to say a block has nothing in it. Three of
+         * those is a fresh day: most of the screen given over to empty
+         * affordances, with the third block pushed under the tab bar.
+         *
+         * The name does not move. It stays in the same heading, in the same
+         * place it occupies when the block is full, and the pill opposite is the
+         * one already used for `Save as meal` and `History` — so an empty block
+         * is a populated block with the card taken away, rather than a different
+         * kind of object. 64px.
+         *
+         * The whole row is the target, and the pill is a span rather than a
+         * button: a button inside a button is two things to tab to and one
+         * thing to tap, and the row is what the thumb actually goes for.
+         */
+        if (!blockEntries.length) {
+          return h(
+            'section',
+            { class: 'flex flex-col' },
+            h(
+              'button',
+              {
+                class: 'block-add section-head w-full py-[5px]',
+                'aria-label': `Add to ${name.toLowerCase()}`,
+                onclick: () => openAddFood({ date: state.date, block }),
+              },
+              h('span', { class: 'section-label' }, name),
+              h('span', { class: 'chip-sm' }, icon('plus', { size: 16 }), 'Add')
+            )
+          )
+        }
+
         return h(
           'section',
           { class: 'flex flex-col gap-[10px]' },
@@ -91,36 +126,23 @@ export function logScreen() {
             'div',
             { class: 'section-head' },
             h('div', { class: 'section-label' }, name),
-            blockEntries.length
-              ? h(
-                  'button',
-                  {
-                    class: 'chip-sm',
-                    onclick: () => promptSaveAsMeal(blockEntries, `Usual ${name.toLowerCase()}`),
-                  },
-                  'Save as meal'
-                )
-              : null
+            h(
+              'button',
+              {
+                class: 'chip-sm',
+                onclick: () => promptSaveAsMeal(blockEntries, `Usual ${name.toLowerCase()}`),
+              },
+              'Save as meal'
+            )
           ),
           card(
-            blockEntries.length
-              ? blockEntries.map((entry) =>
-                  entryRow(entry, {
-                    onEdit: openEditEntry,
-                    onDelete: deleteEntryWithUndo,
-                    onDuplicate: openDuplicateSheet,
-                  })
-                )
-              : // Empty blocks collapse to one row rather than an empty container.
-                h(
-                  'button',
-                  {
-                    class: 'row text-[12px] text-muted',
-                    onclick: () => openAddFood({ date: state.date, block }),
-                  },
-                  icon('plus', { size: 16 }),
-                  `Add to ${name.toLowerCase()}`
-                )
+            blockEntries.map((entry) =>
+              entryRow(entry, {
+                onEdit: openEditEntry,
+                onDelete: deleteEntryWithUndo,
+                onDuplicate: openDuplicateSheet,
+              })
+            )
           )
         )
       })
@@ -140,8 +162,9 @@ export function logScreen() {
           title: 'Log',
           onBack: () => setDate(-1),
           backLabel: 'Previous day',
-          onForward: isToday(state.date) ? null : () => setDate(1),
+          onForward: () => setDate(1),
           forwardLabel: 'Next day',
+          forwardDisabled: isToday(state.date),
         }),
 
         h(

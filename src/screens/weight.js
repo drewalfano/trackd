@@ -281,13 +281,18 @@ export function weightScreen() {
                 ),
                 h('span', { class: 'text-[12px] font-medium text-muted' }, unit)
               ),
-              h(
-                'span',
-                { class: 'text-[12px] text-muted' },
-                rate == null
-                  ? 'needs more data'
-                  : `${signed(kgToUnit(rate, unit))} ${unit} / week`
-              )
+              // Nothing at all when there is no rate yet. The notice below the
+              // card already says what is missing and how far off it is, and
+              // the trend figure above is already an em-dash — a second dash
+              // under the first says the same thing twice, in the weaker of the
+              // two positions.
+              rate == null
+                ? null
+                : h(
+                    'span',
+                    { class: 'text-[12px] text-muted' },
+                    `${signed(kgToUnit(rate, unit))} ${unit} / week`
+                  )
             )
           ),
 

@@ -35,13 +35,25 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
     h(
       'div',
       { class: 'min-w-0 flex-1' },
-      // Name and time read as one line, separated by a middot, per the mockups.
+      /**
+       * Name and time read as one line, separated by a middot, per the mockups.
+       *
+       * Truncating the line as a whole ate the time, because the time is at the
+       * end of it — `organic granola bites chocolate banana · 9:4…`. That is
+       * backwards: a clipped name is still recognisable from its first
+       * two-thirds, while a clipped time is unreadable and unguessable, and the
+       * time is the only thing on the row you cannot work out from the food
+       * itself.
+       *
+       * So the name is the only part that yields. `whitespace-pre` on the
+       * separator keeps the exact spacing the single text node used to give.
+       */
       h(
         'div',
-        { class: 'truncate text-[14px] font-semibold leading-tight' },
-        entry.foodName || 'Deleted food',
-        h('span', { class: 'text-muted' }, ' · '),
-        h('span', { class: 'font-normal' }, formatTime(entry.createdAt))
+        { class: 'flex items-baseline text-[14px] font-semibold leading-tight' },
+        h('span', { class: 'min-w-0 truncate' }, entry.foodName || 'Deleted food'),
+        h('span', { class: 'shrink-0 whitespace-pre text-muted' }, ' · '),
+        h('span', { class: 'shrink-0 font-normal' }, formatTime(entry.createdAt))
       ),
       h('div', { class: 'mt-[4px]' }, macroLine(entry.computed, { size: 12 }))
     )

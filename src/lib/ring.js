@@ -1,6 +1,6 @@
 import { h, s } from './dom.js'
 import { progress, MACRO_META } from './compute.js'
-import { g, signed } from './format.js'
+import { g } from './format.js'
 import { digits, macroColor, macroTextColor } from './ui.js'
 
 /**
@@ -122,45 +122,61 @@ function ringSvg({ pct, macro, key, animate }) {
 }
 
 /**
- * Ring with the gap to target in its centre, macro name beneath.
+ * Ring with `consumed / target` in its centre, macro name and the gap beneath.
  *
- * The number lives in the hole rather than under the ring. That puts the
- * magnitude AT the mark instead of beside it, and it means the centre is never
- * an empty slot that only fills up in the over state.
+ * The ring used to hold the gap alone, as a negative: `-159g`. Two things were
+ * wrong with that. A minus sign reads as debt or as an error even when it means
+ * "still to eat" — and the same sign carried opposite valences, `-32g` on
+ * protein being 32 to go while `-46g` on fat is 46 of headroom, with nothing on
+ * screen to say which. And the number ran the wrong way: it was largest on an
+ * empty morning and counted down while the arc filled up, so the two halves of
+ * the same mark moved in opposite directions all day.
  *
- * One consequence worth keeping in view: the sign is a direction, not a
- * verdict. `-32g` on protein means 32 still to eat; `-46g` on fat means 46 of
- * headroom. Same sign, opposite valence, and the screen does not say which.
+ * Consumed over target is what the calorie row already does, and it is stated
+ * the way the calorie row states it: the value at full size, the target small
+ * and muted beneath. Two lines rather than one because `180 / 300` measures
+ * 68.4px in Inter at 15px and the hole gives 62.2px across at that height —
+ * every three-digit pair is exactly that wide, the figures being tabular.
+ *
+ * The over state needs no special form: `320 / 300` carries magnitude past the
+ * target by itself, where the old centre needed a `+` to do it.
  *
  * Both the number and the name take the TEXT shade, not the fill — a fill is
- * never used as type. The carbs fill is 4.55:1 on white, which scrapes AA by
- * 0.05 and fails the moment the card is anything but pure white.
+ * never used as type.
  */
 export function macroRing({ macro, value, target, animate = true, key = macro }) {
-  const { pct, over } = progress(value, target)
-  const isOver = over > 0
+  const { pct } = progress(value, target)
   // Round the operands, then difference. Rounding the difference of two raw
   // floats is what put a number on screen that did not match its own operands.
-  const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
+  const consumed = Math.round(Number(value) || 0)
+  const goal = Math.round(Number(target) || 0)
+  const remaining = goal - consumed
+  const isOver = remaining < 0
   const colour = macroTextColor(macro)
 
   const centre = h(
     'div',
     {
-      class: 'tnum absolute inset-0 flex items-center justify-center text-[15px] font-semibold',
+      class: 'absolute inset-0 flex flex-col items-center justify-center leading-none',
       style: { color: colour },
     },
-    ...digits(`${signed(diff, 0)}g`)
+    h('div', { class: 'tnum text-[15px] font-semibold' }, ...digits(g(consumed))),
+    h('div', { class: 'tnum mt-[3px] text-[11px] font-medium text-muted' }, ...digits(`/ ${g(goal)}`))
   )
+
+  /**
+   * The gap moves here rather than disappearing. It is the answer to "how much
+   * protein is left", which is the question the card exists to answer, and
+   * subtracting two numbers in your head at 8am is not an answer.
+   */
+  const gap = isOver ? `${g(-remaining)} over` : `${g(remaining)} left`
 
   return h(
     'div',
     {
       class: 'flex flex-col items-center gap-[10px]',
       role: 'group',
-      'aria-label': `${MACRO_META[macro].label}, ${g(Math.abs(diff))} grams ${
-        isOver ? 'over target' : 'under target'
-      }`,
+      'aria-label': `${MACRO_META[macro].label}, ${g(consumed)} of ${g(goal)} grams, ${gap}`,
     },
     h(
       'div',
@@ -170,8 +186,13 @@ export function macroRing({ macro, value, target, animate = true, key = macro })
     ),
     h(
       'div',
-      { class: 'text-[16px] font-semibold leading-tight', style: { color: colour } },
-      MACRO_META[macro].label
+      { class: 'flex flex-col items-center gap-[2px]' },
+      h(
+        'div',
+        { class: 'text-[16px] font-semibold leading-tight', style: { color: colour } },
+        MACRO_META[macro].label
+      ),
+      h('div', { class: 'tnum text-[12px] leading-tight text-muted' }, ...digits(gap))
     )
   )
 }

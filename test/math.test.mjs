@@ -239,6 +239,25 @@ for (const m of MACROS) {
   atLeast(`${m} text on dark surface`, token(`${m}-text`, darkBlock), token('surface', darkBlock), AA)
 }
 
+/**
+ * Fills are MARKS, and a mark has a floor of its own: WCAG 1.4.11 asks 3:1 of
+ * anything you have to see in order to read the screen, which an arc showing
+ * how much of a target is gone certainly is.
+ *
+ * Nothing measured this before, and the gap is exactly where the gold went
+ * missing — its text shade passed AA at 5.87:1 while the fill it was named
+ * after sat at 2.10:1 on a white card. Both facts were true at once, which is
+ * how "fat is low contrast" and "fat passes the contrast test" coexisted.
+ *
+ * The fills never change between themes, so the same four are measured against
+ * both cards.
+ */
+const MARK = 3
+for (const m of MACROS) atLeast(`${m} fill as a mark on a card`, token(m), token('surface'), MARK)
+for (const m of MACROS) {
+  atLeast(`${m} fill as a mark on a dark card`, token(m), token('surface', darkBlock), MARK)
+}
+
 // Body and secondary text.
 atLeast('ink on canvas', token('ink'), token('canvas'), 7)
 atLeast('muted on canvas', token('muted'), token('canvas'), AA)

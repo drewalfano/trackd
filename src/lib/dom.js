@@ -138,9 +138,13 @@ export function haptic(pattern = 8) {
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
- * Render text with every digit in a fixed-advance span, so numbers hold their
- * position as they change. See the `.tnum` note in styles.css for why the font
- * cannot do this itself.
+ * Render text with every digit in its own span, so `countTo` can write through
+ * them each frame rather than replacing a text node mid-animation.
+ *
+ * The spans used to carry a fixed advance as well, because Inclusive Sans
+ * shipped no `tnum`. Inter has real tabular figures and `body` asks for them,
+ * so holding position is the font's job now — see the `.tnum` note in
+ * styles.css.
  */
 export function setTabularText(el, text) {
   const out = []
@@ -180,6 +184,15 @@ export function countTo(el, to, { duration = 200, format = (n) => Math.round(n) 
   }
   requestAnimationFrame(step)
 }
+
+/**
+ * How far a gesture travels before its axis is judged, and how far horizontal
+ * has to beat vertical to take it. A row lives inside a scrolling list, so the
+ * list gets the benefit of the doubt: a gesture has to be decidedly sideways,
+ * not merely more sideways than not.
+ */
+const SWIPE_AXIS_THRESHOLD = 12
+const SWIPE_AXIS_RATIO = 1.5
 
 /**
  * Swipe an entry left to reveal actions. Tracks the finger directly — no
@@ -233,12 +246,29 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
     const deltaY = p.clientY - startY
 
     if (!decided) {
-      // Let the page scroll unless the gesture is clearly horizontal.
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+      /**
+       * Judge the axis once, on enough movement to judge it by.
+       *
+       * This decision is final — that is what an axis lock is for — so the only
+       * question that matters is how much evidence it waits for. At 6px it was
+       * deciding during the opening arc of the gesture, and a thumb flicking a
+       * list downward travels sideways first: 9px across and 4px down is a
+       * genuinely horizontal sample, and it was enough to capture the row for
+       * the remaining 200px of a vertical scroll. The row then tracked the
+       * finger out of its own container, clipped by the wrapper, and sprang
+       * back over 200ms on release.
+       *
+       * 12px is past the arc, and the ratio means a gesture has to be decidedly
+       * sideways rather than merely sideways-ish at one sampled instant.
+       *
+       * Declining costs nothing: `pan-y` means the browser has been scrolling
+       * the page since the gesture began, without waiting on any of this.
+       */
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < SWIPE_AXIS_THRESHOLD) return
+      if (Math.abs(deltaX) <= Math.abs(deltaY) * SWIPE_AXIS_RATIO) {
         dragging = false
         return
       }
-      if (Math.abs(deltaX) < 6) return
       decided = true
     }
     dx = Math.max(-width - 24, Math.min(0, (open ? -width : 0) + deltaX))

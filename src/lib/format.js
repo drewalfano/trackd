@@ -19,6 +19,18 @@ export const qty = (n) => {
 
 export const KG_PER_LB = 0.45359237
 
+/**
+ * There is one units preference, and this is how weight follows from it.
+ *
+ * Kept here rather than written out at each call site because it used to be
+ * two: onboarding derived the weight unit from the units segment while Settings
+ * offered it as a second control, so the same app could be told two different
+ * things and the screens disagreed about which had been said last. Nobody wants
+ * centimetres with pounds, and the canonical-unit rule is about storage, not
+ * display.
+ */
+export const weightUnitFor = (units) => (units === 'imperial' ? 'lb' : 'kg')
+
 export const kgToUnit = (kg, unit) => (unit === 'lb' ? kg / KG_PER_LB : kg)
 export const unitToKg = (v, unit) => (unit === 'lb' ? v * KG_PER_LB : v)
 

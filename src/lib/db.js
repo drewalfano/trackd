@@ -5,6 +5,7 @@
 
 import { openDB } from 'idb'
 import { todayStr } from './dates.js'
+import { weightUnitFor } from './format.js'
 
 export const DB_NAME = 'macro-tracker'
 export const DB_VERSION = 2
@@ -177,12 +178,26 @@ export async function getSettings() {
     blockNames: stored.blockNames || [...DEFAULT_SETTINGS.blockNames],
     favourites: stored.favourites || [],
   }
-  return settingsCache
+  return derive(settingsCache)
+}
+
+/**
+ * `weightUnit` follows `units` and is not settable on its own. It stays a
+ * stored field so every consumer reads one value rather than each deriving its
+ * own — which means the invariant has to be restored on both paths, not just on
+ * load: settings written before Settings dropped its second control can hold a
+ * combination (metric with pounds) that nothing in the app can now produce, and
+ * a patch that changes `units` would otherwise leave the old weight unit
+ * merged in beside it.
+ */
+function derive(settings) {
+  settings.weightUnit = weightUnitFor(settings.units)
+  return settings
 }
 
 export async function saveSettings(patch) {
   const previous = await getSettings()
-  const next = { ...previous, ...patch }
+  const next = derive({ ...previous, ...patch })
   await write(async () => (await db()).put('settings', next, 'settings'))
   settingsCache = next
 

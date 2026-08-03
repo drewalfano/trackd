@@ -920,6 +920,11 @@ export function settingsScreen() {
           { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-label' }, 'Preferences'),
           card(
+            // One control for both heights and weights. It was two — this row
+            // and a kg/lb row under it — while onboarding set both from this
+            // one, so the same preference could be stated twice and the two
+            // screens disagreed about which statement counted. `weightUnit`
+            // now follows `units`; see `weightUnitFor`.
             prefRow(
               'Units',
               segmentedWide({
@@ -929,18 +934,6 @@ export function settingsScreen() {
                 ],
                 value: settings.units,
                 onChange: (v) => saveSettings({ units: v }).then(rerender),
-                on: 'card',
-              })
-            ),
-            prefRow(
-              'Weight unit',
-              segmentedWide({
-                options: [
-                  { value: 'kg', label: 'kg' },
-                  { value: 'lb', label: 'lb' },
-                ],
-                value: settings.weightUnit,
-                onChange: (v) => saveSettings({ weightUnit: v }).then(rerender),
                 on: 'card',
               })
             ),

@@ -279,7 +279,20 @@ function renderStorageBlocked() {
     app,
     h(
       'div',
-      { class: 'mx-auto flex min-h-svh max-w-md flex-col justify-center gap-3 px-6' },
+      {
+        class: 'mx-auto flex min-h-svh max-w-md flex-col justify-center gap-3 px-6',
+        /**
+         * The one surface that is not a `.screen`, so it carries its own
+         * insets. It is centred and short enough never to reach the status bar
+         * in practice — but "in practice" stops being true at the largest text
+         * sizes, and this is the screen that has to render when nothing else in
+         * the app can.
+         */
+        style: {
+          paddingTop: 'env(safe-area-inset-top, 0px)',
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+        },
+      },
       icon('alert', { size: 28, class: 'text-muted' }),
       h('h1', { class: 'text-[22px] font-bold' }, 'Storage is unavailable'),
       h(

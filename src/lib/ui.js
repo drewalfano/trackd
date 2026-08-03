@@ -134,13 +134,27 @@ export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle
  * day view they step the date, on a pushed screen they go back. That ambiguity
  * is in the design; the `aria-label` is what keeps it unambiguous to anything
  * that is not looking at it.
+ *
+ * `forwardDisabled` keeps the forward chevron present but dimmed rather than
+ * swapping it for a spacer. A day view that shows one chevron, on the left,
+ * with empty space opposite is reading as a Back button on the screen where iOS
+ * has trained everyone that a lone top-left chevron means exactly that. Two
+ * chevrons flanking a date read as a stepper, and the pair stays put as the
+ * date changes instead of the header re-forming under the thumb.
  */
-export function navHeader({ title, onBack, backLabel = 'Back', onForward, forwardLabel = 'Forward' }) {
+export function navHeader({
+  title,
+  onBack,
+  backLabel = 'Back',
+  onForward,
+  forwardLabel = 'Forward',
+  forwardDisabled = false,
+}) {
   const spacer = () => h('div', { class: 'w-11 shrink-0' })
-  const btn = (label, handler, name) =>
+  const btn = (label, handler, name, disabled = false) =>
     h(
       'button',
-      { class: 'icon-btn', 'aria-label': label, onclick: handler },
+      { class: 'icon-btn', 'aria-label': label, disabled, onclick: handler },
       icon(name, { size: 20, stroke: 2 })
     )
 
@@ -155,7 +169,9 @@ export function navHeader({ title, onBack, backLabel = 'Back', onForward, forwar
     { class: 'mb-[16px] flex items-center gap-[10px]' },
     onBack ? btn(backLabel, onBack, 'chevronLeft') : spacer(),
     heading,
-    onForward ? btn(forwardLabel, onForward, 'chevronRight') : spacer()
+    onForward || forwardDisabled
+      ? btn(forwardLabel, onForward, 'chevronRight', forwardDisabled)
+      : spacer()
   )
 }
 

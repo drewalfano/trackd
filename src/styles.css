@@ -87,20 +87,27 @@
    * `--color-X-text` is the macro as type, and aliases the edge, because the
    * ground that matters is the grey card and not the white page. The P/F/C
    * letters mostly appear inside log rows, and against #F0F0F0 every fill lands
-   * between 3.98:1 and 4.16:1 — all four fail. The edges clear 5.0:1 there.
+   * between 2.69:1 and 3.98:1 — all four fail. The edges clear 4.5:1 there.
+   *
+   * A fill still has a floor of its own: it is a MARK, and WCAG 1.4.11 asks 3:1
+   * of anything you have to see to read the screen. On the white card the arcs
+   * and bars now run 3.06:1 (carbs) to 4.54:1 (protein).
    *
    * Nothing in this block is a stylistic choice. `npm test` measures all of it
    * against both grounds and both themes; change a hex and it will tell you.
+   *
+   * Carbs are not red, and fat is darker than it was. Both are measured moves —
+   * see the note under the dark block.
    */
   --color-kcal: #44a057;
   --color-protein: #5075be;
-  --color-fat: #d2b02a;
-  --color-carbs: #cd493d;
+  --color-fat: #9c7d1c;
+  --color-carbs: #cc79a7;
 
   --color-kcal-edge: #2a7340;
   --color-protein-edge: #3d5c9c;
   --color-fat-edge: #7a6200;
-  --color-carbs-edge: #b42a2a;
+  --color-carbs-edge: #b34482;
 
   --color-kcal-text: var(--color-kcal-edge);
   --color-protein-text: var(--color-protein-edge);
@@ -156,35 +163,47 @@
 }
 
 /* Dark mode inverts neutrals only. The macro hues do not move — see spec 7. */
+/**
+ * Dark mode.
+ *
+ * The card was #1E1E1E against a #141414 page — 1.11:1, which is not a boundary
+ * so much as a rumour. iOS separates its two darkest greys by 1.23:1 and
+ * Material 3 by 1.14:1, and both read as distinct surfaces where this did not.
+ * #262626 puts it at 1.22:1, and the step is what says "card" without needing a
+ * border or a shadow to say it.
+ *
+ * That lift costs the muted token: grey text that cleared 4.83:1 on the old
+ * card drops to 4.38:1 on the new one, so it moves up in step. This is the
+ * cascade of raising a surface, and it is why the surface is a token rather
+ * than a value typed into thirty rules.
+ */
 :root[data-theme='dark'] {
   --color-ink: #f0f0f0;
   --color-canvas: #141414;
-  --color-surface: #1e1e1e;
-  --color-muted: #8a8a8a;
+  --color-surface: #262626;
+  --color-muted: #949494;
   --color-outline: #333333;
   /* The darker shades go the wrong way against a dark ground: protein and
-     carbs only reach 3.66:1 on #1E1E1E. Macro text lifts to a tint here.
+     carbs only reach 3.66:1 on the old card. Macro text lifts to a tint here.
      The FILLS are untouched — those still never move between themes. */
   --color-kcal-text: #44a057;
   --color-protein-text: #7e9fd6;
   --color-fat-text: #d2b02a;
-  --color-carbs-text: #e2796e;
+  --color-carbs-text: #cb74a4;
 }
 
 @media (prefers-color-scheme: dark) {
+  /* Same values as the explicit dark block above; see the note there. */
   :root[data-theme='system'] {
     --color-ink: #f0f0f0;
     --color-canvas: #141414;
-    --color-surface: #1e1e1e;
-    --color-muted: #8a8a8a;
+    --color-surface: #262626;
+    --color-muted: #949494;
     --color-outline: #333333;
-    /* The darker shades go the wrong way against a dark ground: protein and
-       carbs only reach 3.66:1 on #1E1E1E. Macro text lifts to a tint here.
-       The FILLS are untouched — those still never move between themes. */
     --color-kcal-text: #44a057;
     --color-protein-text: #7e9fd6;
     --color-fat-text: #d2b02a;
-    --color-carbs-text: #e2796e;
+    --color-carbs-text: #cb74a4;
   }
 }
 
@@ -460,6 +479,17 @@
     opacity: 0.85;
   }
 
+  /**
+   * An empty log block: the whole heading row is the add target, and the pill
+   * inside it is a span rather than a button. `:active` matches the element
+   * being pressed and its ancestors, never its descendants, so the pill needs
+   * to be told when its own row is the thing under the thumb.
+   */
+  .block-add:active .chip-sm {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+
   /* Section heading with an action on the right. Repeats on every screen that
      has a list under a label, so it lives here rather than in each of them. */
   .section-head {
@@ -563,6 +593,10 @@
   .icon-btn:active:not(:disabled) {
     transform: scale(0.92);
     opacity: 0.85;
+  }
+  /* Same 0.3 the primary button uses, so "unavailable" reads one way. */
+  .icon-btn:disabled {
+    opacity: 0.3;
   }
 
   .icon-btn-sm {

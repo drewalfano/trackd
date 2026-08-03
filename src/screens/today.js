@@ -20,8 +20,11 @@ import { navigate } from '../router.js'
  * three equal rings. Splitting the log into its own group is what lets the
  * dashboard be the thing you actually came for.
  *
- * Every value on the card is stated ONCE. The rings carry the gap to target in
- * their centres, which is why there is no `153g / 185g` line underneath them.
+ * The rings and the calorie row now state a macro the same way: consumed, then
+ * target, then the gap. The card previously stated every value exactly once —
+ * the rings carried only the gap, in their centres — and that economy is what
+ * is being spent here. It bought a number that ran backwards against its own
+ * arc and a minus sign in front of every macro on an empty morning.
  */
 
 /**
@@ -97,15 +100,17 @@ export function todayScreen() {
         // spacing reads as a list; varied spacing reads as a composition.
         { class: 'flex flex-col' },
 
-        // Forward exists only when there is somewhere forward to go. The mockup
-        // shows Today, where it would be disabled anyway — but without it,
-        // stepping back once strands you in the past with no way home.
+        // Both chevrons are always drawn; forward dims on today rather than
+        // vanishing. One chevron on the left of a root screen reads as Back,
+        // which is not what it does — it steps the day, and the pair is what
+        // says so.
         navHeader({
           title: formatDayHeader(state.date),
           onBack: () => setDate(-1),
           backLabel: 'Previous day',
-          onForward: isToday(state.date) ? null : () => setDate(1),
+          onForward: () => setDate(1),
           forwardLabel: 'Next day',
+          forwardDisabled: isToday(state.date),
         }),
 
         h(
