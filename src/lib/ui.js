@@ -512,7 +512,7 @@ export function emptyRow(text, { action, onAction } = {}) {
     action
       ? h(
           'button',
-          { class: 'text-[14px] font-semibold underline underline-offset-2', onclick: onAction },
+          { class: 'chip-sm', onclick: onAction },
           action
         )
       : null
@@ -781,10 +781,7 @@ export function notice(text, { iconName = 'info', action, onAction } = {}) {
       action
         ? h(
             'button',
-            {
-              class: 'mt-[10px] block text-[13px] font-semibold underline underline-offset-2',
-              onclick: onAction,
-            },
+            { class: 'chip-sm mt-[10px]', onclick: onAction },
             action
           )
         : null

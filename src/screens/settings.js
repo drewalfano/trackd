@@ -519,14 +519,19 @@ export function settingsScreen() {
         }
         derivedHint.replaceChildren(
           h(
-            'span',
-            {},
-            `Protein, fat and carbs work out to ${Math.round(derived)} cal. `,
+            'div',
+            { class: 'flex flex-col items-start gap-[10px]' },
+            h(
+              'span',
+              {},
+              `Protein, fat and carbs work out to ${Math.round(derived)} cal.`,
+              kcalOverridden ? '' : ' Calories now follow the macros.'
+            ),
             kcalOverridden
               ? h(
                   'button',
                   {
-                    class: 'font-semibold underline underline-offset-2',
+                    class: 'chip-sm',
                     onclick: () => {
                       kcalOverridden = false
                       syncDerived()
@@ -535,7 +540,7 @@ export function settingsScreen() {
                   },
                   'Use that'
                 )
-              : 'Calories now follow the macros.'
+              : null
           )
         )
       }
@@ -1070,6 +1075,25 @@ export function settingsScreen() {
               h('span', { class: 'flex-1 text-[13px] font-medium' }, 'Source code'),
               icon('chevronRight', { size: 18, class: 'text-muted' })
             )
+          ),
+          /**
+           * Where the food data comes from.
+           *
+           * Neither source requires this. Open Food Facts is ODbL and the
+           * obligation attaches to redistributing the database, which the app
+           * does not do — it copies a product into your library when you log
+           * it. USDA FoodData Central is a work of the US federal government
+           * and is in the public domain outright.
+           *
+           * It is here anyway, because both are volunteer or public efforts the
+           * app leans on entirely for the half of its data it did not author,
+           * and saying so costs two lines.
+           */
+          h(
+            'p',
+            { class: 'px-0 pt-[10px] text-[12px] leading-snug text-muted' },
+            'Barcode and product data from Open Food Facts. Common foods from USDA ' +
+              'FoodData Central.'
           )
         )
       )

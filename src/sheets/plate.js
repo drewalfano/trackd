@@ -188,7 +188,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
           h(
             'button',
             {
-              class: 'self-start px-0 text-[13px] font-semibold underline underline-offset-2',
+              class: 'chip-sm self-start',
               onclick: async () => {
                 const ok = await confirm({
                   title: 'Clear the plate?',

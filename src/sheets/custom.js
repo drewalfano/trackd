@@ -112,13 +112,13 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
         kcalHint.replaceChildren(
           kcalOverridden
             ? h(
-                'span',
-                {},
-                'Using your number. ',
+                'div',
+                { class: 'flex flex-col items-start gap-[10px]' },
+                h('span', {}, 'Using your number.'),
                 h(
                   'button',
                   {
-                    class: 'font-semibold underline underline-offset-2',
+                    class: 'chip-sm',
                     onclick: () => {
                       kcalOverridden = false
                       syncCalories()

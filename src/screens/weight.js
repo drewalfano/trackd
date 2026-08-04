@@ -206,7 +206,7 @@ export function weightScreen() {
         h(
           'button',
           {
-            class: 'self-start px-0 text-[12px] font-semibold underline underline-offset-2',
+            class: 'chip-sm self-start',
             onclick: () => openWeighInSheet(),
           },
           'Add or edit another day'

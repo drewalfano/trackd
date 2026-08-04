@@ -622,7 +622,7 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
           h(
             'button',
             {
-              class: 'self-center px-0 py-[10px] text-[13px] font-semibold underline underline-offset-2',
+              class: 'chip-sm self-center',
               onclick: () => finish(false),
             },
             preview ? 'Close the preview' : 'Skip for now'

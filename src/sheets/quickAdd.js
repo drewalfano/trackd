@@ -115,13 +115,13 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           derived,
           kcalOverridden && fromMacros
             ? h(
-                'span',
-                {},
-                `The macros work out to ${Math.round(fromMacros)} cal. `,
+                'div',
+                { class: 'flex flex-col items-start gap-[10px]' },
+                h('span', {}, `The macros work out to ${Math.round(fromMacros)} cal.`),
                 h(
                   'button',
                   {
-                    class: 'font-semibold underline underline-offset-2',
+                    class: 'chip-sm',
                     onclick: () => {
                       kcalOverridden = false
                       sync()
