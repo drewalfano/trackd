@@ -16,7 +16,18 @@ import { pushCustom } from './custom.js'
 
 const FORMATS = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'ITF']
 
-export function pushScan(ctx, { date, block }) {
+/**
+ * `onStage` is passed straight through to every panel this can end on, and is
+ * never read here.
+ *
+ * Scanning is a way of NAMING a food, not a separate place to put one. Whatever
+ * the camera finds ends up on the serving panel or in the custom editor, and
+ * both of those are the same screens a recent or a search result opens — so
+ * they must offer the same destinations. They did not: a food found by barcode
+ * could only be logged, while the same food found by typing three letters could
+ * also go on a plate.
+ */
+export function pushScan(ctx, { date, block, onStage }) {
   ctx.push({
     title: 'Scan',
     render: (c) => {
@@ -45,7 +56,7 @@ export function pushScan(ctx, { date, block }) {
         // Spec 9: a barcode already in the library is reused, not duplicated.
         const known = await findFoodByBarcode(code)
         if (known) {
-          pushServing(c, { food: known, date, block })
+          pushServing(c, { food: known, date, block, onStage })
           return
         }
 
@@ -67,11 +78,12 @@ export function pushScan(ctx, { date, block }) {
               date,
               block,
               initial: { ...result.draft, source: 'custom', per100: null },
+              onStage,
             })
             return
           }
           const food = await adoptDraft(result.draft)
-          pushServing(c, { food, date, block })
+          pushServing(c, { food, date, block, onStage })
         } catch {
           showNoMatch(code, 'Could not reach Open Food Facts.')
         }
@@ -107,7 +119,8 @@ export function pushScan(ctx, { date, block }) {
                 'button',
                 {
                   class: 'btn-primary',
-                  onclick: () => pushCustom(c, { date, block, initial: { barcode: code } }),
+                  onclick: () =>
+                    pushCustom(c, { date, block, initial: { barcode: code }, onStage }),
                 },
                 'Create it'
               )
@@ -165,7 +178,7 @@ export function pushScan(ctx, { date, block }) {
             'button',
             {
               class: 'btn-secondary',
-              onclick: () => pushCustom(c, { date, block, initial: {} }),
+              onclick: () => pushCustom(c, { date, block, initial: {}, onStage }),
             },
             'Create a custom food'
           )

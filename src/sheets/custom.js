@@ -326,13 +326,22 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
   }
 }
 
-/** Custom route from the add sheet: save, then go straight to the serving step. */
-export function pushCustom(ctx, { date, block, initial = {} }) {
+/**
+ * Custom route from the add sheet: save, then go straight to the serving step.
+ *
+ * `onStage` is forwarded rather than used, exactly as in `pushScan`. A food
+ * typed in by hand is still a food found from this sheet, so it reaches the
+ * same serving panel with the same two destinations on it. Creating one to put
+ * on a plate — the restaurant dish that is one of four things on tonight's
+ * plate — was the case that could not be done in one pass: you had to create
+ * it, log it, and take it off the day again.
+ */
+export function pushCustom(ctx, { date, block, initial = {}, onStage }) {
   ctx.push(
     customPanel({
       initial,
       onSaved: async (food, c) => {
-        pushServing(c, { food, date, block })
+        pushServing(c, { food, date, block, onStage })
       },
     })
   )

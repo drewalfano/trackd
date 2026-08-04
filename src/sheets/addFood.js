@@ -16,7 +16,7 @@ import {
 import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
 import { quickLogFood, logMeal, logPlate, defaultServing } from '../lib/logging.js'
 import { plateBar, pushPlate, resolvePlate, plateLoggedToast } from './plate.js'
-import { macroLine, card, emptyRow, listRow, slot } from '../lib/ui.js'
+import { card, emptyRow, listRow, slot, foodRowBody } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
 import { servingLabel, qty, unitLabel, pluralize } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
@@ -77,13 +77,10 @@ function pickRow({ title, subtitle, totals, onLog, onOpen }) {
   const row = h(
     'button',
     { class: 'row min-w-0 flex-1', onclick: onOpen },
-    h(
-      'div',
-      { class: 'min-w-0 flex-1' },
-      h('div', { class: 'truncate text-[16px] font-semibold leading-tight' }, title),
-      h('div', { class: 'mt-[2px] truncate text-[12px] text-muted' }, subtitle),
-      totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 12 })) : null
-    )
+    // Same body as a logged entry, but the serving takes `sub` rather than the
+    // `detail` slot a time uses: it is long enough to eat the name on most rows,
+    // and the name is the half you cannot guess from the rest of the row.
+    foodRowBody({ name: title, sub: subtitle, totals })
   )
 
   return h(
@@ -188,10 +185,26 @@ function searchBar({ onInput, onClear }) {
 /**
  * Route picker, not a tab set.
  *
- * `primary`, not `selected`. Scan renders solid because it is the route most
- * likely to be wanted, not because anything is chosen — nothing on this row has
- * a selected state, and it carried no `aria-pressed` to match the styling, so a
- * screen reader heard an ordinary button while the eye saw a picked one.
+ * **Both buttons render at the same weight, and neither is primary.**
+ *
+ * Scan used to take the solid fill, on the reasoning that it was the route most
+ * likely to be wanted and the one a right thumb reaches without moving the
+ * phone. Both of those are still true and neither is an argument for EMPHASIS.
+ * There are four ways to add a food here — Custom, Scan, the search field, and
+ * tapping a recent or a favourite — and no one of them outranks the other
+ * three. A fill that says "this is the thing to press" on one of four equals is
+ * a claim the screen cannot support.
+ *
+ * It also cost the sheet its actual hierarchy. Primary means maximum contrast
+ * against the surface, there is one per region, and the plate bar above this
+ * row is the thing that has earned it: it appears only when there is something
+ * to commit. With Scan solid as well, two full-contrast elements sat stacked
+ * and the eye had no single answer to what mattered — which is the whole reason
+ * the screen read as busy.
+ *
+ * Note that "solid" is not "white". In light mode primary is an ink fill and in
+ * dark mode it is a white one, because the tokens invert — so the rule is about
+ * contrast against the surface, never about a colour.
  *
  * Icon BESIDE the label, not above it, and 72px tall rather than 89 — the mock
  * is the authority on both. Stacked, the button was a tile and its label read
@@ -211,13 +224,13 @@ function searchBar({ onInput, onClear }) {
  * would take an SVG mask per button — so these are true rounded rects and read
  * very slightly sharper at the corners than the Figma file does.
  */
-function actionButton({ iconName, label, primary, onclick }) {
+function actionButton({ iconName, label, onclick }) {
   return h(
     'button',
     {
       class:
         'flex min-h-[72px] flex-1 items-center justify-center gap-[10px] rounded-[24px] ' +
-        (primary ? 'bg-ink text-canvas' : 'bg-surface text-ink'),
+        'bg-surface text-ink',
       onclick,
     },
     // 24 and 16, both off the mock's own frame: 72 tall with 24 of padding top
@@ -269,6 +282,23 @@ export async function openAddFood({ date = state.date, block } = {}) {
        * failed search, is the case that never justified the line.
        */
 
+      /**
+       * The plate's way in, handed to every route that opens off this sheet.
+       *
+       * One handler rather than a closure per call site, because the rule it
+       * encodes is about the SURFACE and not about any one route: this sheet
+       * shows the plate bar, therefore everything reached from this sheet
+       * offers the plate. Written inline six times, that rule was six chances
+       * to forget it — and it had already been forgotten three times, on the
+       * scan, Open Food Facts and Custom routes.
+       *
+       * The food comes back from the serving panel rather than being captured
+       * here, because scan and Custom do not know which food they are going to
+       * end up with: it is adopted from a barcode or typed into existence
+       * several panels deeper.
+       */
+      const stageOne = (item, food) => addToPlate([item], food.name)
+
       /** One row shape for Recents and Results, because they are one thing. */
       const foodRow = (food) => {
         const { quantity, unit } = defaultServing(food)
@@ -279,22 +309,42 @@ export async function openAddFood({ date = state.date, block } = {}) {
               ? `${qty(quantity)} × ${servingLabel(food)}`
               : `${qty(quantity)} ${unitLabel(unit, quantity)}`,
           totals: computeMacros(food, quantity, unit),
-          onLog: () => logAndClose(() => quickLogFood(food, { date, block: targetBlock }), food.name),
+          onLog: () => logDirect(() => quickLogFood(food, { date, block: targetBlock }), food.name),
           onOpen: () =>
-            pushServing(ctx, {
-              food,
-              date,
-              block: targetBlock,
-              onStage: (item) => addToPlate([item], food.name),
-            }),
+            pushServing(ctx, { food, date, block: targetBlock, onStage: stageOne }),
         })
       }
 
-      const logAndClose = async (fn, label) => {
+      /**
+       * A direct log from a list on this sheet. Closes the sheet, unless a
+       * plate is open.
+       *
+       * `+` means the same thing whether or not a plate exists — commit this,
+       * now, at the amount shown, to the log — and that does not change here.
+       * What changes is the dismissal. Logging is normally the last thing you
+       * do in this sheet, so closing it is the right ending; but with a plate
+       * open you are in the middle of something, and a sheet that dismisses
+       * itself takes the search you typed and the rail position you had
+       * scrolled to along with it. The plate survives, held in storage. Your
+       * place on the screen does not.
+       *
+       * So the destination never moves and only the exit does. That is the
+       * narrow version of this fix deliberately: making `+` route to the plate
+       * instead would give one glyph two meanings decided by state, which is a
+       * much larger change to argue than "do not throw me out mid-task".
+       *
+       * The lists are NOT repainted afterwards. Logging bumps the food's
+       * recency, so a repaint would re-sort Recents under a thumb that is still
+       * on it — the row you just used sliding to the top and everything below
+       * it shifting up a place. A stale order for the rest of one sitting is
+       * the cheaper wrong.
+       */
+      const logDirect = async (fn, label) => {
         const entries = await fn()
-        ctx.close()
+        const plate = await getPlate()
+        if (!plate.items.length) ctx.close()
         const list = Array.isArray(entries) ? entries : [entries]
-        toast(`Added ${label}`, {
+        toast(`Logged ${label}`, {
           action: 'Undo',
           onAction: () => Promise.all(list.map((e) => deleteEntry(e.id))),
         })
@@ -373,14 +423,9 @@ export async function openAddFood({ date = state.date, block } = {}) {
                     : `${qty(quantity)} ${unitLabel(unit, quantity)}`,
                 totals: computeMacros(food, quantity, unit),
                 onLog: () =>
-                  logAndClose(() => quickLogFood(food, { date, block: targetBlock }), food.name),
+                  logDirect(() => quickLogFood(food, { date, block: targetBlock }), food.name),
                 onOpen: () =>
-                  pushServing(ctx, {
-                    food,
-                    date,
-                    block: targetBlock,
-                    onStage: (item) => addToPlate([item], food.name),
-                  }),
+                  pushServing(ctx, { food, date, block: targetBlock, onStage: stageOne }),
               })
             )
           } else {
@@ -397,14 +442,14 @@ export async function openAddFood({ date = state.date, block } = {}) {
                 subtitle: pluralize(meal.items.length, 'item'),
                 totals,
                 onLog: () =>
-                  logAndClose(() => logMeal(meal, { date, block: targetBlock }), meal.name),
+                  logDirect(() => logMeal(meal, { date, block: targetBlock }), meal.name),
                 onOpen: () =>
                   pushMeal(ctx, {
                     meal,
                     date,
                     block: targetBlock,
                     onLogged: ({ block }) =>
-                      logAndClose(() => logMeal(meal, { date, block }), meal.name),
+                      logDirect(() => logMeal(meal, { date, block }), meal.name),
                     // A meal on a plate expands into its items, so they can be
                     // adjusted individually rather than as one opaque lump.
                     onStage: () => addToPlate([...meal.items], meal.name),
@@ -475,7 +520,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
           chevron: true,
           onclick: async () => {
             const food = await adoptDraft(draft)
-            pushServing(ctx, { food, date, block: targetBlock })
+            pushServing(ctx, { food, date, block: targetBlock, onStage: stageOne })
           },
         })
 
@@ -579,7 +624,12 @@ export async function openAddFood({ date = state.date, block } = {}) {
                 : emptyRow(`Nothing matches “${q}”.`, {
                     action: 'Create it',
                     onAction: () =>
-                      pushCustom(ctx, { date, block: targetBlock, initial: { name: q } }),
+                      pushCustom(ctx, {
+                        date,
+                        block: targetBlock,
+                        initial: { name: q },
+                        onStage: stageOne,
+                      }),
                   })
             )
           }
@@ -665,14 +715,18 @@ export async function openAddFood({ date = state.date, block } = {}) {
           label: 'Custom',
           onclick: () => pushQuickAdd(ctx, { date, block: targetBlock }),
         }),
-        // Solid one goes on the right, per the mock. It is also the side a
-        // right thumb reaches without moving the phone, and the only button
-        // here anyone taps in a hurry.
+        // `onStage` goes to Scan for the same reason it goes to a recent: this
+        // sheet has a plate bar, so everything opened from it can reach the
+        // plate. A barcode that logs but cannot be staged was the same food
+        // offering different destinations depending on how it was found.
+        // Scan keeps the right-hand side, which is the side a right thumb
+        // reaches without moving the phone. What it no longer keeps is the
+        // fill — see `actionButton`. Position can say "this one is easy to
+        // reach" without the screen also claiming it is the one to press.
         actionButton({
           iconName: 'scan',
           label: 'Scan',
-          primary: true,
-          onclick: () => pushScan(ctx, { date, block: targetBlock }),
+          onclick: () => pushScan(ctx, { date, block: targetBlock, onStage: stageOne }),
         })
       )
 

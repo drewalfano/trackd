@@ -92,29 +92,20 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                   h(
                     'div',
                     { class: 'row' },
-                    h(
-                      'div',
-                      { class: 'min-w-0 flex-1' },
-                      h(
-                        'div',
-                        {
-                          class:
-                            'truncate text-[14px] font-semibold leading-tight' +
-                            (food ? '' : ' text-muted line-through'),
-                        },
-                        food?.name || 'Deleted food'
-                      ),
-                      h(
-                        'div',
-                        { class: 'mt-[2px] truncate text-[12px] text-muted' },
-                        food
-                          ? item.unit === 'serving'
-                            ? `${qty(item.quantity)} × ${servingLabel(food)}`
-                            : `${qty(item.quantity)} ${unitLabel(item.unit, item.quantity)}`
-                          : 'No longer in your library'
-                      ),
-                      macros ? h('div', { class: 'mt-[4px]' }, macroLine(macros, { size: 12 })) : null
-                    ),
+                    // A plate item is the same food a moment before it becomes a
+                    // logged entry, so it is the same body — and the amount takes
+                    // its own line here for the same reason it does in the add
+                    // sheet's lists.
+                    foodRowBody({
+                      name: food?.name || 'Deleted food',
+                      sub: food
+                        ? item.unit === 'serving'
+                          ? `${qty(item.quantity)} × ${servingLabel(food)}`
+                          : `${qty(item.quantity)} ${unitLabel(item.unit, item.quantity)}`
+                        : 'No longer in your library',
+                      totals: macros,
+                      missing: !food,
+                    }),
                     food
                       ? h(
                           'button',
@@ -431,16 +422,25 @@ export function plateBar({ rows, onOpen, onLog }) {
         onclick: onLog,
       },
       /**
-       * "Add to log", not "Log 1".
+       * `Log`, bare.
        *
-       * The count was being said twice on one bar — "1 item" is already three
-       * words to the left of it — and the half that repeated it was the half
-       * that had to name the action. "Log" alone is also the weakest verb in
-       * this app: it is the noun on the Today screen, the name of a whole
-       * screen, and a section heading, so a button carrying it says which of
-       * those it means only from where it happens to sit.
+       * Not "Log 1" — the count is already three words to the left of it, and a
+       * bar that says the number twice is a bar with nothing else to say. Not
+       * "Add to log" either, which is what this read for several versions: the
+       * verb in a direct-log flow is `log`, and "add" was the one place it
+       * became something else.
+       *
+       * The old objection to `Log` alone was that it is the weakest verb in the
+       * app — the noun on Today, the name of a screen, a section heading — so a
+       * button carrying it says which it means only from where it sits. That is
+       * true and it is answered by where this sits: it is on a bar reading
+       * `3 items · 812 cal`, which is a sentence with exactly one verb missing.
+       *
+       * The plate screen keeps `Log {n} items`, because a screen you navigated
+       * to has no such sentence beside the button and confirming what is being
+       * committed is worth the repetition there.
        */
-      'Add to log'
+      'Log'
     )
   )
 }
@@ -462,7 +462,7 @@ export async function pushPlate(ctx, { plate, onCommitted }) {
 
 /** Shared commit toast: one undo for the whole plate, never one per item. */
 export function plateLoggedToast(entries) {
-  toast(`Added ${pluralize(entries.length, 'item')}`, {
+  toast(`Logged ${pluralize(entries.length, 'item')}`, {
     action: 'Undo',
     onAction: () => Promise.all(entries.map((e) => deleteEntry(e.id))),
   })

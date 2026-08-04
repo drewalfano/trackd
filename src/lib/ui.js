@@ -245,6 +245,65 @@ export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) 
   )
 }
 
+/* --------------------------------------------------------- the food row */
+
+/**
+ * One food, as two lines: what it is, then what it costs.
+ *
+ * **This is the log's row, generalised.** It was `entryRow`'s inner block and
+ * nothing else used it, so every other list of foods in the app grew its own
+ * near-copy — the add sheet's Recents at three lines and a 16px name, the
+ * plate's items at three lines and a 14px one. They are the same object at
+ * three moments of its life: one you might eat, one you are about to eat, one
+ * you ate. Three shapes for that is two too many, and the versions drifted
+ * because nothing held them together.
+ *
+ * So the callers keep what genuinely differs — what wraps it and what sits
+ * beside it — and this holds what does not.
+ *
+ * **There are two slots for the qualifier, and which one a caller uses is about
+ * how long the qualifier can get.**
+ *
+ * `detail` sits beside the name after a middot. It is for something short and
+ * fixed: a logged entry's time is five characters and never grows, so it costs
+ * the name almost nothing and the row stays two lines.
+ *
+ * `sub` takes a line of its own. It is for the serving, which is the same job —
+ * telling you WHICH of this food you are looking at — but a variable-length
+ * version of it: `1 × 170 g`, `2 × 450 g`, `1 × 1 biscuit (15 g)`. Put beside
+ * the name it truncated the name on most rows, and all three arrangements were
+ * built and looked at before this was settled. Sharing the macro line was the
+ * worst of them: it fits for short numbers and wraps for long ones, so one list
+ * held rows of two different heights with an orphaned middot at the wrap.
+ *
+ * A clipped name is recognisable from its first two-thirds and a clipped
+ * `1 × 2…` is not, so wherever the two do compete the name is what yields:
+ * `min-w-0 truncate` on it, `shrink-0` on everything after it.
+ *
+ * The 2px between lines is deliberate and not 4: they are one thing said in
+ * parts, so they want to sit as a block rather than as a list. The weight change
+ * from a semibold name to muted figures already separates them.
+ */
+export function foodRowBody({ name, detail, sub, totals, missing = false }) {
+  return h(
+    'div',
+    { class: 'min-w-0 flex-1' },
+    h(
+      'div',
+      {
+        class:
+          'flex items-baseline text-[14px] font-semibold leading-tight' +
+          (missing ? ' text-muted line-through' : ''),
+      },
+      h('span', { class: 'min-w-0 truncate' }, name),
+      detail ? h('span', { class: 'shrink-0 whitespace-pre text-muted' }, ' · ') : null,
+      detail ? h('span', { class: 'shrink-0 font-normal' }, detail) : null
+    ),
+    sub ? h('div', { class: 'mt-[2px] truncate text-[12px] text-muted' }, sub) : null,
+    totals ? h('div', { class: 'mt-[2px]' }, macroLine(totals, { size: 12 })) : null
+  )
+}
+
 /* ------------------------------------------------------------------- bars */
 
 /**

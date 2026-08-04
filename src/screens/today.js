@@ -506,7 +506,7 @@ function quickAddTile(food, { date, block }) {
     bodyLabel: `Change the amount of ${food.name}`,
     onAction: async () => {
       const entry = await quickLogFood(food, { date, block })
-      toast(`Added ${food.name}`, {
+      toast(`Logged ${food.name}`, {
         action: 'Undo',
         onAction: () => deleteEntry(entry.id),
       })

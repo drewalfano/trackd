@@ -335,6 +335,19 @@ export function servingPanel({
  * button — the food library and Today's rail both open this without one,
  * because a plate assembled from a screen that cannot show you the plate is a
  * buffer you have no way of seeing.
+ *
+ * **The option belongs to the surface, not the route.** Which is a rule the
+ * code stated and then broke: a recent carried `onStage` and a scanned barcode
+ * did not, so the same food on the same sheet offered a plate or withheld it
+ * depending on how you had arrived at it. Scan and Custom now hand it down the
+ * same way, and the passing test is the one the rule already implies — if the
+ * plate bar is on screen behind this panel, the plate button is in its footer.
+ *
+ * The `food` handed back alongside the item is what makes that pass-through
+ * possible: the add sheet knows it has a plate, but on the scan and Custom
+ * routes it does not yet know WHICH food is going onto it, because the food is
+ * created or adopted several panels deeper. So the item comes back with the
+ * record it was built from rather than the caller having to have held one.
  */
 export async function pushServing(ctx, { food, date, block, onStage }) {
   const settings = await getSettings()
@@ -346,11 +359,11 @@ export async function pushServing(ctx, { food, date, block, onStage }) {
       onSubmit: async ({ quantity, unit, block: b, date: d }) => {
         await logFood({ food, quantity, unit, date: d, block: b })
         ctx.close()
-        toast(`Added ${food.name}`)
+        toast(`Logged ${food.name}`)
       },
       onStage:
         onStage &&
-        (({ quantity, unit }) => onStage({ foodId: food.id, quantity, unit })),
+        (({ quantity, unit }) => onStage({ foodId: food.id, quantity, unit }, food)),
     })
   )
 }
@@ -365,7 +378,7 @@ export async function openServingSheet({ food, date, block }) {
     onSubmit: async ({ quantity, unit, block: b, date: d }) => {
       await logFood({ food, quantity, unit, date: d, block: b })
       closeCurrent()
-      toast(`Added ${food.name}`)
+      toast(`Logged ${food.name}`)
     },
   })
   let closeCurrent = () => {}
