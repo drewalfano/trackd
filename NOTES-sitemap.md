@@ -103,6 +103,8 @@ The dashboard, then a preview of the log.
 - **Three macro rings** — protein, fat, carbs, equal diameter, gap-to-target in the centre
 - Every value stated once; the rings carry the remainder so there is no `153g / 185g` line
 - **Log preview** — entry rows with edit / delete-with-undo / duplicate, plus a `Full Log` chip
+- Newest first, which is the reverse of the Log screen and is deliberate: this is
+  a preview of the day so far, so the entry you just added is the one at the top
 - The entire Log section is dropped when the day is empty
 
 ### Log — `#/log` (under the Today tab)

@@ -179,7 +179,7 @@ your instinct to look was right and it stays worth doing, but the bug turned out
 to be arithmetic and a wrong colour model, so it would have been research in
 support of a decision that had already made itself.
 
-### U4 · Full Log outweighs the section it belongs to — low · fix
+### U4 · Full Log outweighs the section it belongs to — low · **fixed**, v1.2.3
 **Frame:** Section 5, `Log` row
 **Effect:** "unbalanced and out of place."
 **Why:** "the full log button being bigger than the tile title is
@@ -191,6 +191,30 @@ the type-scale problem, not a one-off. [NOTES-design-process.md:130](NOTES-desig
 already calls it: everything is near the same size, so a button and a heading
 compete. Raising the title is the local fix; the scale is the real one.
 `#looks`
+
+**Fixed in v1.2.3, both halves of the impulse, and the impulse was right.** The
+mechanism was narrower than "everything is the same size": `.section-label` was
+16px doing two different jobs, heading a section and captioning a field in a
+sheet. Same size for both leaves physical mass as the only hierarchy signal on
+that row, and a 34px stroked pill wins that against a 16px word. Headings are
+20px now, scoped to `.section-head` so only the heading job moves; the pill is
+30px and 14px of padding, with its stroke untouched, because the contrast was
+never the problem.
+
+**The scale is still open.** This raised one step; it did not build a scale, and
+the reason a heading and a caption were the same size to begin with is that
+there are five steps for the whole app. Phase 4 keeps the entry.
+
+Two things worth carrying forward:
+
+- **`.chip-sm` is a 30px tap target** where it stands alone, under the 44 iOS
+  asks for. It was under at 34, so this changed nothing, but it is now written
+  down rather than unnoticed. Log's empty block is fine — the whole
+  `.block-add` row is the target there.
+- **`sectionLabel()` in [ui.js](src/lib/ui.js) is dead** and builds the
+  heading-with-action row by hand instead of using `.section-head`, so it would
+  not have picked this up. It has no callers. Delete it or point it at the
+  class; leaving it is how the next heading gets the wrong size.
 
 ### U5 · Item times are hard to skim — low · watch
 **Frame:** Section 5, entry rows

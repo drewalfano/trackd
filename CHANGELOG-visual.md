@@ -6,6 +6,58 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.2.3 — the section heading gets a size of its own, and the log runs backwards
+
+From use — [NOTES-use-audit.md](NOTES-use-audit.md), U4: *"the full log button
+being bigger than the tile title is unproportionate. the hierarchy is off."*
+
+### The heading and the caption were the same size
+
+`.section-label` was 16px in both of the jobs it had. It headed a section —
+"Log", "Morning", "Today's weight" — and it captioned a field inside a sheet —
+"Block", "Serving", "Day". Those are not the same rank, and giving them the same
+size means the only thing left setting hierarchy on that row is physical size.
+A 34px pill with an ink stroke beats a 16px word at that, every time, which is
+why the button read as the louder of the two.
+
+Headings are 20px now, scoped to `.section-head` — the label only takes the
+larger step when it is heading a list. Field labels are untouched at 16, which
+is the size they should be, because they are captions. 20 lands between the 26
+screen title and the 16 body step, so the day header still leads the screen and
+the section heading still leads its own rows.
+
+### The pill lost 4px, and kept its stroke
+
+30px tall and 14px of padding, down from 34 and 16. The stroke stays exactly as
+dark: the note above `.chip-sm` is still true — it is the only control on a
+heading row and nothing else is there to say it is pressable. What was wrong was
+its size against the heading, not its contrast. At 34 against 16 the pill stood
+a shade over twice the heading's type; at 30 against 20 it is one and a half.
+
+This is the local fix. The scale is the real one — five steps for the whole app
+is *why* a heading and a caption were the same size, and that is still Phase 4.
+The entry stays open for it.
+
+**Found while measuring, not fixed:** `.chip-sm` is a 30px tap target where it
+is a button of its own, under the 44 iOS asks for. It was under at 34 too, so
+nothing here made it worse, but it is now written down.
+
+### Today's log preview runs newest first
+
+Not from U4 — a separate note the same day. `listEntries` returns oldest-first
+and both screens took it as given. That is right for Log, which groups by block,
+and a block reads forwards through the meal. It is wrong for Today, which is a
+preview of the day so far: the thing you just ate is the thing you opened the
+app to check, and oldest-first pushes it one row further down every time you
+log. By evening the newest entry was ninth.
+
+Reversed at the render site in [today.js](src/screens/today.js) rather than in
+`listEntries`, so the order stays one screen's decision instead of silently
+becoming both screens'. The two screens now disagree on purpose, and each has
+its reason written next to it.
+
+---
+
 ## v1.2.2 — over darkens in dark mode too
 
 Found on device, in the app, which is the only place it could have been found:
