@@ -435,7 +435,7 @@ export async function recentFoods(limit = 30) {
  * duplicate usually does not, so including it would keep apart exactly the pair
  * this is here to merge.
  */
-const identityKey = (food) =>
+export const identityKey = (food) =>
   food.barcode || `name:${(food.name || '').toLowerCase().trim().replace(/\s+/g, ' ')}`
 
 /**

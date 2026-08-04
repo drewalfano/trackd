@@ -21,6 +21,7 @@ import { foodTile } from '../lib/foodTile.js'
 import { servingLabel, qty, unitLabel, pluralize } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
 import { adoptDraft, isOnline, searchProducts } from '../lib/off.js'
+import { searchNewStaples, adoptStaple, stapleDraft, stapleName } from '../lib/staples.js'
 import { state } from '../state.js'
 import { pushServing } from './serving.js'
 import { pushMeal } from './meal.js'
@@ -525,7 +526,55 @@ export async function openAddFood({ date = state.date, block } = {}) {
         })
 
       /**
-       * One list. Your library first, then Open Food Facts, no second heading.
+       * A common food, from the bundled table.
+       *
+       * It renders as a library row rather than a remote one — `+` logs, the
+       * body opens the Add screen — because after the adoption both of those
+       * paths perform first, that is exactly what it is. A chevron here would
+       * be the row admitting an implementation detail: that this particular egg
+       * has not been copied into a store yet.
+       *
+       * The adoption is idempotent and keyed on the name, so tapping `+` twice
+       * gives one food with two entries.
+       *
+       * Subtitle is the serving label bare, not `1 × 1 large egg (50 g)`. The
+       * label these carry is already a whole portion in words; the `1 ×` a
+       * library row prefixes is there for foods whose label is a bare weight.
+       */
+      const stapleRow = (staple) => {
+        const draft = stapleDraft(staple)
+        return pickRow({
+          title: stapleName(staple),
+          subtitle: staple.servingLabel,
+          totals: computeMacros(draft, 1, 'serving'),
+          onLog: async () => {
+            const food = await adoptStaple(staple)
+            logDirect(() => quickLogFood(food, { date, block: targetBlock }), food.name)
+          },
+          onOpen: async () => {
+            const food = await adoptStaple(staple)
+            pushServing(ctx, { food, date, block: targetBlock, onStage: stageOne })
+          },
+        })
+      }
+
+      /**
+       * One list. Your library first, then the staples, then Open Food Facts.
+       *
+       * The order is the whole fix for `egg` returning eight mayonnaises. Your
+       * own foods lead because they are the likely hit and cost no network.
+       * Staples sit above Open Food Facts because for a bare noun the generic
+       * answer beats the branded one — and because OFF is a database of
+       * BARCODED PACKAGED PRODUCTS whose text search reads ingredient lists, so
+       * `egg` there means "things containing egg" and its best honest answer is
+       * still a branded box rather than an egg.
+       *
+       * Staples are dropped once the library has absorbed them, so a food you
+       * have eaten appears once, as yours, with its serving history intact.
+       *
+       * ---
+       *
+       * Below that, the original argument, unchanged:
        *
        * The two were briefly separate sections, and the separation was an
        * implementation detail wearing a heading: local foods log on tap and
@@ -545,13 +594,13 @@ export async function openAddFood({ date = state.date, block } = {}) {
        * wrapper around the remote half would swallow them.
        */
       async function paintResults(q) {
-        const found = await searchFoods(q, 30)
+        const [found, staples] = await Promise.all([searchFoods(q, 30), searchNewStaples(q, 8)])
 
         // Guards against an earlier, slower query landing after a later one and
         // painting stale results over fresh ones.
         if (q !== query.trim()) return
 
-        const list = card(found.map(foodRow))
+        const list = card([...found.map(foodRow), ...staples.map(stapleRow)])
 
         resultsCard.replaceChildren(
           h(
@@ -562,7 +611,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
           )
         )
 
-        paintRemote(q, found, list)
+        paintRemote(q, found, list, found.length + staples.length)
       }
 
       /**
@@ -577,14 +626,21 @@ export async function openAddFood({ date = state.date, block } = {}) {
         if (node) list.appendChild(node)
       }
 
-      async function paintRemote(q, local, list) {
+      /**
+       * `local` is the library array, which the barcode dedupe below needs.
+       * `offlineCount` is what the copy answers to, and it counts the staples as
+       * well — they are bundled, so they are searchable with the radio off and
+       * a message saying otherwise would be wrong in the one state where being
+       * wrong is most annoying.
+       */
+      async function paintRemote(q, local, list, offlineCount = local.length) {
         if (!isOnline()) {
           setTail(
             list,
             emptyRow(
-              local.length
-                ? 'Offline — only your library is searchable.'
-                : 'Offline, and nothing in your library matches.'
+              offlineCount
+                ? 'Offline — showing what is on this device.'
+                : 'Offline, and nothing on this device matches.'
             )
           )
           return
@@ -619,7 +675,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
           if (!fresh.length) {
             setTail(
               list,
-              local.length
+              offlineCount
                 ? emptyRow('Nothing on Open Food Facts to add to this.')
                 : emptyRow(`Nothing matches “${q}”.`, {
                     action: 'Create it',
@@ -639,7 +695,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
             list,
             emptyRow('Could not reach Open Food Facts.', {
               action: 'Try again',
-              onAction: () => paintRemote(q, local, list),
+              onAction: () => paintRemote(q, local, list, offlineCount),
             })
           )
         }
