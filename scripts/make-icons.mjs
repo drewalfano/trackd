@@ -11,20 +11,33 @@
  */
 
 import { deflateSync } from 'node:zlib'
-import { writeFileSync, mkdirSync } from 'node:fs'
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT = resolve(ROOT, 'public/icons')
 
-const INK = [0x23, 0x23, 0x23]
-const BARS = [
-  [0x44, 0xa0, 0x57], // calories
-  [0x50, 0x75, 0xbe], // protein
-  [0xca, 0xaf, 0x3a], // fat
-  [0xcd, 0x49, 0x3d], // carbs
-]
+/**
+ * The palette is read out of styles.css rather than copied here.
+ *
+ * It was copied here once, and the two drifted: the icon kept a retired set
+ * where fat was gold and carbs was red, long after the app had moved to orange
+ * and magenta. The icon is the one asset nobody re-opens after shipping it, so
+ * it is exactly the wrong place to keep a second copy of anything.
+ */
+const css = readFileSync(resolve(ROOT, 'src/styles.css'), 'utf8')
+
+function token(name) {
+  const m = css.match(new RegExp(`--color-${name}:\\s*(#[0-9a-fA-F]{6})`))
+  if (!m) throw new Error(`icons: token --color-${name} not found in styles.css`)
+  return m[1]
+}
+
+const rgb = (hex) => hex.match(/[0-9a-fA-F]{2}/g).map((h) => parseInt(h, 16))
+
+const INK = rgb(token('ink'))
+const BARS = ['kcal', 'protein', 'fat', 'carbs'].map((name) => rgb(token(name)))
 const WIDTHS = [1.0, 0.68, 0.46, 0.84]
 
 const SS = 4 // supersample factor

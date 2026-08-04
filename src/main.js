@@ -342,7 +342,7 @@ function renderStorageBlocked() {
       h(
         'p',
         { class: 'text-[15px] leading-snug text-muted' },
-        'Macro Tracker keeps everything on this device, so it needs local storage to run. ' +
+        'Trackd keeps everything on this device, so it needs local storage to run. ' +
           'This usually means private browsing is on, or site data is blocked for this page.'
       ),
       h(

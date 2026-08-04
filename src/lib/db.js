@@ -615,7 +615,7 @@ export async function exportAll() {
 export function validateImport(data) {
   if (!data || typeof data !== 'object') throw new Error('That file is not valid JSON.')
   if (data.format !== EXPORT_FORMAT) {
-    throw new Error('That file was not exported from Macro Tracker.')
+    throw new Error('That file was not exported from Trackd.')
   }
   // A store missing entirely is fine — an export taken before it existed.
   for (const key of DATA_STORES) {

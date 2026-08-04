@@ -2,7 +2,7 @@
 /**
  * Service worker.
  *
- * Built by the `macro-tracker:sw` plugin in vite.config.js, which stamps in the
+ * Built by the `trackd:sw` plugin in vite.config.js, which stamps in the
  * hashed asset list below. Three jobs, and no more than three:
  *
  *   1. Precache the app shell so a cold launch works with the radio off.

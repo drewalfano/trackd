@@ -1,7 +1,7 @@
 {
-  "name": "Macro Tracker",
-  "short_name": "Macros",
-  "description": "Personal macro tracker. Local first, works offline.",
+  "name": "Trackd",
+  "short_name": "Trackd",
+  "description": "Trackd. Personal macro tracking, local first, works offline.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

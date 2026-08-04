@@ -4,4 +4,4 @@
 export const VERSION = typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'
 
 /** Shown in Settings. Change the owner if you fork this. */
-export const REPO_URL = 'https://github.com/drewalfano/macro-tracking-app'
+export const REPO_URL = 'https://github.com/drewalfano/trackd'

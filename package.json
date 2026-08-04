@@ -1,9 +1,9 @@
 {
-  "name": "macro-tracking-app",
+  "name": "trackd",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Personal macro tracker. Installable PWA, single user, local first.",
+  "description": "Trackd. Personal macro tracking. Installable PWA, single user, local first.",
   "scripts": {
     "dev": "vite",
     "build": "node scripts/make-icons.mjs && vite build",

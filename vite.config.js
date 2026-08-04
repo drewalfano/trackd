@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 // Repo name on GitHub Pages. Override with BASE_PATH=/ for a custom domain.
-const base = process.env.BASE_PATH ?? '/macro-tracking-app/'
+const base = process.env.BASE_PATH ?? '/trackd/'
 
 /**
  * Hand-rolled service worker build step.
@@ -16,7 +16,7 @@ const base = process.env.BASE_PATH ?? '/macro-tracking-app/'
 function serviceWorker() {
   const templatePath = resolve(process.cwd(), 'src/sw.template.js')
   return {
-    name: 'macro-tracker:sw',
+    name: 'trackd:sw',
     apply: 'build',
     generateBundle(_options, bundle) {
       const assets = Object.keys(bundle)

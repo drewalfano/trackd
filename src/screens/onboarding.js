@@ -672,7 +672,7 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     return h(
       'div',
       { class: 'mx-auto flex min-h-full max-w-[430px] flex-col justify-center gap-[20px] pb-[20px]' },
-      h('h1', { class: 'text-display font-semibold leading-none' }, 'Macro Tracker'),
+      h('h1', { class: 'text-display font-semibold leading-none' }, 'Trackd'),
       h(
         'p',
         { class: 'text-[16px] leading-snug' },
