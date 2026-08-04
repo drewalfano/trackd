@@ -499,6 +499,29 @@
     color: var(--color-ink);
   }
 
+  /**
+   * A label that heads a list gets a step of its own.
+   *
+   * 16px was doing two jobs at once: heading a section ("Log", "Morning") and
+   * labelling a field inside a sheet ("Block", "Serving", "Day"). One size for
+   * both is why a 34px pill beside the word Log read as the louder of the two —
+   * the heading had no more weight than a field caption, so the only thing left
+   * setting hierarchy was physical size, and the button won that.
+   *
+   * 20 sits between the 26 screen title and the 16 body step, so the heading is
+   * now below the day header and above the row it labels. Only the heading job
+   * moves; field labels are still 16, which is what they should be — they are
+   * captions, not headings.
+   *
+   * This is the local fix for U4. The scale is the real one: five steps for the
+   * whole app is why a heading and a caption were the same size in the first
+   * place, and that is Phase 4.
+   */
+  .section-head .section-label {
+    font-size: 20px;
+    letter-spacing: -0.01em;
+  }
+
   .section-action {
     font-size: 13px;
     font-weight: 600;
@@ -700,13 +723,25 @@
    * `--color-outline` on a control against a white card is nearly invisible —
    * and this is the one control on a section heading, so it has to read as
    * pressable at a glance. The heavier edge is what earns it that.
+   *
+   * 30px, down from 34, and 14px of padding rather than 16 — the other half of
+   * U4. The stroke stays exactly as dark, because the paragraph above is still
+   * true: this control has to look pressable with nothing else around it to say
+   * so. What was wrong was its size against the heading, not its contrast. At
+   * 34 beside a 16px word the pill stood a shade over twice the heading's type;
+   * at 30 beside 20 it is one and a half, and the heading leads.
+   *
+   * It is a 30px tap target where it is a button of its own — under the 44 iOS
+   * asks for, as 34 also was. Not made worse here, but not fixed either, and
+   * worth a row when the section head is next opened. In Log's empty block the
+   * whole `.block-add` row is the target, so that one is fine.
    */
   .chip-sm {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    height: 34px;
-    padding: 0 16px;
+    height: 30px;
+    padding: 0 14px;
     border-radius: 999px;
     font-size: 13px;
     font-weight: 600;

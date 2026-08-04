@@ -62,5 +62,7 @@ export default defineConfig({
     // One user, one device, no code splitting worth the extra round trips.
     modulePreload: { polyfill: false },
   },
-  server: { host: true },
+  // `PORT` so a second dev server can be told where to sit rather than picking
+  // for itself; unset falls through to Vite's own 5173.
+  server: { host: true, port: process.env.PORT ? Number(process.env.PORT) : undefined },
 })

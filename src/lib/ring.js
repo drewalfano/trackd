@@ -138,53 +138,54 @@ function span(from, to, stroke) {
 }
 
 /**
- * The ramp, as a real gradient rather than as steps of `color-mix`.
+ * The second lap: one ramp from the fill shade to the edge shade, stretched
+ * across the WHOLE lap however long it is.
  *
- * Ten mixed segments was the first build and it banded: at 84px each step is
- * six device pixels wide at 3x, so the blend read as a staircase rather than a
- * ramp, which is worse than the hard seam it replaced — a seam is at least
- * deliberate.
+ * This replaces a fixed blend — a sixth of a turn of gradient and then flat
+ * edge shade for the rest. That version is fine at 120% and falls apart above
+ * about 150%, where the lap is long enough that the ramp is a small part of it
+ * and everything past is one flat dark field. The only visual event left is the
+ * boundary between that field and the first lap showing past the cap, which
+ * reads as a hard line — the exact seam the blend existed to remove, moved
+ * further round the circle.
  *
- * The axis is horizontal in the arc's own space, which the -90 rotation turns
- * into the vertical at 12 o'clock: full at the top of the ring, edge shade a
- * quarter turn later. Everything past that pads to the edge shade, and because
- * this is only ever painted over the first quarter turn, the pad never gets a
- * chance to run backwards up the other side.
+ * Proportional fixes both ends at once. The strand always leaves 12 o'clock at
+ * the colour of the lap underneath it and always arrives at full edge shade
+ * exactly at the cap, so the cap always has the most separation it can have and
+ * there is never a flat stretch for a boundary to sit against.
  *
- * Positional rather than path-length based, which is the property that matters:
- * the shade at any point on the strand depends on WHERE IT IS, not on how far
- * over you are. The ramp is nailed to the ring, so it cannot stretch or slide
- * as the day goes on.
+ * The earlier note argued for positional on the grounds that the shade at a
+ * point should depend on where it sits rather than on how far over you are.
+ * That was wrong about which fact the mark is carrying: **the length of the lap
+ * already says how far over you are.** The colour's job is to make the lap read
+ * as one strand deepening rather than as an object placed on top, and it does
+ * that best by spending its whole range on whatever length it is given.
+ *
+ * ---
+ *
+ * Drawn as N segments rather than as an SVG gradient because an SVG gradient is
+ * linear and this ramp is angular. Banding scales with the colour step BETWEEN
+ * segments, not with their width, and the total range here is fixed at ΔL 0.14 —
+ * so 32 segments is 0.0044 apiece whatever the lap's length, which is under the
+ * threshold at any size this ring is drawn at. The ten-segment build that banded
+ * was spending the same range over a sixth of the distance.
  */
-function ramp(id, macro) {
-  return s(
-    'linearGradient',
-    {
-      id,
-      gradientUnits: 'userSpaceOnUse',
-      x1: SIZE / 2 + R,
-      y1: SIZE / 2,
-      x2: SIZE / 2,
-      y2: SIZE / 2,
-    },
-    s('stop', { offset: '0', 'stop-color': macroColor(macro) }),
-    s('stop', { offset: '1', 'stop-color': macroEdgeColor(macro) })
-  )
-}
+const RAMP_STEPS = 32
 
-/**
- * The second lap, painted at its full length and revealed by a mask.
- *
- * Painting it whole and masking it — rather than growing the arcs themselves —
- * is what keeps the ramp fixed to the strand.
- *
- * Two arcs: the edge shade the whole way, then the ramp laid over its first
- * quarter turn. Drawn this way round so the pure shade is the default and the
- * blend is the exception, which is also the only reason the gradient never has
- * to wrap.
- */
-function overStrand(macro, rampId) {
-  return [span(0, C, macroEdgeColor(macro)), span(0, BLEND, `url(#${rampId})`)]
+function overStrand(macro, overLen) {
+  const fill = macroColor(macro)
+  const edge = macroEdgeColor(macro)
+  // Below the floor the lap is a stub and the ramp has nowhere to run; paint it
+  // flat rather than compress the whole range into a few pixels.
+  const len = Math.max(overLen, MIN_ARC)
+  const step = len / RAMP_STEPS
+
+  const arcs = []
+  for (let i = 0; i < RAMP_STEPS; i++) {
+    const mix = Math.round(((i + 1) / RAMP_STEPS) * 100)
+    arcs.push(span(i * step, (i + 1) * step, `color-mix(in srgb, ${edge} ${mix}%, ${fill})`))
+  }
+  return arcs
 }
 
 /**
@@ -290,7 +291,7 @@ function ringSvg({ ratio, macro, key, animate }) {
   // does not need a marker to say so.
   const base = hasBase ? lap(macroColor(macro), baseFrom, null) : null
   const over = hasOver
-    ? s('g', { mask: `url(#${refId('over', uid)})` }, ...overStrand(macro, refId('ramp', uid)))
+    ? s('g', { mask: `url(#${refId('over', uid)})` }, ...overStrand(macro, overTo))
     : null
 
   if (animate) {
@@ -312,7 +313,6 @@ function ringSvg({ ratio, macro, key, animate }) {
       'aria-hidden': 'true',
       class: 'block',
     },
-    hasOver ? ramp(refId('ramp', uid), macro) : null,
     overMask,
     track,
     // Drawn in order, so the strand continues over the lap below it and ends on

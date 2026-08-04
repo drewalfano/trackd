@@ -491,8 +491,16 @@ export function todayScreen() {
                   'Full Log'
                 )
               ),
+              // Newest first, which is the opposite of the full Log screen and
+              // is meant to be. `listEntries` returns oldest-first because Log
+              // groups by block and a block reads forwards through the meal.
+              // This is a preview of the day so far, and the thing you just ate
+              // is the thing you came to check — putting it fifth down means
+              // the answer moves further from the top every time you log.
+              // Reversed here rather than in `listEntries`, so the sort stays
+              // one screen's decision instead of both screens'.
               card(
-                entries.map((entry) =>
+                [...entries].reverse().map((entry) =>
                   entryRow(entry, {
                     onEdit: openEditEntry,
                     onDelete: deleteEntryWithUndo,
