@@ -223,6 +223,28 @@ export function macroRing({
   const big = remainingMode ? `${g(Math.abs(remaining))}g` : g(consumed)
   const small = remainingMode ? (isOver ? 'over' : 'left') : `/ ${g(goal)}g`
 
+  /**
+   * An empty ring puts its centre in ink rather than in the macro's colour.
+   *
+   * Pale type inside an unfilled outline is the standard vocabulary of a
+   * loading skeleton, and at zero the ring was drawing exactly that: a hollow
+   * circle with a faint coloured `0` in it. Reading a report of zero as a
+   * placeholder that has not finished arriving is the one thing the mark cannot
+   * afford — it means the instrument looks broken on the screen you see first
+   * every morning.
+   *
+   * Ink at zero and colour above it also makes the transition legible. The
+   * first thing you log turns the numeral the macro's colour on the same frame
+   * the arc appears, so the two halves of the mark start together.
+   *
+   * Keyed on what has been EATEN, not on the number being drawn. In remaining
+   * mode an untouched macro shows its whole target — `180g left`, a large
+   * number over an empty ring — and colouring that would say the ring is
+   * carrying data when it is carrying none. The rule is about the ring, so it
+   * has to read the ring's own value.
+   */
+  const empty = consumed === 0
+
   const centre = h(
     'div',
     {
@@ -230,7 +252,7 @@ export function macroRing({
       // be animated as one gesture across the card — the calorie number and all
       // three ring centres change at the same moment and for the same reason.
       class: `reading${swapping ? ' reading-swap' : ''} absolute inset-0 flex flex-col items-center justify-center leading-none`,
-      style: { color: colour },
+      style: { color: empty ? 'var(--color-ink)' : colour },
     },
     h('div', { class: 'tnum text-[15px] font-semibold' }, ...digits(big)),
     h('div', { class: 'tnum mt-[3px] text-[11px] font-medium text-muted' }, ...digits(small))

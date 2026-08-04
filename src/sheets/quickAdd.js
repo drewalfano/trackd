@@ -33,6 +33,15 @@ import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
  * Now it is a decision inside one form, stated in the words of the consequence:
  * save it, or do not.
  *
+ * **This panel is now the one called "Custom", which is not the collision it
+ * looks like.** It shipped as "Quick add" and gave that name up when Today grew
+ * a Quick add rail — a rail of foods you have already eaten has the better
+ * claim to the phrase, and two different things one tap apart cannot share a
+ * word. "Custom" was free to take back because the button that used to carry it
+ * is the one folded into the switch below; the full editor it opened is titled
+ * "New food" and "Edit food" wherever it still appears, and is no longer a
+ * front door on this sheet at all.
+ *
  * Turning it on is the ONE case that needs more than four numbers. A food is
  * defined per 100g, so it needs to know what one serving is; and it needs a
  * name, which is optional for an entry and cannot be for something you will go
@@ -53,7 +62,7 @@ export async function pushQuickAdd(ctx, { date = todayStr(), block } = {}) {
 
 export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
   return {
-    title: 'Quick add',
+    title: 'Custom',
     render: (ctx) => {
       let label = ''
       let block = initialBlock ?? blockForTime(new Date(), settings.blockThresholds)
@@ -215,9 +224,27 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
               block,
               foodId: null,
               source: QUICK_ADD_SOURCE,
-              // entryRow and the edit sheet both read `foodName`; without one a
-              // quick add would render as "Deleted food".
-              foodName: label.trim() || 'Quick add',
+              /**
+               * entryRow, the Log screen and the edit sheet all read
+               * `foodName`; without one a custom entry would render as
+               * "Deleted food", which is a lie about a row that was never
+               * attached to a food in the first place.
+               *
+               * "Unnamed" rather than "Custom", and neither rather than the
+               * "Quick add" this shipped with. A log row is a list of things
+               * you ate, and the two earlier names both answered a question
+               * nobody reading the log is asking — they named the ROUTE the
+               * entry came in by, which matters at the moment of typing and
+               * never again. Two months on, "Custom · 420 cal" tells you the
+               * form you used and nothing about the food.
+               *
+               * The field above is optional and says so, so leaving it blank is
+               * a complete answer rather than a mistake. The honest row is the
+               * one that admits the name is missing and lets the macros and the
+               * timestamp carry the rest, which is all the day needs to read
+               * back.
+               */
+              foodName: label.trim() || 'Unnamed',
               quantity: 1,
               unit: 'item',
               computed: {
@@ -273,7 +300,14 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
               : 'Optional. Shows in the log so the day still reads back.',
             children: textInput({
               value: label,
-              placeholder: keep ? 'Overnight oats' : 'Quick add',
+              // Two different jobs, which is why the two placeholders are not
+              // the same kind of word. With the switch on the field is required
+              // and the placeholder is an EXAMPLE of what to type. With it off
+              // the field is optional, so the placeholder is a PREVIEW of what
+              // the log will say if you leave it alone — it has to stay in step
+              // with the `foodName` fallback below, or the field advertises one
+              // row and writes another.
+              placeholder: keep ? 'Overnight oats' : 'Unnamed',
               onInput: (v) => {
                 label = v
                 sync()

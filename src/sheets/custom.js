@@ -17,10 +17,14 @@ import { pushServing } from './serving.js'
  * The full food editor, also used to edit an existing food and to finish a scan
  * that came back with a barcode but no nutrition data.
  *
- * No longer a front-door button on the Add sheet — Quick add took that slot,
- * and the two read as duplicates side by side. What is left here is everything
- * Quick add's switch does not need: brand, barcode, label photo, the per-100
- * basis and sodium.
+ * No longer a front-door button on the Add sheet — the Custom panel took that
+ * slot, and the two read as duplicates side by side. What is left here is
+ * everything Custom's switch does not need: brand, barcode, label photo, the
+ * per-100 basis and sodium.
+ *
+ * The word "Custom" now names that panel rather than this editor, which is the
+ * opposite of where it started. This one is titled "New food" and "Edit food"
+ * everywhere it appears, so nothing user-facing carries the old sense.
  *
  * Two things earn their complexity here. The per-serving / per-100 toggle,
  * because labels are printed both ways and retyping arithmetic at a restaurant

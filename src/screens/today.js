@@ -1,14 +1,24 @@
 import { h, countTo, haptic, swipePages, pressable } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
-import { listEntries, getSettings, saveCardMode } from '../lib/db.js'
-import { sumEntries, progress, MACRO_META } from '../lib/compute.js'
+import {
+  listEntries,
+  getSettings,
+  saveCardMode,
+  quickAddFoods,
+  firstLoggedDate,
+  deleteEntry,
+} from '../lib/db.js'
+import { sumEntries, progress, computeMacros, MACRO_META } from '../lib/compute.js'
 import { macroRing } from '../lib/ring.js'
-import { tnum, card, macroTextColor, navHeader } from '../lib/ui.js'
-import { kcal } from '../lib/format.js'
-import { formatDayHeader, isToday, addDays } from '../lib/dates.js'
+import { tnum, card, emptyRow, macroTextColor, navHeader } from '../lib/ui.js'
+import { foodTile } from '../lib/foodTile.js'
+import { kcal, qty, servingLabel, unitLabel } from '../lib/format.js'
+import { formatDayHeader, isToday, addDays, blockForTime } from '../lib/dates.js'
 import { entryRow } from '../lib/entryRow.js'
 import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
-import { openEditEntry } from '../sheets/serving.js'
+import { quickLogFood, defaultServing } from '../lib/logging.js'
+import { toast } from '../lib/toast.js'
+import { openEditEntry, openServingSheet } from '../sheets/serving.js'
 import { state, setDate } from '../state.js'
 import { navigate } from '../router.js'
 
@@ -424,6 +434,126 @@ function dayDeck({ current, prev, next }) {
   return deck
 }
 
+/* ------------------------------------------------------------- quick add */
+
+/**
+ * Eight, and the number is a judgement rather than a fit.
+ *
+ * Four and a bit fit across a 375 screen, so this is roughly two flicks of
+ * rail. Past that a shortcut stops being a shortcut: scanning a horizontal row
+ * for the ninth card is slower than typing three letters into the search field
+ * one tap away, and a rail long enough to get lost in is a worse version of the
+ * list it was meant to save you from.
+ */
+const RAIL_MAX = 8
+
+/**
+ * One tile in the Quick add rail.
+ *
+ * **The card opens the amount sheet; only `+` writes to the log.** The two were
+ * built the other way round first — card logs, `+` adjusts, matching the add
+ * sheet — and the pair were compared on device before this was settled. The
+ * comparison is worth recording because it did not work the way comparisons
+ * usually do: the two builds are pixel-identical. Nothing on the card changes
+ * between them. So this could not be decided by looking, only by arguing about
+ * what each target should mean.
+ *
+ * What settled it is the serving. A tile logs the LAST serving you used for
+ * that food, which is right far more often than a default of one would be and
+ * is still wrong sometimes — you had 200g of yoghurt yesterday and want 150
+ * today. With the card opening the sheet, that case costs nothing: the amount
+ * is sitting in a field, prefilled, one edit from correct. With the card
+ * logging outright it costs a wrong entry and a correction afterwards.
+ *
+ * So the big target asks and the small one commits, which inverts the usual
+ * reading of a large surface being the primary action. It is the right way
+ * round here because the irreversible half is the one that should be harder to
+ * hit by accident while scrolling a rail with a thumb, and because the
+ * shortcut is not lost — `+` is still one tap and still skips everything.
+ *
+ * The cost, stated plainly: a tile on this screen and a tile on the add sheet
+ * now look identical and do different things on a body tap. See `favCard` in
+ * sheets/addFood.js, which still logs outright.
+ *
+ * Logging goes through `quickLogFood`, the same call the add sheet's favourites
+ * make — so the serving used, the `computed` snapshot and the recency bump that
+ * reorders this very rail all happen on one path. A second logging route with
+ * its own idea of any of that is how two screens start disagreeing about what
+ * you ate.
+ *
+ * `state.date`, not today. Today's screen shows whichever day you have stepped
+ * to, and a rail that quietly logged into today from a screen showing Saturday
+ * would put food on the wrong day with nothing on screen to say so. The block
+ * still comes from the clock, which is the same compromise the add sheet makes:
+ * the hour you are logging AT is the best guess available for a day you are not
+ * living through.
+ */
+function quickAddTile(food, { date, block }) {
+  const { quantity, unit } = defaultServing(food)
+  const serving =
+    unit === 'serving'
+      ? `${qty(quantity)} × ${servingLabel(food)}`
+      : `${qty(quantity)} ${unitLabel(unit, quantity)}`
+
+  return foodTile({
+    title: food.name,
+    subtitle: serving,
+    totals: computeMacros(food, quantity, unit),
+    onBody: () => openServingSheet({ food, date, block }),
+    // Spelled out rather than shortened, because the two targets are a sentence
+    // apart and a screen reader gets no help from the shapes. Nothing about a
+    // card and a circle says one asks and one commits, so the labels have to.
+    bodyLabel: `Change the amount of ${food.name}`,
+    onAction: async () => {
+      const entry = await quickLogFood(food, { date, block })
+      toast(`Added ${food.name}`, {
+        action: 'Undo',
+        onAction: () => deleteEntry(entry.id),
+      })
+    },
+    actionLabel: `Log ${food.name}, ${serving}`,
+  })
+}
+
+/**
+ * The rail, or the line that stands in for it before anything has been logged.
+ *
+ * `firstRun` is the state of the whole database, not a flag anybody set —
+ * `firstLoggedDate` returning null is the only condition, so the line cannot
+ * survive its own usefulness the way a dismissal flag can. It goes away when
+ * the first entry exists and never comes back, including after a data import,
+ * which is correct: an imported history is a history.
+ *
+ * **The line needs an empty rail as well as an empty history**, which the brief
+ * did not anticipate because it assumed recents were derived from entries.
+ * They are derived from the food records, and a food can be in the library
+ * without ever having been logged — the sample favourites do exactly this, and
+ * so does creating a custom food and not eating it yet. In that state there are
+ * real tiles to show, and telling someone to log their first food while
+ * suppressing six working shortcuts to do it would be the screen arguing with
+ * itself.
+ *
+ * With entries in the database but no recents, the whole section drops. That
+ * only happens if every food behind those entries has since been deleted, and a
+ * heading over an empty rail would be a section announcing that it has nothing
+ * to say.
+ */
+function quickAddSection({ foods, firstRun, date, block }) {
+  if (!foods.length && !firstRun) return null
+
+  return h(
+    'section',
+    { class: 'mt-[20px] flex flex-col gap-[10px]' },
+    h('div', { class: 'section-head' }, h('div', { class: 'section-label' }, 'Quick add')),
+    foods.length
+      ? h('div', { class: 'food-rail' }, foods.map((food) => quickAddTile(food, { date, block })))
+      : // Points at the FAB rather than describing the app. The button is the
+        // only thing on this screen that does anything at zero, and it is 20px
+        // from where the sentence sits.
+        card(emptyRow('Tap + to log your first food'))
+  )
+}
+
 export function todayScreen() {
   return createScreen(
     async () => {
@@ -432,12 +562,15 @@ export function todayScreen() {
       // show you what it is dragging in is a gesture that stutters exactly
       // once, on the first use, which is the worst possible time.
       const forward = isToday(state.date) ? null : addDays(state.date, 1)
-      const [entries, prevEntries, nextEntries, settings] = await Promise.all([
-        listEntries(state.date),
-        listEntries(addDays(state.date, -1)),
-        forward ? listEntries(forward) : Promise.resolve(null),
-        getSettings(),
-      ])
+      const [entries, prevEntries, nextEntries, settings, railFoods, everLogged] =
+        await Promise.all([
+          listEntries(state.date),
+          listEntries(addDays(state.date, -1)),
+          forward ? listEntries(forward) : Promise.resolve(null),
+          getSettings(),
+          quickAddFoods(RAIL_MAX),
+          firstLoggedDate(),
+        ])
       const totals = sumEntries(entries)
       const t = settings.targets
       // Before anything is built, so the first card drawn is already in the
@@ -474,32 +607,48 @@ export function todayScreen() {
           next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
         }),
 
-        // The log. Its own group, and the route to the full Log screen — which
-        // is in turn the only route to History, so this link keeps both
-        // reachable. No empty state yet; an unlogged day drops the section.
-        entries.length
-          ? h(
-              'section',
-              { class: 'mt-[20px] flex flex-col gap-[10px]' },
-              h(
-                'div',
-                { class: 'section-head' },
-                h('div', { class: 'section-label' }, 'Log'),
-                h(
-                  'button',
-                  { class: 'chip-sm', onclick: () => navigate('log') },
-                  'Full Log'
-                )
-              ),
-              // Newest first, which is the opposite of the full Log screen and
-              // is meant to be. `listEntries` returns oldest-first because Log
-              // groups by block and a block reads forwards through the meal.
-              // This is a preview of the day so far, and the thing you just ate
-              // is the thing you came to check — putting it fifth down means
-              // the answer moves further from the top every time you log.
-              // Reversed here rather than in `listEntries`, so the sort stays
-              // one screen's decision instead of both screens'.
-              card(
+        /**
+         * The log. Its own group, and the route to the full Log screen — which
+         * is in turn the only route to History, so this link keeps both
+         * reachable.
+         *
+         * **It renders at every count, including zero.** It used to drop
+         * entirely on an unlogged day, and dropping it was the larger half of
+         * why a fresh morning read as a screen that had failed to load: with no
+         * section here, the card sat above nothing at all, and there was no way
+         * to tell "the log is empty" from "the log is not on this screen".
+         * Naming the void and giving it a position is what turns nothing here
+         * into nothing here yet.
+         *
+         * `Logged`, not `Log`. The heading is now describing a state rather
+         * than labelling a list, and it has to make sense with one muted line
+         * under it as well as with six rows.
+         *
+         * No item count on the right, which the brief asked for. That side is
+         * already spoken for by Full Log, and Full Log is not decoration — it
+         * is the only way to the Log screen and therefore the only way to
+         * History. The count is also the weakest fact available: it sits
+         * directly above the list it counts.
+         */
+        h(
+          'section',
+          { class: 'mt-[20px] flex flex-col gap-[10px]' },
+          h(
+            'div',
+            { class: 'section-head' },
+            h('div', { class: 'section-label' }, 'Logged'),
+            h('button', { class: 'chip-sm', onclick: () => navigate('log') }, 'Full Log')
+          ),
+          // Newest first, which is the opposite of the full Log screen and
+          // is meant to be. `listEntries` returns oldest-first because Log
+          // groups by block and a block reads forwards through the meal.
+          // This is a preview of the day so far, and the thing you just ate
+          // is the thing you came to check — putting it fifth down means
+          // the answer moves further from the top every time you log.
+          // Reversed here rather than in `listEntries`, so the sort stays
+          // one screen's decision instead of both screens'.
+          entries.length
+            ? card(
                 [...entries].reverse().map((entry) =>
                   entryRow(entry, {
                     onEdit: openEditEntry,
@@ -508,8 +657,20 @@ export function todayScreen() {
                   })
                 )
               )
-            )
-          : null
+            : // One line, in the same card every list on this screen sits in,
+              // so an empty day has the same edges as a full one. "Nothing
+              // logged yet" and not "Your log is empty" — the heading directly
+              // above it already said the word log, and a sentence that repeats
+              // its own heading is saying one thing twice.
+              card(emptyRow('Nothing logged yet'))
+        ),
+
+        quickAddSection({
+          foods: railFoods,
+          firstRun: everLogged === null,
+          date: state.date,
+          block: blockForTime(new Date(), settings.blockThresholds),
+        })
       )
     },
     { watch: ['entries', 'settings', 'foods'] }

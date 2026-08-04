@@ -37,7 +37,33 @@ function unitOptions(food) {
   return options
 }
 
-export function servingPanel({ food, initial = {}, mode = 'add', settings, onSubmit, onDelete }) {
+/**
+ * `onStage` is the plate's way in, and it is here because the `+` that used to
+ * carry it on every tile and row now logs.
+ *
+ * That swap is the whole point of the rearrangement: `+` means the same thing
+ * everywhere in the app — commit this, now, at the amount shown — and the
+ * larger target always opens this panel first. Staging had to go somewhere, and
+ * this is the honest place for it: you are building a meal out of specific
+ * amounts, and this is the screen where an amount exists. The old `+` staged a
+ * default serving and left you to fix it on the plate afterwards.
+ *
+ * It costs a tap per item against the old one-tap staging. A plate is a
+ * deliberate, multi-item activity, so the tap buys a decision that was
+ * previously deferred, on a path nobody walks by accident.
+ *
+ * Absent on `edit`, where there is nothing to stage — the entry is already in
+ * the log.
+ */
+export function servingPanel({
+  food,
+  initial = {},
+  mode = 'add',
+  settings,
+  onSubmit,
+  onStage,
+  onDelete,
+}) {
   return {
     title: mode === 'edit' ? 'Edit entry' : 'Add',
     render: (ctx) => {
@@ -69,7 +95,25 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
             await onSubmit({ quantity: Number(quantity), unit, block, date })
           },
         },
-        mode === 'edit' ? 'Save' : 'Add'
+        /**
+         * "Log it", not "Add", and the reason is the button underneath.
+         *
+         * Alone, "Add" was fine — the sheet is titled Add and there was nowhere
+         * else for a food to go. Once staging moved in here, the pair read as
+         * one action and a more specific version of it: "Add" never named its
+         * destination, so "Add to plate" looked like the same button with
+         * detail attached rather than a different place to send the food.
+         *
+         * Four footers were built and looked at rather than argued about. Two
+         * of them kept the verb and named both destinations — "Add to log" over
+         * "Add to plate" — which is the tidier pair on paper and still two
+         * near-identical pills at a glance. Different verbs is what actually
+         * separates them at the speed anyone reads a footer.
+         *
+         * `Save` still wins on edit: nothing is being logged there, the entry
+         * already exists, and staging is absent on that path anyway.
+         */
+        mode === 'edit' ? 'Save' : 'Log it'
       )
 
       const unitRow = h('div')
@@ -168,11 +212,45 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
       paintDate()
       repaintPreview()
 
+      const stageBtn =
+        onStage &&
+        mode !== 'edit' &&
+        h(
+          'button',
+          {
+            class: 'btn-secondary',
+            /**
+             * Pops back to the list rather than closing or staying put.
+             *
+             * A plate is built one food at a time, so staging is almost never
+             * the last thing you do — the next action is finding the next item,
+             * which is on the panel underneath. Closing the sheet outright
+             * would throw away the search or the rail position you were using
+             * to find things; staying here leaves you on a dead panel with a
+             * spent button, holding an amount for a food already on the plate.
+             *
+             * The `+` this replaced kept you on the list for exactly this
+             * reason. That property was worth carrying over even though the
+             * control moved.
+             */
+            onclick: async () => {
+              stageBtn.disabled = true
+              await onStage({ quantity: Number(quantity), unit, block, date })
+              ctx.pop()
+            },
+          },
+          'Add to plate'
+        )
+
       ctx.setFooter(
         h(
           'div',
           { class: 'flex flex-col gap-[10px]' },
           submitBtn,
+          // Under the primary, not beside it. Side by side they read as two
+          // equal choices and the panel stops having an obvious way out;
+          // logging is what this sheet is for, and staging is the variant.
+          stageBtn || null,
           onDelete &&
             h(
               'button',
@@ -249,8 +327,16 @@ export function servingPanel({ food, initial = {}, mode = 'add', settings, onSub
   }
 }
 
-/** Push the serving sheet onto an existing sheet (the add-food flow). */
-export async function pushServing(ctx, { food, date, block }) {
+/**
+ * Push the serving sheet onto an existing sheet (the add-food flow).
+ *
+ * `onStage` is optional and comes from the add sheet, which is the only caller
+ * that has a plate to stage onto. Left off, the panel simply has no plate
+ * button — the food library and Today's rail both open this without one,
+ * because a plate assembled from a screen that cannot show you the plate is a
+ * buffer you have no way of seeing.
+ */
+export async function pushServing(ctx, { food, date, block, onStage }) {
   const settings = await getSettings()
   ctx.push(
     servingPanel({
@@ -262,6 +348,9 @@ export async function pushServing(ctx, { food, date, block }) {
         ctx.close()
         toast(`Added ${food.name}`)
       },
+      onStage:
+        onStage &&
+        (({ quantity, unit }) => onStage({ foodId: food.id, quantity, unit })),
     })
   )
 }

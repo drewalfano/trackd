@@ -37,7 +37,21 @@ const amountLabel = (food, { quantity, unit }) =>
     ? `${qty(quantity)} × ${servingLabel(food)}`
     : `${qty(quantity)} ${unitLabel(unit, quantity)}`
 
-export function mealPanel({ meal, rows, settings, date, block: initialBlock, onLogged }) {
+/**
+ * `onStage` mirrors the serving sheet's: the plate's way in, now that the `+`
+ * on a favourite logs rather than stages. A meal expands into its items on the
+ * plate rather than going on as one lump, so they stay individually adjustable
+ * — same as the old `+` did.
+ */
+export function mealPanel({
+  meal,
+  rows,
+  settings,
+  date,
+  block: initialBlock,
+  onLogged,
+  onStage,
+}) {
   return {
     title: meal.name,
     render: (ctx) => {
@@ -77,7 +91,27 @@ export function mealPanel({ meal, rows, settings, date, block: initialBlock, onL
       }
       paintBlock()
 
-      ctx.setFooter(logBtn)
+      const stageBtn =
+        onStage &&
+        h(
+          'button',
+          {
+            class: 'btn-secondary',
+            disabled: !available.length,
+            // Back to the list, same as the serving sheet's — a plate is built
+            // one item at a time and the next one is on the panel underneath.
+            onclick: async () => {
+              stageBtn.disabled = true
+              await onStage()
+              ctx.pop()
+            },
+          },
+          'Add to plate'
+        )
+
+      ctx.setFooter(
+        stageBtn ? h('div', { class: 'flex flex-col gap-[10px]' }, logBtn, stageBtn) : logBtn
+      )
 
       return h(
         'div',
@@ -164,7 +198,7 @@ export function mealPanel({ meal, rows, settings, date, block: initialBlock, onL
 }
 
 /** Push the meal panel onto the add sheet's stack. */
-export async function pushMeal(ctx, { meal, date, block, onLogged }) {
+export async function pushMeal(ctx, { meal, date, block, onLogged, onStage }) {
   const [settings, rows] = await Promise.all([getSettings(), resolveItems(meal)])
   ctx.push(
     mealPanel({
@@ -174,6 +208,7 @@ export async function pushMeal(ctx, { meal, date, block, onLogged }) {
       date,
       block,
       onLogged,
+      onStage,
     })
   )
 }

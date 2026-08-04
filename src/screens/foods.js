@@ -183,7 +183,7 @@ export function foodsScreen() {
            *
            * It used to be a link at the bottom of the add sheet, where it was
            * the third route to typing numbers on a screen that already had
-           * Quick add. Every other way into the editor arrives from something
+           * Custom. Every other way into the editor arrives from something
            * specific — an unknown barcode, a scan with no nutrition data, a
            * search that found nothing — and this is the one remaining case:
            * deciding, cold, to put a food in the library. That decision belongs

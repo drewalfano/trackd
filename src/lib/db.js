@@ -423,6 +423,57 @@ export async function recentFoods(limit = 30) {
     .slice(0, limit)
 }
 
+/**
+ * What the same food is called, whichever record you happen to be holding.
+ *
+ * A barcode is the strong claim — two records carrying one are the same
+ * product — and the name is the fallback for everything typed by hand. Lowered,
+ * trimmed, and with runs of whitespace collapsed, because "Greek  Yogurt" and
+ * "greek yogurt" are one food that arrived by two routes.
+ *
+ * Brand is deliberately NOT part of the key. A scan fills it in and a hand-typed
+ * duplicate usually does not, so including it would keep apart exactly the pair
+ * this is here to merge.
+ */
+const identityKey = (food) =>
+  food.barcode || `name:${(food.name || '').toLowerCase().trim().replace(/\s+/g, ' ')}`
+
+/**
+ * Recents for a rail, deduped down to one card per real food.
+ *
+ * `recentFoods` is already recency-ordered and already carries the last-used
+ * serving, so this is the same read with one pass over it — it does NOT walk
+ * the entries store. Recency on the food record is maintained by `touchFood` on
+ * every log, which is the same signal a scan of the entries would recover, at
+ * one index read instead of a full table.
+ *
+ * The dedupe is the part `recentFoods` cannot do: the same real food can exist
+ * as two food records, one adopted from a barcode and one typed by hand, and a
+ * rail of eight shortcuts cannot afford to spend two of them on one yoghurt.
+ * First occurrence wins, so the surviving card is the most recently used of the
+ * pair and carries that record's serving.
+ *
+ * Reads deeper than `limit` before slicing, because duplicates are removed
+ * after the sort — taking eight first would hand back six once a pair collapsed.
+ *
+ * Foods already logged today are deliberately kept. Re-logging the same thing
+ * within a day is ordinary, and dropping it would be a shortcut that vanishes
+ * precisely because you used it.
+ */
+export async function quickAddFoods(limit = 8) {
+  const recents = await recentFoods(limit * 4)
+  const seen = new Set()
+  const out = []
+  for (const food of recents) {
+    const key = identityKey(food)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(food)
+    if (out.length === limit) break
+  }
+  return out
+}
+
 /* ----------------------------------------------------------------- entries */
 
 export async function listEntries(date) {

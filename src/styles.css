@@ -940,22 +940,24 @@
     transform: translate(-50%, -50%);
   }
 
-  /* ------------------------------------------------------ favourites rail */
+  /* ------------------------------------------------------------- food rail */
 
   /**
-   * The horizontal rail of favourites on the add sheet.
+   * The horizontal rail of food cards. Favourites on the add sheet, Quick add
+   * on Today — one rail, because they are one kind of thing and learning the
+   * row twice would be the cost of having two.
    *
    * It bleeds the body's own 20px gutter and pays it back as padding, so the
    * last card runs off the screen edge instead of stopping neatly short of it.
    * The half-card peeking past the edge is the entire scroll affordance —
-   * there is no arrow, no dots, and nothing else on the sheet says the row
+   * there is no arrow, no dots, and nothing else on the screen says the row
    * moves. Cards stopping flush at 20 would read as a row that simply ends.
    *
    * `proximity` snapping, not `mandatory`: the rail is a shortcut, and a flick
    * that lands between two cards should stay where it was thrown rather than
    * being dragged to the nearest stop.
    */
-  .fav-rail {
+  .food-rail {
     display: flex;
     gap: 10px;
     overflow-x: auto;
@@ -978,15 +980,15 @@
        does not have a line. */
     scrollbar-width: none;
   }
-  .fav-rail::-webkit-scrollbar {
+  .food-rail::-webkit-scrollbar {
     display: none;
   }
-  .fav-rail > * {
+  .food-rail > * {
     scroll-snap-align: start;
   }
 
   /**
-   * One favourite. Fixed width, because the whole point of the rail is that a
+   * One food. Fixed width, because the whole point of the rail is that a
    * given food is always in the same place — a card that sized to its own name
    * would move every time the list above it changed.
    *
@@ -1006,7 +1008,7 @@
    * the overlay was there to save. A real bottom row is the same picture — `+`
    * in the bottom-right corner, numbers to its left — and it cannot collide.
    */
-  .fav-card {
+  .food-tile {
     position: relative;
     display: flex;
     flex: none;
@@ -1019,7 +1021,7 @@
     border-radius: var(--radius-card);
     transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
   }
-  .fav-card:active {
+  .food-tile:active {
     transform: scale(0.97);
   }
 
@@ -1037,14 +1039,14 @@
    * full-width row, and 38 there reads as the card's main event. The tap target
    * does not shrink with it — `.icon-btn-sm` keeps its 44 either way.
    */
-  .fav-action {
+  .food-tile-action {
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
     gap: 10px;
     margin-top: auto;
   }
-  .fav-action .icon-btn-sm {
+  .food-tile-action .icon-btn-sm {
     width: 32px;
     height: 32px;
   }
@@ -1059,7 +1061,7 @@
    * equalises to the tallest, so one long name spends 18px on all of them. Two
    * lines is the trade the shorter card is made of.
    */
-  .fav-name {
+  .food-tile-name {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;

@@ -31,13 +31,51 @@ function getHost() {
   return host
 }
 
+/**
+ * How many toasts may be on screen at once.
+ *
+ * They stack upward from the tab bar, over the bottom of whatever screen you
+ * are on, and three of them reach halfway up a phone — deleting a few entries
+ * in a row buried Today's Quick add rail completely. Two is the smallest cap
+ * that does not cost anything real: the case that produces more than one toast
+ * is a burst of the same action, and each carries its own Undo, so collapsing
+ * to a single toast would silently throw away the ability to undo all but the
+ * last.
+ *
+ * Over the cap the OLDEST goes, not the newest. The newest is the one whose
+ * consequence you are still looking for, and the oldest has had the longest to
+ * be read and undone.
+ */
+const MAX_VISIBLE = 2
+
+/** Live toasts, oldest first, so the cap and Escape both have something to act on. */
+const open = new Set()
+
+/**
+ * Escape clears everything.
+ *
+ * The tap is the real dismissal and works with a thumb; this is the same
+ * affordance for a keyboard, which otherwise has no way past a toast at all.
+ * Registered once, on first use, and never removed — the app is a single page
+ * and the listener is idle whenever the set is empty.
+ */
+let escBound = false
+function bindEscape() {
+  if (escBound) return
+  escBound = true
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !open.size) return
+    for (const fn of [...open]) fn()
+  })
+}
+
 export function toast(message, { action, onAction, duration = 5000 } = {}) {
   const el = h(
     'div',
     {
       class:
-        'toast-in pointer-events-auto flex w-full max-w-[430px] items-center gap-[10px] ' +
-        'rounded-[24px] bg-ink px-[20px] py-[15px] text-canvas',
+        'toast-in pointer-events-auto flex w-full max-w-[430px] items-center ' +
+        'gap-[10px] rounded-[24px] bg-ink py-[15px] pl-[20px] pr-[10px] text-canvas',
     },
     h('span', { class: 'flex-1 text-[15px] font-medium' }, message),
     action &&
@@ -53,18 +91,53 @@ export function toast(message, { action, onAction, duration = 5000 } = {}) {
         },
         icon('undo', { size: 16 }),
         action
-      )
+      ),
+    /**
+     * A real close target, rather than dismissing on a tap anywhere.
+     *
+     * Tap-the-whole-surface is the tidier rule and it is wrong here. A toast
+     * lives at the bottom of the screen, directly over where a thumb rests, and
+     * the thing it is covering is the thing you just changed — so a stray tap is
+     * likely, and on an Undo toast a stray tap would destroy the undo. That is
+     * the one interaction in the app where being careless costs you a recovery
+     * you were explicitly offered.
+     *
+     * So the glyph earns its pixels: dismissal becomes deliberate, and Undo can
+     * never be lost to a mis-tap. Drawn on every toast rather than only the ones
+     * with an action, because a dismissal that is present sometimes is a
+     * dismissal nobody trusts is there.
+     */
+    h(
+      'button',
+      {
+        class: 'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full',
+        style: { background: 'color-mix(in srgb, currentColor 12%, transparent)' },
+        'aria-label': 'Dismiss',
+        onclick: () => dismiss(),
+      },
+      icon('close', { size: 16, stroke: 2.25 })
+    )
   )
 
   let timer = null
   const dismiss = () => {
     clearTimeout(timer)
+    open.delete(dismiss)
     if (!el.isConnected) return
     el.style.transition = 'opacity 160ms ease-in'
     el.style.opacity = '0'
     setTimeout(() => el.remove(), 170)
   }
 
+  // Before appending, so the cap counts what will be on screen rather than one
+  // frame of three.
+  while (open.size >= MAX_VISIBLE) {
+    const oldest = open.values().next().value
+    oldest()
+  }
+
+  open.add(dismiss)
+  bindEscape()
   getHost().appendChild(el)
   timer = setTimeout(dismiss, duration)
   return dismiss

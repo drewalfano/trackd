@@ -1,4 +1,4 @@
-import { h, repaint, longPress } from '../lib/dom.js'
+import { h, repaint } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { openSheet } from '../lib/sheet.js'
 import { toast } from '../lib/toast.js'
@@ -15,14 +15,9 @@ import {
 } from '../lib/db.js'
 import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
 import { quickLogFood, logMeal, logPlate, defaultServing } from '../lib/logging.js'
-import {
-  plateBar,
-  plateItemFor,
-  pushPlate,
-  resolvePlate,
-  plateLoggedToast,
-} from './plate.js'
+import { plateBar, pushPlate, resolvePlate, plateLoggedToast } from './plate.js'
 import { macroLine, card, emptyRow, listRow, slot } from '../lib/ui.js'
+import { foodTile } from '../lib/foodTile.js'
 import { servingLabel, qty, unitLabel, pluralize } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
 import { adoptDraft, isOnline, searchProducts } from '../lib/off.js'
@@ -38,7 +33,7 @@ import { pushScan } from './scan.js'
  *
  * Section 3 of the brief is the whole argument for this screen: the app is a
  * recall interface, not a database interface. Favourites and Recents are the
- * front door and sit above the fold; Scan, Search and Quick add are the
+ * front door and sit above the fold; Scan, Search and Custom are the
  * fallback for the handful of genuinely new foods.
  *
  * Search left the route row in v1.2.4 and became a bar of its own. Three routes
@@ -59,23 +54,29 @@ import { pushScan } from './scan.js'
 const SEARCH_DEBOUNCE_MS = 120
 
 /**
- * Row that logs on tap, stages on `+`, and inspects on long-press.
+ * Row that opens on tap and logs on `+`.
  *
- * Three verbs, two visible targets. Tap still logs immediately — that is the
- * path the whole app is built around and it does not change. The second control
- * is `+` rather than the old pencil, because assembling a meal is the thing the
- * row could not do at all, while adjusting a serving already had a home: the
- * plate, where you tune the whole meal against one running total instead of
- * guessing food by food.
+ * **Two verbs, two visible targets, and no long-press.** This is the third
+ * arrangement the row has had and the first where nothing important is hidden.
+ * It went pencil-and-tap, then `+`-stages-and-tap-logs with adjustment demoted
+ * to an undocumented long-press, and now this.
  *
- * The cost is real and worth stating: adjusting a single food at a non-default
- * amount moves from a visible pencil to a long-press nobody has been told
- * about. That is the one thing to watch in the friction log.
+ * `+` means one thing everywhere in the app: commit this, now, at the amount
+ * shown. The row itself opens the serving sheet, which is where the amount can
+ * be changed and — since the plate lost the `+` it used to live on — where a
+ * plate is now assembled.
+ *
+ * What this gives up is tap-to-log, which was the fastest path in the app and
+ * was genuinely good. What it buys is that the fast path is now the SMALL
+ * target rather than the whole row, so it is much harder to fire by accident
+ * while scrolling; and that adjusting a serving is back to being a thing you
+ * can see, instead of a gesture nobody was told about. The friction log's
+ * question 28 was written to watch exactly that trade, and this is the answer.
  */
-function pickRow({ title, subtitle, totals, onLog, onAdd, onOpen }) {
+function pickRow({ title, subtitle, totals, onLog, onOpen }) {
   const row = h(
     'button',
-    { class: 'row min-w-0 flex-1', onclick: onLog },
+    { class: 'row min-w-0 flex-1', onclick: onOpen },
     h(
       'div',
       { class: 'min-w-0 flex-1' },
@@ -84,7 +85,6 @@ function pickRow({ title, subtitle, totals, onLog, onAdd, onOpen }) {
       totals ? h('div', { class: 'mt-[4px]' }, macroLine(totals, { size: 12 })) : null
     )
   )
-  if (onOpen) longPress(row, onOpen)
 
   return h(
     'div',
@@ -94,8 +94,8 @@ function pickRow({ title, subtitle, totals, onLog, onAdd, onOpen }) {
       'button',
       {
         class: 'icon-btn icon-btn-sm mr-[20px] bg-canvas',
-        'aria-label': `Add ${title} to your plate`,
-        onclick: onAdd,
+        'aria-label': subtitle ? `Log ${title}, ${subtitle}` : `Log ${title}`,
+        onclick: onLog,
       },
       icon('plus', { size: 18, stroke: 2.25 })
     )
@@ -105,65 +105,25 @@ function pickRow({ title, subtitle, totals, onLog, onAdd, onOpen }) {
 /**
  * One favourite, as a card in the rail.
  *
- * Same three verbs as the Recents row below and in the same order — tap logs,
- * `+` stages on the plate, long-press opens. The rail changes the shape, not
- * the grammar, because a favourite and a recent are the same kind of thing and
- * learning the row twice would be the cost of the layout.
+ * The card itself is `foodTile`, shared with Today's Quick add rail. What stays
+ * here is the grammar — and it is now the SAME grammar as both the Recents row
+ * below and the Today rail: the body opens, the `+` logs.
  *
- * TWO buttons, not one nested in another. The card is a plain div: the tap
- * target for logging is a transparent overlay pinned to its edges, and the `+`
- * sits above it. A `<button>` inside a `<button>` is invalid, and the browsers
- * that tolerate it disagree about which one a tap belongs to.
- *
- * Calories only, which is what buys the short card.
- *
- * Sharing the bottom row with the `+` leaves 84px for numbers. `648 cal · 35 P`
- * measures about 82 and `1010 cal · 120 P` does not fit at all, so protein
- * could only be kept by letting the line wrap — which puts the height straight
- * back. Calories are the number the top of the day is counting; the full
- * `cal · P · F · C` is on the Recents row underneath and on the serving sheet a
- * long-press away.
- *
- * The serving comes off the face entirely and lives in the label a screen
- * reader gets. It is a constant for a given favourite, so it tells you nothing
- * at the moment you are choosing between four of them.
+ * The three surfaces disagreed for exactly one build. A favourite, a recent and
+ * a quick-add tile are the same kind of thing pointed at from three places, and
+ * a `+` that logged on one screen while staging a plate on another was one
+ * glyph with two consequences, one of them a write you cannot see happen.
  */
-function favCard({ title, subtitle, totals, onLog, onAdd, onOpen }) {
-  const hit = h('button', {
-    class: 'absolute inset-0 rounded-[inherit]',
-    'aria-label': subtitle ? `Log ${title}, ${subtitle}` : `Log ${title}`,
-    onclick: onLog,
+function favCard({ title, subtitle, totals, onLog, onOpen }) {
+  return foodTile({
+    title,
+    subtitle,
+    totals,
+    onBody: onOpen,
+    bodyLabel: `Change the amount of ${title}`,
+    onAction: onLog,
+    actionLabel: subtitle ? `Log ${title}, ${subtitle}` : `Log ${title}`,
   })
-  if (onOpen) longPress(hit, onOpen)
-
-  return h(
-    'div',
-    { class: 'fav-card' },
-    hit,
-    // `relative` lifts the content over the overlay so it is not dimmed or
-    // clipped by it; `pointer-events-none` hands the taps straight back.
-    h('div', { class: 'fav-name pointer-events-none relative' }, title),
-    // `mt-auto` on the row, so the numbers and the `+` land on the same
-    // baseline in every card whether the name above them took one line or two.
-    h(
-      'div',
-      { class: 'fav-action relative' },
-      h(
-        'div',
-        { class: 'pointer-events-none min-w-0' },
-        macroLine(totals, { size: 11, omit: ['protein', 'fat', 'carbs'] })
-      ),
-      h(
-        'button',
-        {
-          class: 'icon-btn icon-btn-sm shrink-0 bg-canvas',
-          'aria-label': `Add ${title} to your plate`,
-          onclick: onAdd,
-        },
-        icon('plus', { size: 17, stroke: 2.25 })
-      )
-    )
-  )
 }
 
 /**
@@ -295,8 +255,8 @@ export async function openAddFood({ date = state.date, block } = {}) {
        *
        * It was the third way to type numbers into this sheet, and the comment
        * defending it claimed the full editor was "one tap away from inside
-       * Quick add", which was simply not true — Quick add has never linked to
-       * it. What Quick add does have is a switch that saves what you typed as a
+       * Custom", which was simply not true — Custom has never linked to
+       * it. What Custom does have is a switch that saves what you typed as a
        * reusable food, and that covers the overlap: name, serving, macros. The
        * editor's extras are brand, barcode, label photo, the per-100 basis and
        * sodium, and every one of those is something you read off a packet.
@@ -320,8 +280,13 @@ export async function openAddFood({ date = state.date, block } = {}) {
               : `${qty(quantity)} ${unitLabel(unit, quantity)}`,
           totals: computeMacros(food, quantity, unit),
           onLog: () => logAndClose(() => quickLogFood(food, { date, block: targetBlock }), food.name),
-          onAdd: () => addToPlate([plateItemFor(food)], food.name),
-          onOpen: () => pushServing(ctx, { food, date, block: targetBlock }),
+          onOpen: () =>
+            pushServing(ctx, {
+              food,
+              date,
+              block: targetBlock,
+              onStage: (item) => addToPlate([item], food.name),
+            }),
         })
       }
 
@@ -409,8 +374,13 @@ export async function openAddFood({ date = state.date, block } = {}) {
                 totals: computeMacros(food, quantity, unit),
                 onLog: () =>
                   logAndClose(() => quickLogFood(food, { date, block: targetBlock }), food.name),
-                onAdd: () => addToPlate([plateItemFor(food)], food.name),
-                onOpen: () => pushServing(ctx, { food, date, block: targetBlock }),
+                onOpen: () =>
+                  pushServing(ctx, {
+                    food,
+                    date,
+                    block: targetBlock,
+                    onStage: (item) => addToPlate([item], food.name),
+                  }),
               })
             )
           } else {
@@ -428,11 +398,6 @@ export async function openAddFood({ date = state.date, block } = {}) {
                 totals,
                 onLog: () =>
                   logAndClose(() => logMeal(meal, { date, block: targetBlock }), meal.name),
-                // A meal on a plate expands into its items, so they can be
-                // adjusted individually rather than as one opaque lump.
-                onAdd: () => addToPlate([...meal.items], meal.name),
-                // Was the same call as onLog — the careful-looking control did
-                // the irreversible thing. It opens the meal now.
                 onOpen: () =>
                   pushMeal(ctx, {
                     meal,
@@ -440,6 +405,9 @@ export async function openAddFood({ date = state.date, block } = {}) {
                     block: targetBlock,
                     onLogged: ({ block }) =>
                       logAndClose(() => logMeal(meal, { date, block }), meal.name),
+                    // A meal on a plate expands into its items, so they can be
+                    // adjusted individually rather than as one opaque lump.
+                    onStage: () => addToPlate([...meal.items], meal.name),
                   }),
               })
             )
@@ -455,7 +423,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
             // pinned there is no row to scroll, so the empty state goes back to
             // a full-width card and says what the rail would have held.
             favNodes.length
-              ? h('div', { class: 'fav-rail' }, favNodes)
+              ? h('div', { class: 'food-rail' }, favNodes)
               : card(emptyRow('Pin the things you eat constantly. They stay put.'))
           )
         )
@@ -678,14 +646,23 @@ export async function openAddFood({ date = state.date, block } = {}) {
       const routeRow = h(
         'div',
         { class: 'flex gap-[10px]' },
-        // Quick add rather than the full editor, because over a month you type
-        // numbers in far more often than you author a food — and the two read
-        // as duplicates side by side. The editor is still one tap away, from
-        // inside Quick add or from the link below. The mock calls this slot
-        // "Custom"; the word is the only thing that differs.
+        // Typing the numbers yourself, rather than the full food editor: over a
+        // month you type numbers in far more often than you author a food, and
+        // the two read as duplicates side by side. The editor is still one tap
+        // away, from inside this panel's save-as-a-food switch.
+        //
+        // **Called "Custom", which is what the mock called it all along.** It
+        // shipped as "Quick add" for several versions, and that name stopped
+        // being available the moment Today grew a Quick add rail — two
+        // different things a tap apart cannot share a word, and the rail has
+        // the better claim to it. A rail of foods you have already eaten IS a
+        // quick add; typing four numbers into a form is a custom entry, which
+        // is also the honest pairing with Scan beside it. Both buttons are
+        // routes for a food the app has never seen: one reads the packet, one
+        // is you typing it.
         actionButton({
           iconName: 'custom',
-          label: 'Quick add',
+          label: 'Custom',
           onclick: () => pushQuickAdd(ctx, { date, block: targetBlock }),
         }),
         // Solid one goes on the right, per the mock. It is also the side a
@@ -715,7 +692,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
         // action in progress, and it should not have to be scrolled to.
         plateSlot,
         routeRow,
-        // Under the routes rather than above them. Scan and Quick add are the
+        // Under the routes rather than above them. Scan and Custom are the
         // two things you do to a food the app has never seen; this searches the
         // ones it has. Putting it first would open the sheet with the general
         // case above the specific ones.
