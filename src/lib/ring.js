@@ -199,35 +199,71 @@ function span(from, to, stroke) {
  */
 const RAMP_STEPS = 32
 
+/**
+ * Whether the lap deepens along its length, or stays the first lap's colour and
+ * is marked only by its cap and the gap behind it.
+ *
+ * One flag, so the two can be compared as themselves rather than as one of them
+ * plus a broken imitation of the other.
+ */
+const RAMPED = true
+
+/** A disc at `at`, which is what a zero-length round dash renders as. */
+function capDisc(at, colour) {
+  return s(
+    'circle',
+    onRing({
+      stroke: colour,
+      'stroke-linecap': 'round',
+      'stroke-dasharray': `0.01 ${C}`,
+      'stroke-dashoffset': -at,
+    })
+  )
+}
+
+/**
+ * The second lap, painted at exactly the length it is.
+ *
+ * **The cap is geometry, not a mask.** Every previous build produced the round
+ * end by masking a longer strand with a disc, and every one of them broke: the
+ * mask's disc reaches half a stroke past the cap, so the strand had to overrun
+ * to give it something to round, and the moment anything changed how far the
+ * strand was painted the end came back square with a bite out of it. Painting a
+ * disc AT the end instead cannot fail that way — there is nothing to be out of
+ * step with.
+ *
+ * Losing the mask loses the growth animation for this lap; it now appears
+ * rather than unwinding out of the first. That is a real trade and it is the
+ * right way round: the first lap still animates, and a mark that is correct
+ * every frame beats one that is animated and occasionally square.
+ *
+ * The ramp itself runs the whole length of the lap, so the strand always leaves
+ * 12 o'clock at the colour underneath it and always reaches the full edge shade
+ * exactly at the cap. A fixed-length blend leaves a flat field past it, and at
+ * anything over about 150% that flat field's boundary is the only visual event
+ * left — which is the seam the blend existed to remove, moved further round.
+ *
+ * Segments rather than an SVG gradient because SVG gradients are linear and
+ * this ramp is angular. Banding scales with the step BETWEEN segments, not
+ * their width, so a fixed range over a fixed count is 0.0044 apiece at any lap
+ * length — under the threshold at every size this is drawn at.
+ */
 function overStrand(macro, overLen) {
   const fill = macroColor(macro)
   const edge = macroEdgeColor(macro)
-  // Below the floor the lap is a stub and the ramp has nowhere to run; paint it
-  // flat rather than compress the whole range into a few pixels.
   const len = Math.max(overLen, MIN_ARC)
-  const step = len / RAMP_STEPS
 
+  if (!RAMPED) return [span(0, len, fill), capDisc(len, fill)]
+
+  const step = len / RAMP_STEPS
   const arcs = []
   for (let i = 0; i < RAMP_STEPS; i++) {
     const mix = Math.round(((i + 1) / RAMP_STEPS) * 100)
     arcs.push(span(i * step, (i + 1) * step, `color-mix(in srgb, ${edge} ${mix}%, ${fill})`))
   }
-
-  /**
-   * Half a stroke of overrun past the end, in the finished shade.
-   *
-   * The mask's round tip is a disc centred ON the cap, so it reaches STROKE/2
-   * beyond it — and a mask can only round paint that is there. While the strand
-   * was painted round the whole circle there always was some; the moment the
-   * ramp became proportional and stopped at the cap, the disc had nothing to
-   * uncover on its far side and the end came out square with a bite taken out
-   * of it. This is the paint the cap is cut from.
-   *
-   * Clamped at C so it cannot wrap. A dash that ran past the end of the path
-   * would reappear at 12 o'clock, where the mask body is also revealing, and
-   * paint the darkest shade on the strand over the lightest part of it.
-   */
-  arcs.push(span(len, Math.min(C, len + STROKE), edge))
+  // The cap takes the shade the ramp finished on, so the end of the strand is
+  // one colour rather than a round tip in a slightly different one.
+  arcs.push(capDisc(len, edge))
   return arcs
 }
 
@@ -281,58 +317,8 @@ function ringSvg({ ratio, macro, key, animate }) {
 
   const uid = hasOver ? ++maskUid : null
 
-  // The second lap is painted whole and uncovered by this, so the colour ramp
-  // stays put on the strand instead of stretching with it.
-  //
-  // Two pieces, because the ends want different caps and a stroke only gets
-  // one. The body is square at BOTH ends: the strand leaves the first lap where
-  // the first lap stopped, so a cap there would be a second nose on a strand
-  // that never ended. A round one is worse than redundant — it reaches half a
-  // stroke BACKWARDS past 12 o'clock, and on a closed path that is the far end
-  // of the ring, where it uncovered a 5px patch of the darkest paint on the
-  // strand and hung it at 11 o'clock unattached to anything.
-  //
-  // The tip is then a zero-length round dash, which renders as a disc, parked
-  // on the leading end. That disc is the cap the whole mark ends on.
-  const revealBody = hasOver
-    ? s(
-        'circle',
-        onRing({
-          class: 'ring-arc',
-          stroke: '#fff',
-          'stroke-linecap': 'butt',
-          'stroke-dasharray': C,
-          'stroke-dashoffset': C - overFrom,
-        })
-      )
-    : null
-
-  const revealTip = hasOver
-    ? s(
-        'circle',
-        onRing({
-          class: 'ring-arc',
-          stroke: '#fff',
-          'stroke-linecap': 'round',
-          'stroke-dasharray': `0.01 ${C}`,
-          'stroke-dashoffset': -overFrom,
-        })
-      )
-    : null
-
-  const overMask = hasOver
-    ? s(
-        'mask',
-        { id: refId('over', uid), maskUnits: 'userSpaceOnUse' },
-        s('rect', { x: 0, y: 0, width: SIZE, height: SIZE, fill: '#000' }),
-        revealBody,
-        revealTip
-      )
-    : null
-
   // Black paints the hole, white keeps the rest. It travels with the cap it
-  // outlines, on the same curve and duration, so the break stays welded to it
-  // the whole way round.
+  // outlines, on the same curve and duration, so the break stays welded to it.
   const gap = hasOver
     ? s(
         'circle',
@@ -341,7 +327,7 @@ function ringSvg({ ratio, macro, key, animate }) {
           stroke: '#000',
           'stroke-linecap': 'round',
           'stroke-dasharray': `${GAP} ${C - GAP}`,
-          'stroke-dashoffset': gapAt(overFrom),
+          'stroke-dashoffset': gapAt(overTo),
         })
       )
     : null
@@ -358,18 +344,13 @@ function ringSvg({ ratio, macro, key, animate }) {
   // Nothing logged draws the track alone. An empty ring is the zero state and
   // does not need a marker to say so.
   const base = hasBase ? lap(macroColor(macro), baseFrom, hasOver ? refId('gap', uid) : null) : null
-  const over = hasOver
-    ? s('g', { mask: `url(#${refId('over', uid)})` }, ...overStrand(macro, overTo))
-    : null
+  // Painted at its true length, so nothing here depends on a mask agreeing with
+  // it. `overTo` rather than `overFrom`: this lap does not grow, it arrives.
+  const over = overTo > 0 ? s('g', { class: 'ring-lap' }, ...overStrand(macro, overTo)) : null
 
   if (animate) {
     requestAnimationFrame(() => {
       if (base && baseFrom !== baseTo) base.style.strokeDashoffset = String(C - baseTo)
-      if (overFrom !== overTo) {
-        revealBody.style.strokeDashoffset = String(C - overTo)
-        revealTip.style.strokeDashoffset = String(-overTo)
-        gap.style.strokeDashoffset = String(gapAt(overTo))
-      }
     })
   }
 
@@ -383,7 +364,6 @@ function ringSvg({ ratio, macro, key, animate }) {
       class: 'block',
     },
     gapMask,
-    overMask,
     track,
     // Drawn in order, so the strand continues over the lap below it and ends on
     // its own cap, which is the only thing marking where it crossed.
