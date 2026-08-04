@@ -261,31 +261,30 @@ for (const m of MACROS) {
 }
 
 /**
- * The EDGE is a mark too, and nothing measured it as one until v1.1.9.
+ * The EDGE is NOT measured against a card, and the reason is worth writing down
+ * because getting it wrong shipped a bug.
  *
- * It used to be type and a chip behind white text, both of which the AA rows
- * above cover. Then the ring's second lap started painting with it, and a lap
- * is a mark — so it owes the same 3:1 as the fill does. In dark mode it was not
- * paying: the light-mode edges run 1.91:1 (protein) to 2.95:1 (fat) on the dark
- * card, which is why the dark theme now overrides the edge as well as the text.
+ * v1.1.7 made the edge the ring's second lap, and v1.2.0 concluded that a lap
+ * is a mark and therefore owes 3:1 against the surface — which the light-mode
+ * edges fail on the dark card at 1.91:1 to 2.95:1. That produced a dark theme
+ * where the lap got BRIGHTER as it went over while light got darker, so the one
+ * state the app exists to show meant two opposite things depending on theme.
+ *
+ * The ground was wrong. **A second lap only exists once the first lap has
+ * closed**, so it is painted on top of the fill every time and never touches
+ * the card. What governs it is the separation from the fill, below.
+ *
+ * The light edge still owes 4.5:1 as TYPE — `--color-X-text` aliases it — and
+ * the AA rows above already measure exactly that.
  */
-for (const m of MACROS) atLeast(`${m} edge as a mark on a card`, token(`${m}-edge`), token('surface'), MARK)
-for (const m of MACROS) {
-  atLeast(
-    `${m} edge as a mark on a dark card`,
-    token(`${m}-edge`, darkBlock),
-    token('surface', darkBlock),
-    MARK
-  )
-}
 
 /**
  * The two shades of a macro have to be far enough apart to read as two.
  *
  * This is the ring's whole argument — the second lap is the first lap's colour
- * moved — so if a pair is too close the mark stops saying anything. Measured as
- * a plain contrast ratio between the pair, in both themes, because the eye is
- * comparing them to each other here rather than to any ground.
+ * moved — so if a pair closes up the mark stops saying anything. A plain
+ * contrast ratio between the pair, in both themes, because here the eye is
+ * comparing them to each other and to nothing else.
  */
 const PAIR = 1.55
 for (const m of MACROS) atLeast(`${m} fill vs edge`, token(m), token(`${m}-edge`), PAIR)

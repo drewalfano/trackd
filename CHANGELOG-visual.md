@@ -6,6 +6,31 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.2.2 — over darkens in dark mode too
+
+Found on device, in the app, which is the only place it could have been found:
+the ring's second lap was getting BRIGHTER as it went over in dark mode and
+darker in light. One state, two opposite marks, depending on the theme.
+
+v1.2.0 did that on purpose and the purpose was wrong. The reasoning was that the
+edge had become a mark, a mark owes 3:1 against what it sits on, and the light
+edges fail that on the dark card at 1.91:1 to 2.95:1.
+
+**The ground was wrong.** A second lap only exists once the first lap has
+closed, so it is painted on top of the fill every time and never touches the
+card at all. The contrast that governs it is the separation from the fill, and
+measured that way a darker lap sits at 1.75–1.85 in dark against the brighter
+one's 1.74–1.84. The inversion was buying nothing, and it cost the one property
+that mattered: that the mark means the same thing wherever you see it.
+
+Dark edges are now each theme's own fill at the same −0.14 step. The test that
+argued for the old values is gone, replaced by the note explaining which ground
+applies — a passing test measuring the wrong thing is worse than no test, and
+this one passed all the way to a device. 123 → 115 assertions, and the eight
+that went were the eight that were wrong.
+
+---
+
 ## v1.2.0 — the drawn colours, and the rule that was stopping them
 
 From use — [NOTES-use-audit.md](NOTES-use-audit.md), U7. Three notes on one

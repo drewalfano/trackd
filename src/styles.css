@@ -289,31 +289,29 @@
   --color-carbs: #c824a2;
 
   /**
-   * The EDGE lifts here too, and it did not used to.
+   * The EDGE darkens here exactly as it does in light. Same −0.14 step, taken
+   * off THIS theme's fill.
    *
-   * That was fine while the edge was only ever type or a chip behind white
-   * text. v1.1.7 made it a MARK — the second lap of the ring — and a mark owes
-   * 3:1 against what it sits on. The light-mode edges run 1.91:1 (protein) to
-   * 2.95:1 (fat) on this card: all four under, and the coil in dark mode was
-   * darker paint on a dark ground.
+   * v1.2.0 had it lifting instead, so the ring's second lap got brighter as it
+   * lapped in dark mode and darker in light. The reasoning was that the edge had
+   * become a MARK and a mark owes 3:1 against what it sits on, and the light
+   * edges run 1.91:1 to 2.95:1 on this card.
    *
-   * So the step inverts with the theme. Light: the strand DARKENS as it laps.
-   * Dark: it BRIGHTENS. Both say the same thing — the strand moved away from
-   * the shade it started at — and each does it in the direction its ground
-   * leaves room for.
+   * **The ground was wrong.** The second lap only exists once the first lap has
+   * closed, so it is always painted ON TOP of the fill and never on the card at
+   * all. The number that governs it is the separation from the fill, not the
+   * contrast against a surface it never touches. Measured against the fill, a
+   * darker lap sits at 1.75–1.85 here — indistinguishable from the 1.74–1.84
+   * the brighter one gave, so the inversion was buying nothing and costing the
+   * one thing that matters: the mark meant the same thing in both themes.
    *
-   * The step is +0.15 against light's −0.14, and the asymmetry is measured
-   * rather than eyeballed. Matching the ΔL exactly gave a visibly weaker pair
-   * here — 1.56:1 on kcal against 1.82:1 in light — because contrast ratios
-   * compress as luminance rises, so the same lightness move buys less
-   * separation going up than coming down. 0.15 lands the pairs at 1.74–1.83,
-   * alongside light's 1.77–1.83. The constant that matters is the separation,
-   * not the number that produces it, and `npm test` measures the separation.
+   * Over now reads the same way everywhere. The strand deepens as it laps, in
+   * light and in dark, and `npm test` measures the pair rather than the card.
    */
-  --color-kcal-edge: #5ad098;
-  --color-protein-edge: #6d9bff;
-  --color-fat-edge: #ffb482;
-  --color-carbs-edge: #fd5ed2;
+  --color-kcal-edge: #007149;
+  --color-protein-edge: #173ea7;
+  --color-fat-edge: #a95400;
+  --color-carbs-edge: #8d0071;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -332,10 +330,10 @@
     --color-protein: #3c6ad6;
     --color-fat: #e67500;
     --color-carbs: #c824a2;
-    --color-kcal-edge: #5ad098;
-    --color-protein-edge: #6d9bff;
-    --color-fat-edge: #ffb482;
-    --color-carbs-edge: #fd5ed2;
+    --color-kcal-edge: #007149;
+    --color-protein-edge: #173ea7;
+    --color-fat-edge: #a95400;
+    --color-carbs-edge: #8d0071;
   }
 }
 
