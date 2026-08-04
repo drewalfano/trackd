@@ -102,6 +102,33 @@ const NS = Math.random().toString(36).slice(2, 8)
 let maskUid = 0
 const refId = (kind, uid) => `ring-${kind}-${NS}-${uid}`
 
+/**
+ * The gap that outlines the second lap's cap where it crosses the first.
+ *
+ * Cut as a HOLE, not painted in the background colour, so the ring does not
+ * need to know what it is sitting on. Painting it would tie the component to
+ * the day card's surface and break the first time a ring appeared elsewhere.
+ *
+ * Round-capped and starting level with the strand's own cap, so the two round
+ * ends nest and the break reads as an outline hugging the cap. Square ends cut
+ * a straight slot across the ring instead, which leaves first-lap colour in the
+ * corners either side and reads as a nick rather than as one strand lying over
+ * another — that was the first build, and it was invisible at 84px.
+ *
+ * This is the third time the crossing has been marked and the second time by
+ * this gap: shadow, then this, then nothing, then this again. What settled it
+ * was the mockup — the strand needs a break behind its cap or the cap has
+ * nothing to sit proud of.
+ */
+const GAP = 2
+
+/**
+ * Where the hole sits: level with the strand's cap, so their round ends nest.
+ * Offsetting by the cap radius instead puts the hole clear of the cap, which is
+ * what turns an outline into a slot.
+ */
+const gapAt = (overLen) => -overLen
+
 /** Arc length for a percentage, with the zero state and the floor applied. */
 function arcLength(pct) {
   if (pct <= 0) return 0
@@ -303,9 +330,34 @@ function ringSvg({ ratio, macro, key, animate }) {
       )
     : null
 
+  // Black paints the hole, white keeps the rest. It travels with the cap it
+  // outlines, on the same curve and duration, so the break stays welded to it
+  // the whole way round.
+  const gap = hasOver
+    ? s(
+        'circle',
+        onRing({
+          class: 'ring-arc',
+          stroke: '#000',
+          'stroke-linecap': 'round',
+          'stroke-dasharray': `${GAP} ${C - GAP}`,
+          'stroke-dashoffset': gapAt(overFrom),
+        })
+      )
+    : null
+
+  const gapMask = hasOver
+    ? s(
+        'mask',
+        { id: refId('gap', uid), maskUnits: 'userSpaceOnUse' },
+        s('rect', { x: 0, y: 0, width: SIZE, height: SIZE, fill: '#fff' }),
+        gap
+      )
+    : null
+
   // Nothing logged draws the track alone. An empty ring is the zero state and
   // does not need a marker to say so.
-  const base = hasBase ? lap(macroColor(macro), baseFrom, null) : null
+  const base = hasBase ? lap(macroColor(macro), baseFrom, hasOver ? refId('gap', uid) : null) : null
   const over = hasOver
     ? s('g', { mask: `url(#${refId('over', uid)})` }, ...overStrand(macro, overTo))
     : null
@@ -316,6 +368,7 @@ function ringSvg({ ratio, macro, key, animate }) {
       if (overFrom !== overTo) {
         revealBody.style.strokeDashoffset = String(C - overTo)
         revealTip.style.strokeDashoffset = String(-overTo)
+        gap.style.strokeDashoffset = String(gapAt(overTo))
       }
     })
   }
@@ -329,6 +382,7 @@ function ringSvg({ ratio, macro, key, animate }) {
       'aria-hidden': 'true',
       class: 'block',
     },
+    gapMask,
     overMask,
     track,
     // Drawn in order, so the strand continues over the lap below it and ends on
