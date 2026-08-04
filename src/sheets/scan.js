@@ -1,10 +1,9 @@
 import { h, haptic } from '../lib/dom.js'
 import { findFoodByBarcode } from '../lib/db.js'
-import { fetchByBarcode, isOnline } from '../lib/off.js'
+import { adoptDraft, fetchByBarcode, isOnline } from '../lib/off.js'
 import { card, notice, textInput, labelledField } from '../lib/ui.js'
 import { pushServing } from './serving.js'
 import { pushCustom } from './custom.js'
-import { adoptDraft } from './search.js'
 
 /**
  * Barcode scanning.

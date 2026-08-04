@@ -57,8 +57,15 @@ const P = {
   check: '<path d="M20 6L9 17l-5-5"/>',
 
   search: '<circle cx="11" cy="11" r="7"/><path d="M20.5 20.5L16.5 16.5"/>',
+  /**
+   * Brackets with bars inside, per the mock. The single horizontal line this
+   * used to carry was a scanner beam — it says "a laser passes over this",
+   * which is a picture of the machine rather than of the thing you point the
+   * phone at. The bars say barcode, which is what someone is looking for when
+   * they hold a packet up.
+   */
   scan:
-    '<path d="M4 8.5V6a2 2 0 012-2h2.5M15.5 4H18a2 2 0 012 2v2.5M20 15.5V18a2 2 0 01-2 2h-2.5M8.5 20H6a2 2 0 01-2-2v-2.5"/><path d="M4 12h16"/>',
+    '<path d="M4 8.5V6a2 2 0 012-2h2.5M15.5 4H18a2 2 0 012 2v2.5M20 15.5V18a2 2 0 01-2 2h-2.5M8.5 20H6a2 2 0 01-2-2v-2.5"/><path d="M8.5 8.5v7M11.5 8.5v7M14.5 8.5v7M17 8.5v7"/>',
   custom: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 9v6M9 12h6"/>',
   barcode: '<path d="M4 6v12M8 6v12M11.5 6v12M15 6v12M20 6v12"/>',
   camera:

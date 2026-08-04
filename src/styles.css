@@ -411,6 +411,22 @@
     /* Figma: the blur rect is 402 x 159, bottom-anchored. */
     --nav-fade: 159px;
   }
+
+  /**
+   * WebKit draws its own clear button inside `type="search"`, and both search
+   * fields in the app already have one — a proper `.icon-btn` sized to the
+   * app's target and coloured with its ink. Left alone the two sit side by
+   * side, which reads as two different things to press.
+   *
+   * `type="search"` stays for what it actually buys: the search keyboard on
+   * iOS, `enterkeyhint`, and the right role to assistive tech. The native
+   * decoration is the only part being declined.
+   */
+  input[type='search']::-webkit-search-cancel-button,
+  input[type='search']::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
 }
 
 @layer components {
@@ -491,9 +507,10 @@
     height: 48px;
   }
 
-  /* Section headings — "Log", "Your Favourites", "Morning". Bold ink, not the
-     small muted caps of v1; the mockups treat these as real headings. */
-  .section-label {
+  /* Bold ink, not the small muted caps of v1; the mockups treat these as real
+     headings. `.section-label` is the 16px caption job — see below. */
+  .section-label,
+  .section-title {
     font-size: 16px;
     font-weight: 600;
     color: var(--color-ink);
@@ -516,7 +533,19 @@
    * This is the local fix for U4. The scale is the real one: five steps for the
    * whole app is why a heading and a caption were the same size in the first
    * place, and that is Phase 4.
+   *
+   * `.section-title` finishes the job the `.section-head` variant started.
+   * Scoping 20px to `.section-head` meant a heading only got its size if it
+   * happened to sit in a flex row with an action beside it — "Log" is 20
+   * because it has a Full Log button next to it, and "Recents", "Data" and
+   * "Targets" were 16 for the sole reason that nothing sits to their right.
+   * That is a layout container deciding a type size, which is why the same kind
+   * of heading came out two different sizes across the app.
+   *
+   * Both selectors, one declaration: a heading is 20 whether or not it has
+   * company on its row.
    */
+  .section-title,
   .section-head .section-label {
     font-size: 20px;
     letter-spacing: -0.01em;
@@ -782,10 +811,6 @@
     transition: stroke-dashoffset 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
-  /* The gap the second lap cuts in the first travels on the same curve as the
-     lap that cuts it, which is what `.ring-arc` above is for — see GAP in
-     ring.js for why it is a hole rather than a shadow. */
-
   /* ------------------------------------------------------------------ bars */
 
   /**
@@ -882,9 +907,166 @@
     opacity: 0.3;
   }
 
+  /**
+   * A 38px control with a 44px target.
+   *
+   * The two numbers are answering different questions and had been collapsed
+   * into one. 38 is what the control should LOOK like beside a 48px row — a
+   * full 44px circle next to 16px type reads as a second button rather than as
+   * something the row owns. 44 is the smallest region a thumb lands on
+   * reliably, which is a fact about hands and not about the layout.
+   *
+   * The pseudo-element separates them: the circle stays 38, the region that
+   * responds to a tap is 44, and nothing in the layout moves because the
+   * expansion is absolutely positioned. It matters most on the `+` of a
+   * favourite, where a near miss is not a free mistake — the neighbouring
+   * target logs food you did not eat.
+   *
+   * Safe beside a neighbour: `.row` gaps are 10, so two of these still leave
+   * 4px of dead space between their targets rather than overlapping.
+   */
   .icon-btn-sm {
     width: 38px;
     height: 38px;
+    position: relative;
+  }
+  .icon-btn-sm::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+  }
+
+  /* ------------------------------------------------------ favourites rail */
+
+  /**
+   * The horizontal rail of favourites on the add sheet.
+   *
+   * It bleeds the body's own 20px gutter and pays it back as padding, so the
+   * last card runs off the screen edge instead of stopping neatly short of it.
+   * The half-card peeking past the edge is the entire scroll affordance —
+   * there is no arrow, no dots, and nothing else on the sheet says the row
+   * moves. Cards stopping flush at 20 would read as a row that simply ends.
+   *
+   * `proximity` snapping, not `mandatory`: the rail is a shortcut, and a flick
+   * that lands between two cards should stay where it was thrown rather than
+   * being dragged to the nearest stop.
+   */
+  .fav-rail {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+    margin-inline: -20px;
+    padding-inline: 20px;
+    /**
+     * Without this the rail loads already scrolled by 20.
+     *
+     * A snap position is measured against the scrollport, and the scrollport
+     * ignores the container's own padding — so "align the first card to the
+     * start" means align it to x=0, and the browser helpfully scrolls the
+     * gutter away to get there. `scroll-padding` is the property that tells
+     * snapping about the inset, and it has to repeat the number rather than
+     * inherit it.
+     */
+    scroll-padding-inline: 20px;
+    /* The peek is the scroll affordance. A scrollbar sitting under a 123px row
+       of cards is a second one, drawn by the platform, in a place the design
+       does not have a line. */
+    scrollbar-width: none;
+  }
+  .fav-rail::-webkit-scrollbar {
+    display: none;
+  }
+  .fav-rail > * {
+    scroll-snap-align: start;
+  }
+
+  /**
+   * One favourite. Fixed width, because the whole point of the rail is that a
+   * given food is always in the same place — a card that sized to its own name
+   * would move every time the list above it changed.
+   *
+   * 150 is set by the longest thing that has to stay readable, not by how many
+   * cards fit. At 130 the two-line clamp was cutting real food names in half,
+   * and a favourite you have to decipher is slower than the search you were
+   * avoiding. Three cards no longer fit across a 375 screen at this width; the
+   * fourth peeking is better than four legible-in-theory.
+   *
+   * ~96 tall, down from 141. The height came out of the `+`, which used to have
+   * a row to itself under the numbers; it now shares the bottom row with them.
+   *
+   * The corner `+` was tried as an absolutely positioned overlay first, which
+   * is what the mock draws and reaches about 80. It cannot be spaced properly:
+   * at 80 the button's top edge sits above the name's second line, so a long
+   * name runs underneath it, and the only way to keep them apart is the height
+   * the overlay was there to save. A real bottom row is the same picture — `+`
+   * in the bottom-right corner, numbers to its left — and it cannot collide.
+   */
+  .fav-card {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 6px;
+    width: 150px;
+    padding: 12px;
+    text-align: left;
+    background: var(--color-surface);
+    border-radius: var(--radius-card);
+    transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fav-card:active {
+    transform: scale(0.97);
+  }
+
+  /**
+   * Numbers left, `+` right, both bottom.
+   *
+   * `flex-end`, not `center`. Centring lines up the two boxes' middles, and the
+   * two boxes are 15px and 32px tall — so the number floated above the button's
+   * midline with nothing under it to explain why. Sitting them on a shared
+   * bottom edge gives the row one line to be read along, which is the line the
+   * card's bottom padding already draws.
+   *
+   * 32 rather than the 38 a `.icon-btn-sm` draws elsewhere: this one sits
+   * beside an 11px number on a 150px card rather than beside 16px type on a
+   * full-width row, and 38 there reads as the card's main event. The tap target
+   * does not shrink with it — `.icon-btn-sm` keeps its 44 either way.
+   */
+  .fav-action {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: auto;
+  }
+  .fav-action .icon-btn-sm {
+    width: 32px;
+    height: 32px;
+  }
+
+  /**
+   * Three lines, then ellipsis. Not `truncate`: a single clipped line turns
+   * "Homemade Spaghetti & Meatballs" into "Homemade Spagh…", which is the same
+   * word as three other things in a real library.
+   *
+   * Two, not three. Three fits one more real name — "Homemade Spaghetti &
+   * Meatballs" lands its last word on line three — but every card in the rail
+   * equalises to the tallest, so one long name spends 18px on all of them. Two
+   * lines is the trade the shorter card is made of.
+   */
+  .fav-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.25;
   }
 
   /**

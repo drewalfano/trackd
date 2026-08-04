@@ -468,6 +468,10 @@ export function settingsScreen() {
         storageEstimate(),
       ])
 
+      // Dev only, and compiled out with the row that reads it.
+      const sampleLoaded =
+        import.meta.env.DEV && foods.some((f) => String(f.id).startsWith('sample-'))
+
       /* --------------------------------------------------------- targets */
 
       const targets = { ...settings.targets }
@@ -747,7 +751,7 @@ export function settingsScreen() {
         h(
           'section',
           { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-label' }, 'Targets'),
+          h('div', { class: 'section-title' }, 'Targets'),
           h(
             'p',
             { class: 'px-0 text-[12px] leading-snug text-muted' },
@@ -776,7 +780,7 @@ export function settingsScreen() {
         h(
           'section',
           { class: 'flex flex-col gap-[20px]' },
-          h('div', { class: 'section-label' }, 'About you'),
+          h('div', { class: 'section-title' }, 'About you'),
           h(
             'p',
             { class: 'px-0 text-[12px] leading-snug text-muted' },
@@ -892,7 +896,7 @@ export function settingsScreen() {
         h(
           'section',
           { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-label' }, 'Foods'),
+          h('div', { class: 'section-title' }, 'Foods'),
           card(
             listRow({
               title: 'Food library',
@@ -918,7 +922,7 @@ export function settingsScreen() {
         h(
           'section',
           { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-label' }, 'Preferences'),
+          h('div', { class: 'section-title' }, 'Preferences'),
           card(
             // One control for both heights and weights. It was two — this row
             // and a kg/lb row under it — while onboarding set both from this
@@ -974,7 +978,7 @@ export function settingsScreen() {
         h(
           'section',
           { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-label' }, 'Data'),
+          h('div', { class: 'section-title' }, 'Data'),
           card(
             listRow({
               title: 'Export data',
@@ -1007,7 +1011,32 @@ export function settingsScreen() {
                   rerender()
                 }
               },
-            })
+            }),
+            /**
+             * Dev only. `import.meta.env.DEV` is a literal at build time, so
+             * the installed app gets `false && …` and the bundler drops both
+             * this row and the module behind it — the filler cannot ship.
+             *
+             * It lives under Data rather than in a console command because the
+             * person who needs it is looking at the design, not at a terminal.
+             */
+            import.meta.env.DEV
+              ? listRow({
+                  title: sampleLoaded ? 'Remove sample favourites' : 'Load sample favourites',
+                  subtitle: sampleLoaded
+                    ? 'Takes back exactly what it added'
+                    : 'Six foods, pinned, for looking at the rail',
+                  leading: icon('star', { size: 19, class: 'text-muted' }),
+                  onclick: async () => {
+                    const { loadSampleFoods, clearSampleFoods } = await import(
+                      '../lib/sampleData.js'
+                    )
+                    const n = sampleLoaded ? await clearSampleFoods() : await loadSampleFoods()
+                    toast(sampleLoaded ? `Removed ${n} sample foods` : `Added ${n} sample foods`)
+                    rerender()
+                  },
+                })
+              : null
           ),
           h(
             'p',

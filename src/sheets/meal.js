@@ -100,7 +100,7 @@ export function mealPanel({ meal, rows, settings, date, block: initialBlock, onL
         h(
           'div',
           { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-label' }, pluralize(rows.length, 'item')),
+          h('div', { class: 'section-title' }, pluralize(rows.length, 'item')),
           card(
             rows.map(({ item, food, macros }) =>
               h(

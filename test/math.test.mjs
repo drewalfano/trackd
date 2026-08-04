@@ -270,9 +270,14 @@ for (const m of MACROS) {
  * where the lap got BRIGHTER as it went over while light got darker, so the one
  * state the app exists to show meant two opposite things depending on theme.
  *
- * The ground was wrong. **A second lap only exists once the first lap has
- * closed**, so it is painted on top of the fill every time and never touches
- * the card. What governs it is the separation from the fill, below.
+ * The ground was wrong. **Overage only exists once the fill has closed**, so it
+ * is painted on top of the fill every time and never touches the card. What
+ * governs it is the separation from the fill, below.
+ *
+ * The ring's second lap was removed in v1.2.5 — see the note at the top of
+ * `lib/ring.js`. The rule outlives it: `bar-over` is the same shade in the same
+ * relationship, a segment butted inside the fill, and it is what these rows
+ * measure now.
  *
  * The light edge still owes 4.5:1 as TYPE — `--color-X-text` aliases it — and
  * the AA rows above already measure exactly that.
@@ -281,7 +286,7 @@ for (const m of MACROS) {
 /**
  * The two shades of a macro have to be far enough apart to read as two.
  *
- * This is the ring's whole argument — the second lap is the first lap's colour
+ * This is the bar's whole argument for overage — the chip is the fill's colour
  * moved — so if a pair closes up the mark stops saying anything. A plain
  * contrast ratio between the pair, in both themes, because here the eye is
  * comparing them to each other and to nothing else.

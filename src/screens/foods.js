@@ -38,7 +38,7 @@ const SORTS = {
 
 export function foodsScreen() {
   return createScreen(
-    async () => {
+    async ({ rerender }) => {
       const foods = await listFoods()
 
       /**
@@ -53,7 +53,7 @@ export function foodsScreen() {
        * field is not a search box.
        *
        * The Open Food Facts sheet already worked this way — see
-       * `run()` in sheets/search.js. This makes the two agree.
+       * the add sheet's own search. This makes the two agree.
        *
        * No debounce here, unlike that sheet. This filters an array already in
        * memory, so there is nothing to wait for; a debounce would only add lag.
@@ -170,9 +170,45 @@ export function foodsScreen() {
         ),
         h(
           'div',
-          { class: 'px-0' },
-          h('h1', { class: 'text-title font-semibold leading-tight' }, 'Food library'),
-          h('p', { class: 'text-[12px] text-muted' }, pluralize(foods.length, 'food'))
+          { class: 'flex items-start gap-[10px] px-0' },
+          h(
+            'div',
+            { class: 'min-w-0 flex-1' },
+            h('h1', { class: 'text-title font-semibold leading-tight' }, 'Food library'),
+            h('p', { class: 'text-[12px] text-muted' }, pluralize(foods.length, 'food'))
+          ),
+          /**
+           * The full editor's front door, and the only one that is not holding
+           * a packet already.
+           *
+           * It used to be a link at the bottom of the add sheet, where it was
+           * the third route to typing numbers on a screen that already had
+           * Quick add. Every other way into the editor arrives from something
+           * specific — an unknown barcode, a scan with no nutrition data, a
+           * search that found nothing — and this is the one remaining case:
+           * deciding, cold, to put a food in the library. That decision belongs
+           * on the screen that holds the library, next to the count of what is
+           * in it, rather than on the sheet used to log lunch.
+           *
+           * A surface button, NOT the ink fill it was first given. Solid ink
+           * plus a `+` is the floating button in the corner of every screen,
+           * and that one means log something now. Two identical dark circles
+           * doing different things on one screen is worse than no button here
+           * at all — this is the ordinary `.icon-btn` every other control in
+           * the app uses, and the FAB keeps its fill to itself.
+           */
+          h(
+            'button',
+            {
+              class: 'icon-btn shrink-0',
+              'aria-label': 'New food',
+              onclick: async () => {
+                await openCustomFood({ mode: 'create' })
+                rerender()
+              },
+            },
+            icon('plus', { size: 20, stroke: 2.25 })
+          )
         ),
 
         search,

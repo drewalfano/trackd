@@ -1,5 +1,6 @@
 import { round } from './format.js'
 import { sanityCheck } from './compute.js'
+import { putFood, findFoodByBarcode } from './db.js'
 
 /**
  * Open Food Facts client.
@@ -203,7 +204,19 @@ export async function searchProducts(query, { signal, pageSize = 25 } = {}) {
   try {
     data = await getJson(url, { signal })
   } catch (err) {
-    if (err.name === 'AbortError' || !(err instanceof OffError)) throw err
+    /**
+     * `TypeError` is in here as well as `OffError` because a dropped connection
+     * is the transient this retry exists for and it was the one case falling
+     * straight through. `fetch` rejects with a bare "Failed to fetch" when the
+     * socket dies mid-request — no status, no body — and OFF does that under
+     * load on a repeat query, which is exactly the shape of someone typing.
+     * Since search moved inline it fires on the keystroke rather than on a
+     * button, so it meets that failure far more often than it used to.
+     *
+     * `AbortError` is never retried: that one is the app's own doing.
+     */
+    if (err.name === 'AbortError') throw err
+    if (!(err instanceof OffError) && !(err instanceof TypeError)) throw err
     await new Promise((resolve) => setTimeout(resolve, 700))
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
     data = await getJson(url, { signal })
@@ -212,4 +225,21 @@ export async function searchProducts(query, { signal, pageSize = 25 } = {}) {
   return products
     .map((p) => normalizeProduct(p))
     .filter((r) => r.hasNutrition && r.draft.name !== 'Unnamed product')
+}
+
+/**
+ * Copy a normalized draft into the local library, reusing by barcode.
+ *
+ * Lives here rather than with either caller because both the scanner and the
+ * search results reach it, and it is the one place that decides an OFF product
+ * has become one of your foods. Spec 9: a barcode already in the library is
+ * reused, never duplicated — scanning the same tin twice is one food with two
+ * log entries, not two foods.
+ */
+export async function adoptDraft(draft) {
+  if (draft.barcode) {
+    const existing = await findFoodByBarcode(draft.barcode)
+    if (existing) return existing
+  }
+  return putFood({ ...draft, source: draft.source || 'off' })
 }

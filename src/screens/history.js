@@ -239,7 +239,7 @@ export function historyScreen() {
         h(
           'section',
           { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-label' }, 'Days'),
+          h('div', { class: 'section-title' }, 'Days'),
           card(rows)
         )
       )

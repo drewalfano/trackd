@@ -400,19 +400,29 @@ export function plateBar({ rows, onOpen, onLog }) {
       class:
         'flex items-center gap-[10px] rounded-[24px] bg-ink py-[10px] pl-[20px] pr-[10px] text-canvas',
     },
+    /**
+     * The count and the calories, and nothing else.
+     *
+     * `P · F · C` used to sit under them at 70% opacity, and it was three
+     * numbers nobody was going to act on. This bar is a running tally of a
+     * plate still being assembled: the question it answers is "how much have I
+     * put on here so far", and calories are the answer to that. The macro
+     * split matters when the plate is being tuned — which is the plate screen,
+     * one tap away through this very button, where every row carries its own
+     * full line.
+     *
+     * It also cost the bar a second line to say it, which pushed the two
+     * buttons below it further down a sheet whose whole layout argument is
+     * keeping Favourites above the fold.
+     */
     h(
       'button',
-      { class: 'min-w-0 flex-1 text-left', onclick: onOpen, 'aria-label': 'Open your plate' },
-      h(
-        'div',
-        { class: 'text-[14px] font-semibold leading-tight' },
-        `${pluralize(count, 'item')} · ${Math.round(totals.kcal)} cal`
-      ),
-      h(
-        'div',
-        { class: 'tnum mt-[2px] text-[12px] opacity-70' },
-        `${Math.round(totals.protein)} P · ${Math.round(totals.fat)} F · ${Math.round(totals.carbs)} C`
-      )
+      {
+        class: 'min-w-0 flex-1 text-left text-[14px] font-semibold leading-tight',
+        onclick: onOpen,
+        'aria-label': 'Open your plate',
+      },
+      `${pluralize(count, 'item')} · ${Math.round(totals.kcal)} cal`
     ),
     h(
       'button',
@@ -420,7 +430,17 @@ export function plateBar({ rows, onOpen, onLog }) {
         class: 'shrink-0 rounded-[999px] bg-canvas px-[20px] py-[10px] text-[13px] font-semibold text-ink',
         onclick: onLog,
       },
-      `Log ${count}`
+      /**
+       * "Add to log", not "Log 1".
+       *
+       * The count was being said twice on one bar — "1 item" is already three
+       * words to the left of it — and the half that repeated it was the half
+       * that had to name the action. "Log" alone is also the weakest verb in
+       * this app: it is the noun on the Today screen, the name of a whole
+       * screen, and a section heading, so a button carrying it says which of
+       * those it means only from where it happens to sit.
+       */
+      'Add to log'
     )
   )
 }
