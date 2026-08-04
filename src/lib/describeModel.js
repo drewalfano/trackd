@@ -34,11 +34,37 @@ const HOST = 'https://generativelanguage.googleapis.com/v1beta'
  * Flash rather than Pro. This is a short structured extraction against a
  * sentence, not a reasoning problem, and Pro is the model Google restricts
  * hardest on the free tier — 50 requests a day against Flash's 1,500.
+ *
+ * A LIST rather than a constant, because which of these a given key can reach
+ * is not knowable from here. `gemini-2.5-flash` is a current stable model and
+ * still returned 404 on a real device, which is the API saying "not for this
+ * key" rather than "no such model" — a key scoped to a different project, or
+ * an account on a different generation, will see a different set. Guessing
+ * harder is not a fix; asking is.
  */
-const MODEL = 'gemini-2.5-flash'
+const PREFERRED_MODELS = ['gemini-2.5-flash', 'gemini-3.6-flash', 'gemini-2.5-flash-lite']
+
+/** Where the model that actually worked is remembered, so this costs once. */
+const MODEL_KEY = 'mt:aiModel'
 
 /** One retry, per the spec. Beyond that a failure should be visible. */
 const RETRY_DELAY_MS = 700
+
+function storedModel() {
+  try {
+    return localStorage.getItem(MODEL_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+function rememberModel(name) {
+  try {
+    localStorage.setItem(MODEL_KEY, name)
+  } catch {
+    /* a working model that has to be rediscovered next time is still working */
+  }
+}
 
 export class DescribeError extends Error {}
 
@@ -125,22 +151,31 @@ Rules:
 
 /* ------------------------------------------------------------------ call */
 
-async function post(body, { signal }) {
+/** Thrown only for a model this key cannot reach, so discovery can catch it. */
+class ModelNotFoundError extends DescribeError {}
+
+function authHeaders() {
   const key = getAiKey()
   if (!key) throw new DescribeError('No API key is stored.')
+  return { 'Content-Type': 'application/json', 'x-goog-api-key': key }
+}
 
-  const res = await fetch(`${HOST}/models/${MODEL}:generateContent`, {
+async function post(model, body, { signal }) {
+  const res = await fetch(`${HOST}/models/${model}:generateContent`, {
     method: 'POST',
     signal,
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+    headers: authHeaders(),
     body: JSON.stringify(body),
   })
 
+  if (res.status === 404) throw new ModelNotFoundError(`No access to ${model}.`)
   if (res.status === 400) throw new DescribeError('That key was rejected. Check it in Settings.')
   if (res.status === 401 || res.status === 403) {
     throw new DescribeError('That key was refused. Check it in Settings.')
   }
-  if (res.status === 429) throw new DescribeError('Gemini is rate limiting. Try again shortly.')
+  if (res.status === 429) {
+    throw new DescribeError('Gemini is rate limiting. Wait a minute and try again.')
+  }
   if (!res.ok) throw new DescribeError(`Gemini is unavailable (${res.status}).`)
 
   try {
@@ -148,6 +183,43 @@ async function post(body, { signal }) {
   } catch {
     throw new DescribeError('Gemini returned something unreadable.')
   }
+}
+
+/**
+ * What this key can actually reach.
+ *
+ * One GET, and only ever after a 404 has already proved the guess wrong. The
+ * preference order is kept — Flash first, cheapest tier of it — but the list
+ * itself is the authority, so a key on a different generation of models finds
+ * its own rather than needing this file edited.
+ *
+ * An empty list is a different diagnosis entirely: the key reaches the API and
+ * the API has nothing for it, which is a key or project problem rather than a
+ * model-name one, and the message says so instead of naming a model.
+ */
+async function discoverModel({ signal }) {
+  const res = await fetch(`${HOST}/models`, { signal, headers: authHeaders() })
+  if (!res.ok) throw new DescribeError(`Gemini is unavailable (${res.status}).`)
+
+  const data = await res.json().catch(() => null)
+  const usable = (data?.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+    .map((m) => String(m.name || '').replace(/^models\//, ''))
+    .filter(Boolean)
+
+  if (!usable.length) {
+    throw new DescribeError('That key cannot reach any Gemini models. Check it in Settings.')
+  }
+
+  const pick =
+    PREFERRED_MODELS.find((p) => usable.includes(p)) ||
+    // Flash before anything else, and never a preview or a specialised variant.
+    usable.find((m) => /flash/.test(m) && !/preview|tts|audio|live|image|embedding/.test(m)) ||
+    usable.find((m) => !/preview|tts|audio|live|image|embedding/.test(m)) ||
+    usable[0]
+
+  rememberModel(pick)
+  return pick
 }
 
 const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
@@ -172,18 +244,44 @@ export async function describeLeftovers({ spans = [], unresolved = [], signal } 
     },
   }
 
+  let model = storedModel() || PREFERRED_MODELS[0]
   let data
+
+  /**
+   * One retry, and only for things a retry can fix.
+   *
+   * This used to retry on ANY failure, which meant a 404 — an answer that will
+   * be identical every time — fired a second request behind a 700ms wait. On a
+   * free tier metered per minute that is how one tap becomes two requests and
+   * a handful of taps becomes a rate limit, which is exactly what happened on
+   * the first real device: a 404 that could never succeed, quietly doubled,
+   * until the next error to arrive was a 429 blaming the wrong thing.
+   *
+   * So a 4xx is now final except for the one that is genuinely recoverable —
+   * an unreachable model, which is recovered by finding a reachable one rather
+   * than by asking again.
+   */
   try {
-    data = await post(body, { signal })
+    data = await post(model, body, { signal })
   } catch (err) {
-    // The spec allows one retry and no more. A second failure is a real one and
-    // belongs on screen rather than behind another wait.
     if (err.name === 'AbortError') throw err
-    if (err instanceof DescribeError && /rejected|refused/.test(err.message)) throw err
-    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    data = await post(body, { signal })
+
+    if (err instanceof ModelNotFoundError) {
+      model = await discoverModel({ signal })
+      data = await post(model, body, { signal })
+    } else if (err instanceof DescribeError) {
+      // Rejected keys, refused keys and rate limits are all final.
+      throw err
+    } else {
+      // A dropped connection, which is the transient this retry exists for.
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+      data = await post(model, body, { signal })
+    }
   }
+
+  // Only remembered once it has actually produced an answer.
+  if (model !== storedModel()) rememberModel(model)
 
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
   if (!text) throw new DescribeError('Gemini returned nothing to read.')
