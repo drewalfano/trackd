@@ -249,13 +249,48 @@ for (const m of MACROS) {
  * after sat at 2.10:1 on a white card. Both facts were true at once, which is
  * how "fat is low contrast" and "fat passes the contrast test" coexisted.
  *
- * The fills never change between themes, so the same four are measured against
- * both cards.
+ * The fills DID once hold across both themes, and that is what kept them pale —
+ * one value clearing 3:1 on white and on near-black has about a stop and a half
+ * to live in. Since v1.2.0 they move like the type does, so each theme's own
+ * fill is measured against its own card.
  */
 const MARK = 3
 for (const m of MACROS) atLeast(`${m} fill as a mark on a card`, token(m), token('surface'), MARK)
 for (const m of MACROS) {
-  atLeast(`${m} fill as a mark on a dark card`, token(m), token('surface', darkBlock), MARK)
+  atLeast(`${m} fill as a mark on a dark card`, token(m, darkBlock), token('surface', darkBlock), MARK)
+}
+
+/**
+ * The EDGE is a mark too, and nothing measured it as one until v1.1.9.
+ *
+ * It used to be type and a chip behind white text, both of which the AA rows
+ * above cover. Then the ring's second lap started painting with it, and a lap
+ * is a mark — so it owes the same 3:1 as the fill does. In dark mode it was not
+ * paying: the light-mode edges run 1.91:1 (protein) to 2.95:1 (fat) on the dark
+ * card, which is why the dark theme now overrides the edge as well as the text.
+ */
+for (const m of MACROS) atLeast(`${m} edge as a mark on a card`, token(`${m}-edge`), token('surface'), MARK)
+for (const m of MACROS) {
+  atLeast(
+    `${m} edge as a mark on a dark card`,
+    token(`${m}-edge`, darkBlock),
+    token('surface', darkBlock),
+    MARK
+  )
+}
+
+/**
+ * The two shades of a macro have to be far enough apart to read as two.
+ *
+ * This is the ring's whole argument — the second lap is the first lap's colour
+ * moved — so if a pair is too close the mark stops saying anything. Measured as
+ * a plain contrast ratio between the pair, in both themes, because the eye is
+ * comparing them to each other here rather than to any ground.
+ */
+const PAIR = 1.55
+for (const m of MACROS) atLeast(`${m} fill vs edge`, token(m), token(`${m}-edge`), PAIR)
+for (const m of MACROS) {
+  atLeast(`${m} fill vs edge, dark`, token(m, darkBlock), token(`${m}-edge`, darkBlock), PAIR)
 }
 
 // Body and secondary text.

@@ -41,7 +41,6 @@ const MACRO_TEXT = {
   carbs: 'var(--color-carbs-text)',
 }
 
-/** The fill shade. For painted areas only — see MACRO_TEXT for type. */
 /** Digit nodes for a string, for use inside an element that carries .tnum. */
 export function digits(text) {
   const holder = h('span')
@@ -54,8 +53,16 @@ export function tnum(text, cls = '') {
   return h('span', { class: `tnum ${cls}`.trim() }, ...digits(text))
 }
 
+/** The fill shade. For painted areas only — see MACRO_TEXT for type. */
 export const macroColor = (macro) => MACRO_VAR[macro]
 export const macroTextColor = (macro) => MACRO_TEXT[macro]
+
+/**
+ * The darker shade of the same hue. It means one thing everywhere it appears:
+ * the part past the target. The bars carry it on `bar-over`, the rings on the
+ * second lap, so excess is one encoding across both marks rather than two.
+ */
+export const macroEdgeColor = (macro) => MACRO_EDGE[macro]
 
 /* ------------------------------------------------------------------ header */
 
@@ -504,37 +511,9 @@ export function segmentedWide({ options, value, onChange }) {
   )
 }
 
-/**
- * The same control, small enough to live in the corner of a card.
- *
- * Two differences beyond size. It stops its own clicks, because its only home
- * so far is inside a surface that is itself tappable — without that, choosing
- * a segment would set the mode and then have the card underneath flip it
- * straight back. And it carries a `role="group"` with a name, so the pair
- * announces as one control rather than as two loose buttons that happen to be
- * adjacent; the card around it deliberately has no button role of its own.
- */
-export function segmentedSmall({ options, value, onChange, label }) {
-  return h(
-    'div',
-    { class: 'segmented-xs', role: 'group', 'aria-label': label },
-    options.map((opt) =>
-      h(
-        'button',
-        {
-          type: 'button',
-          class: 'segment-xs',
-          'aria-pressed': String(opt.value === value),
-          onclick: (e) => {
-            e.stopPropagation()
-            onChange(opt.value)
-          },
-        },
-        opt.label
-      )
-    )
-  )
-}
+/* Removed in v1.2.1. Its one caller was the day card's Eaten / Remaining
+   switch, and that control is gone — see `modeDots` in screens/today.js for
+   what replaced it and why. */
 
 export function labelledField({ label, hint, children }) {
   return h(

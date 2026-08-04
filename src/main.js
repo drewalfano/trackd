@@ -81,7 +81,7 @@ const TABS = [
  *
  * Each layer sits on top of the previous one and re-blurs its output, so the
  * radii compound rather than replace — about 6px effective at the bottom edge,
- * tapering to nothing by the top of the band.
+ * tapering to nothing partway up the band.
  *
  * 6px is deliberately mild, because the Figma effect is a progressive blur of
  * 0 → 4 and the depth comes from the gradient fill layered over it, not from
@@ -91,11 +91,23 @@ const TABS = [
  * Three layers, not more. Every backdrop-filter costs the compositor its own
  * snapshot-and-blur of the region behind it, every frame, and this band is
  * fixed over a scrolling list — so it pays that continuously.
+ *
+ * **The percentages stop at 62, not 100, and that is the whole point.** The
+ * band is 159px and the bar occupies the bottom 88 of it (20 inset + 68 tall),
+ * so the top 71px of the band is open page. The first version ran the mildest
+ * layer to 100%, which put a 1.5px blur over seventy pixels of text that is
+ * nowhere near the bar and has every reason to be legible — the top log row on
+ * Today, most of the time. Blurring readable content is a cost with no matching
+ * benefit: nothing is about to slide under the bar up there.
+ *
+ * 62% is 98px, ten above the top edge of the bar. Enough that the blur has
+ * already faded out before it reaches anything worth reading, and enough that
+ * it does not end on a line of its own.
  */
 const BLUR_RAMP = [
-  [1.5, 60, 100],
-  [3, 32, 66],
-  [5, 0, 36],
+  [1.5, 34, 62],
+  [3, 16, 42],
+  [5, 0, 24],
 ]
 
 /**
@@ -116,13 +128,9 @@ function tabBarFade() {
     return span
   })
 
-  return h(
-    'div',
-    { class: 'tabbar-fade', 'aria-hidden': 'true' },
-    layers,
-    h('span', { class: 'fade-veil' }),
-    h('span', { class: 'fade-shade' })
-  )
+  // One scrim, not two. The black shade that used to sit on top of the veil is
+  // gone — see `.fade-veil` in styles.css for why.
+  return h('div', { class: 'tabbar-fade', 'aria-hidden': 'true' }, layers, h('span', { class: 'fade-veil' }))
 }
 
 /**

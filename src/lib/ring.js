@@ -1,18 +1,25 @@
 import { h, s } from './dom.js'
 import { progress, MACRO_META } from './compute.js'
 import { g } from './format.js'
-import { digits, macroColor, macroTextColor } from './ui.js'
+import { digits, macroColor, macroEdgeColor, macroTextColor } from './ui.js'
 
 /**
  * A mini macro ring.
  *
- * Concentric rings were rejected for the hero because a ring is a 0–100%
- * container with no honest way to draw overflow, and overflow is routine here.
- * Equal-diameter rings in a row keep the circular language while staying
- * comparable to each other — the thing concentric rings are worst at.
+ * Concentric rings were rejected for the hero because concentric arcs cannot be
+ * compared to each other. Equal-diameter rings in a row keep the circular
+ * language while staying comparable — the thing concentric rings are worst at.
  *
- * The ring saturates rather than looping. Magnitude past the target is carried
- * by the text beneath it, never by a second lap.
+ * **Going over draws a second lap over the first, in the darker edge shade.**
+ * This reverses the original call, which was that the ring saturates at its
+ * target and magnitude past it is carried by the text alone. That was wrong in
+ * use: a saturated ring draws `54g over` and `exactly on target` as the same
+ * closed circle, so the one distinction this app most needs to make is the one
+ * the mark collapses. `over is information` is the thesis, and a ring with
+ * nowhere to put the excess cannot state it.
+ *
+ * The second lap is the shade the bars already use for overage, so excess reads
+ * the same in both marks rather than being a ring-specific invention.
  */
 
 const SIZE = 84
@@ -58,52 +65,241 @@ const MIN_ARC = STROKE
  */
 const lastLen = new Map()
 
+/**
+ * How far the second lap takes to darken from the first lap's shade to its own.
+ *
+ * The second lap does not start as a different colour. Stepping straight from
+ * the fill shade to the edge shade at 12 o'clock draws a hard vertical seam
+ * exactly where the strand should be continuous, and the ring stops reading as
+ * one thing that kept going and starts reading as two rings stacked up.
+ *
+ * So it leaves the first lap at the first lap's own colour and deepens into the
+ * edge shade over the next quarter turn. One coil, rising. The colour is then
+ * doing what it should — saying how far into the second lap you are — instead
+ * of announcing that a second lap has begun, which the geometry already said.
+ *
+ * A sixth of a turn. This was a quarter, and a quarter was too generous: at 112%
+ * the entire second lap sat inside the blend, so a ring 22g over looked very
+ * close to one exactly on target — the original complaint, in miniature, at the
+ * overages that actually happen. A sixth still swallows the seam and reaches
+ * the full edge shade while there is still a lap left to show it on.
+ */
+const BLEND = C / 6
+
+/**
+ * Ids for the mask and the gradient.
+ *
+ * `url(#id)` resolves against the whole DOCUMENT and takes the first match, so
+ * a counter alone is not enough: any second copy of this module starts counting
+ * at one again, and every ring it draws then reaches into the first copy's
+ * gradients. That failure is silent and it is ugly — a carbs ring painting
+ * itself with the fat ramp — because a wrong reference still renders.
+ *
+ * So the counter is namespaced per module instance. Cheap insurance against a
+ * whole class of bug whose symptom is "the wrong macro's colour, sometimes".
+ */
+const NS = Math.random().toString(36).slice(2, 8)
+let maskUid = 0
+const refId = (kind, uid) => `ring-${kind}-${NS}-${uid}`
+
 /** Arc length for a percentage, with the zero state and the floor applied. */
 function arcLength(pct) {
   if (pct <= 0) return 0
   return Math.max(MIN_ARC, (pct / 100) * C)
 }
 
-function ringSvg({ pct, macro, key, animate }) {
-  const to = arcLength(pct)
-  const from = animate ? (lastLen.get(key) ?? 0) : to
-  lastLen.set(key, to)
+/** The shared circle geometry every arc in here is drawn on. */
+const onRing = (extra) => ({
+  cx: SIZE / 2,
+  cy: SIZE / 2,
+  r: R,
+  fill: 'none',
+  'stroke-width': STROKE,
+  // Start at 12 o'clock and run clockwise.
+  transform: `rotate(-90 ${SIZE / 2} ${SIZE / 2})`,
+  ...extra,
+})
 
-  const track = s('circle', {
-    cx: SIZE / 2,
-    cy: SIZE / 2,
-    r: R,
-    fill: 'none',
-    stroke: `color-mix(in srgb, ${macroColor(macro)} ${TRACK_MIX}%, transparent)`,
-    'stroke-width': STROKE,
-  })
+/** An arc covering [from, to] along the path, both ends square. */
+function span(from, to, stroke) {
+  // Half a pixel of overlap at each join. Butted exactly, adjacent arcs leave a
+  // hairline of background between them where the antialiasing does not quite
+  // meet, and ten of those would read as a dotted line rather than a ramp.
+  const a = Math.max(0, from - 0.3)
+  const len = to - a + 0.3
+  return s(
+    'circle',
+    onRing({
+      stroke,
+      'stroke-dasharray': `${len} ${C - len}`,
+      'stroke-dashoffset': -a,
+    })
+  )
+}
 
-  // Nothing logged draws the track alone. The empty ring is the zero state and
-  // does not need a marker to say so.
-  const arc =
-    to > 0 || from > 0
-      ? s('circle', {
+/**
+ * The ramp, as a real gradient rather than as steps of `color-mix`.
+ *
+ * Ten mixed segments was the first build and it banded: at 84px each step is
+ * six device pixels wide at 3x, so the blend read as a staircase rather than a
+ * ramp, which is worse than the hard seam it replaced — a seam is at least
+ * deliberate.
+ *
+ * The axis is horizontal in the arc's own space, which the -90 rotation turns
+ * into the vertical at 12 o'clock: full at the top of the ring, edge shade a
+ * quarter turn later. Everything past that pads to the edge shade, and because
+ * this is only ever painted over the first quarter turn, the pad never gets a
+ * chance to run backwards up the other side.
+ *
+ * Positional rather than path-length based, which is the property that matters:
+ * the shade at any point on the strand depends on WHERE IT IS, not on how far
+ * over you are. The ramp is nailed to the ring, so it cannot stretch or slide
+ * as the day goes on.
+ */
+function ramp(id, macro) {
+  return s(
+    'linearGradient',
+    {
+      id,
+      gradientUnits: 'userSpaceOnUse',
+      x1: SIZE / 2 + R,
+      y1: SIZE / 2,
+      x2: SIZE / 2,
+      y2: SIZE / 2,
+    },
+    s('stop', { offset: '0', 'stop-color': macroColor(macro) }),
+    s('stop', { offset: '1', 'stop-color': macroEdgeColor(macro) })
+  )
+}
+
+/**
+ * The second lap, painted at its full length and revealed by a mask.
+ *
+ * Painting it whole and masking it — rather than growing the arcs themselves —
+ * is what keeps the ramp fixed to the strand.
+ *
+ * Two arcs: the edge shade the whole way, then the ramp laid over its first
+ * quarter turn. Drawn this way round so the pure shade is the default and the
+ * blend is the exception, which is also the only reason the gradient never has
+ * to wrap.
+ */
+function overStrand(macro, rampId) {
+  return [span(0, C, macroEdgeColor(macro)), span(0, BLEND, `url(#${rampId})`)]
+}
+
+/**
+ * A round-capped arc of length `from`, on the transition so it can be grown.
+ * Used for the first lap, and for the mask that reveals the second.
+ */
+function lap(colour, from, maskId) {
+  return s(
+    'circle',
+    onRing({
+      class: 'ring-arc',
+      stroke: colour,
+      'stroke-linecap': 'round',
+      'stroke-dasharray': C,
+      'stroke-dashoffset': C - from,
+      ...(maskId ? { mask: `url(#${maskId})` } : {}),
+    })
+  )
+}
+
+function ringSvg({ ratio, macro, key, animate }) {
+  const total = ratio * 100
+
+  // Past double the target the second lap closes too, and a third lap is not
+  // something a ring can say without becoming a puzzle. The centre number is
+  // already carrying magnitude by then, so the mark stops counting and the
+  // reading becomes "at least twice over", which is true and legible.
+  const basePct = Math.min(100, total)
+  const overPct = Math.min(100, Math.max(0, total - 100))
+
+  const overKey = `${key}:over`
+  const baseTo = arcLength(basePct)
+  const overTo = arcLength(overPct)
+  const baseFrom = animate ? (lastLen.get(key) ?? 0) : baseTo
+  const overFrom = animate ? (lastLen.get(overKey) ?? 0) : overTo
+  lastLen.set(key, baseTo)
+  lastLen.set(overKey, overTo)
+
+  // Each lap is kept while it has somewhere to animate FROM, so deleting the
+  // entry that put you over unwinds the lap instead of snapping it away.
+  const hasBase = baseTo > 0 || baseFrom > 0
+  const hasOver = overTo > 0 || overFrom > 0
+
+  const track = s(
+    'circle',
+    onRing({
+      stroke: `color-mix(in srgb, ${macroColor(macro)} ${TRACK_MIX}%, transparent)`,
+    })
+  )
+
+  const uid = hasOver ? ++maskUid : null
+
+  // The second lap is painted whole and uncovered by this, so the colour ramp
+  // stays put on the strand instead of stretching with it.
+  //
+  // Two pieces, because the ends want different caps and a stroke only gets
+  // one. The body is square at BOTH ends: the strand leaves the first lap where
+  // the first lap stopped, so a cap there would be a second nose on a strand
+  // that never ended. A round one is worse than redundant — it reaches half a
+  // stroke BACKWARDS past 12 o'clock, and on a closed path that is the far end
+  // of the ring, where it uncovered a 5px patch of the darkest paint on the
+  // strand and hung it at 11 o'clock unattached to anything.
+  //
+  // The tip is then a zero-length round dash, which renders as a disc, parked
+  // on the leading end. That disc is the cap the whole mark ends on.
+  const revealBody = hasOver
+    ? s(
+        'circle',
+        onRing({
           class: 'ring-arc',
-          cx: SIZE / 2,
-          cy: SIZE / 2,
-          r: R,
-          fill: 'none',
-          // The FILL shade. An arc is a painted mark, not type, so this is the
-          // same call the bars made — see MACRO_TEXT in ui.js for why the
-          // labels underneath resolve to a different shade than the ring.
-          stroke: macroColor(macro),
-          'stroke-width': STROKE,
-          'stroke-linecap': 'round',
+          stroke: '#fff',
+          'stroke-linecap': 'butt',
           'stroke-dasharray': C,
-          'stroke-dashoffset': C - from,
-          // Start at 12 o'clock and run clockwise.
-          transform: `rotate(-90 ${SIZE / 2} ${SIZE / 2})`,
+          'stroke-dashoffset': C - overFrom,
         })
-      : null
+      )
+    : null
 
-  if (arc && animate && from !== to) {
+  const revealTip = hasOver
+    ? s(
+        'circle',
+        onRing({
+          class: 'ring-arc',
+          stroke: '#fff',
+          'stroke-linecap': 'round',
+          'stroke-dasharray': `0.01 ${C}`,
+          'stroke-dashoffset': -overFrom,
+        })
+      )
+    : null
+
+  const overMask = hasOver
+    ? s(
+        'mask',
+        { id: refId('over', uid), maskUnits: 'userSpaceOnUse' },
+        s('rect', { x: 0, y: 0, width: SIZE, height: SIZE, fill: '#000' }),
+        revealBody,
+        revealTip
+      )
+    : null
+
+  // Nothing logged draws the track alone. An empty ring is the zero state and
+  // does not need a marker to say so.
+  const base = hasBase ? lap(macroColor(macro), baseFrom, null) : null
+  const over = hasOver
+    ? s('g', { mask: `url(#${refId('over', uid)})` }, ...overStrand(macro, refId('ramp', uid)))
+    : null
+
+  if (animate) {
     requestAnimationFrame(() => {
-      arc.style.strokeDashoffset = String(C - to)
+      if (base && baseFrom !== baseTo) base.style.strokeDashoffset = String(C - baseTo)
+      if (overFrom !== overTo) {
+        revealBody.style.strokeDashoffset = String(C - overTo)
+        revealTip.style.strokeDashoffset = String(-overTo)
+      }
     })
   }
 
@@ -116,8 +312,13 @@ function ringSvg({ pct, macro, key, animate }) {
       'aria-hidden': 'true',
       class: 'block',
     },
+    hasOver ? ramp(refId('ramp', uid), macro) : null,
+    overMask,
     track,
-    arc
+    // Drawn in order, so the strand continues over the lap below it and ends on
+    // its own cap, which is the only thing marking where it crossed.
+    base,
+    over
   )
 }
 
@@ -168,8 +369,16 @@ function ringSvg({ pct, macro, key, animate }) {
  * Both the number and the name take the TEXT shade, not the fill — a fill is
  * never used as type.
  */
-export function macroRing({ macro, value, target, animate = true, key = macro, mode = 'consumed' }) {
-  const { pct } = progress(value, target)
+export function macroRing({
+  macro,
+  value,
+  target,
+  animate = true,
+  key = macro,
+  mode = 'consumed',
+  swapping = false,
+}) {
+  const { ratio } = progress(value, target)
   // Round the operands, then difference. Rounding the difference of two raw
   // floats is what put a number on screen that did not match its own operands.
   const consumed = Math.round(Number(value) || 0)
@@ -185,7 +394,10 @@ export function macroRing({ macro, value, target, animate = true, key = macro, m
   const centre = h(
     'div',
     {
-      class: 'absolute inset-0 flex flex-col items-center justify-center leading-none',
+      // `reading` marks the text that a mode switch rewrites, so the swap can
+      // be animated as one gesture across the card — the calorie number and all
+      // three ring centres change at the same moment and for the same reason.
+      class: `reading${swapping ? ' reading-swap' : ''} absolute inset-0 flex flex-col items-center justify-center leading-none`,
       style: { color: colour },
     },
     h('div', { class: 'tnum text-[15px] font-semibold' }, ...digits(big)),
@@ -206,7 +418,7 @@ export function macroRing({ macro, value, target, animate = true, key = macro, m
     h(
       'div',
       { class: 'relative', style: { width: `${SIZE}px`, height: `${SIZE}px` } },
-      ringSvg({ pct, macro, key, animate }),
+      ringSvg({ ratio, macro, key, animate }),
       centre
     ),
     h(

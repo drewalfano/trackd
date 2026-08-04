@@ -111,6 +111,9 @@ Perishable. There is one window where this app can be seen with fresh eyes, and 
 closes within about a week — every rough edge normalises and then cannot be found
 again. These answers cannot be reconstructed later.
 
+**The full instrument is NOTES-first-run.md** — these six plus what they miss:
+what went unlogged, what wasn't believed, and what to protect. Answer it there.
+
 - Opening it for the first time, what did you go looking for that wasn't there?
 - What did you tap that turned out not to be tappable?
 - Where did you hesitate, even for a second?

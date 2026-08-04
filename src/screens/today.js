@@ -3,7 +3,7 @@ import { createScreen } from '../lib/screen.js'
 import { listEntries, getSettings, saveCardMode } from '../lib/db.js'
 import { sumEntries, progress, MACRO_META } from '../lib/compute.js'
 import { macroRing } from '../lib/ring.js'
-import { tnum, card, macroTextColor, navHeader, segmentedSmall } from '../lib/ui.js'
+import { tnum, card, macroTextColor, navHeader } from '../lib/ui.js'
 import { kcal } from '../lib/format.js'
 import { formatDayHeader, isToday, addDays } from '../lib/dates.js'
 import { entryRow } from '../lib/entryRow.js'
@@ -44,19 +44,27 @@ import { navigate } from '../router.js'
  *
  * ---
  *
- * The switch is new; the two readings are not. For a while the only way to the
- * other one was a tap anywhere on the card, with nothing on screen to say so —
- * the argument being that a chip or a chevron would be a fourth thing on a card
- * that had just had two removed. That argument was about DECORATION, and it
- * held right up until the choice needed to be a stated one. A control that
- * names both readings and marks which is live is not a hint about a gesture; it
- * is the setting itself, visible, which is the only form in which a setting can
- * be found by someone who does not already know it is there.
+ * **How you get to the other reading has now been through six answers**, and
+ * has arrived back where it started. The order is the useful part, because each
+ * one only looked wrong once it existed:
  *
- * The tap survives underneath it. Anyone who learned the gesture keeps it, and
- * it costs nothing to leave in — but the card no longer claims a button role,
- * because the control is now where the state is announced and a button wrapping
- * two buttons announces it twice, in two voices, one of them unnamed.
+ *   1. A bare tap on the card, nothing on screen to say so — undiscoverable.
+ *   2. A segmented Eaten / Remaining switch — redundant with the tap, redundant
+ *      with the reading, and the reason the header band was as tall as it was.
+ *   3. Two paging dots — on a card that pages horizontally with yesterday
+ *      peeking in at the left, which made them read as "swipe for more cards".
+ *   4. A vertical swap glyph — no longer a paging signal, still an object.
+ *   5. A muted state label in the corner — the best of them, and still a fifth
+ *      statement of a reading the card already gives four times.
+ *   6. The bare tap again.
+ *
+ * Five of the six were built and looked at rather than argued about, which is
+ * the only reason the sixth is a decision instead of the thing nobody got round
+ * to. What is left underneath it is `modeReach`: a control with no pixels, so
+ * the reading stays reachable without anything claiming space to say so.
+ *
+ * The discoverability problem is real and is now openly unsolved. See
+ * `modeReach`.
  */
 
 /**
@@ -93,6 +101,63 @@ const MODE_OPTIONS = [
  */
 let modeSeeded = false
 
+/**
+ * True only for the repaint a mode switch causes, and false again by the end of
+ * it. Two things read it, and both are about the same distinction: **a mode
+ * switch is not a data change.**
+ *
+ * The card cannot tell the difference on its own — it gets rebuilt either way,
+ * with different numbers in it either way — so it has to be told, or it treats
+ * "you asked a different question" exactly like "you ate something".
+ */
+let modeSwap = false
+
+/**
+ * The way to the other reading, for anything that is not a thumb.
+ *
+ * **Nothing visible marks the switch.** Four things were built and none of them
+ * earned the space: a segmented Eaten / Remaining control, two paging dots, a
+ * vertical swap glyph, and a muted state label in the corner. The sheet that
+ * killed the last of them is in NOTES-use-audit.md, U2.
+ *
+ * The argument that outlived all four is the card's own, from the top of this
+ * file: it already states its reading in words, in four places at once —
+ * `1236 over` against `4073 / 2837`, and the same inside every ring. A control
+ * that names the reading is the fifth statement of a fact the card was
+ * deliberately rebuilt to stop saying twice, and every version of it read as
+ * one more object on a card that had just been cleared of two.
+ *
+ * So the tap stands alone again, and this is what is left underneath it: a
+ * control with no pixels, so that the reading is still reachable by keyboard
+ * and still announced to a screen reader. Removing the visible one is a design
+ * decision; removing the only way in is a regression, and they are not the same
+ * edit.
+ *
+ * **The open cost, stated rather than hidden:** nothing on the screen says the
+ * card can be tapped. `.day-card-toggle` in styles.css has admitted that since
+ * it was written — "a press only answers the question after you have already
+ * asked it" — and it is still true and still unsolved. A first-click test is
+ * what would settle whether anyone finds it, and none of the four candidates
+ * was worth shipping to avoid running one.
+ */
+function modeReach(mode, onMode) {
+  const other = MODE_OPTIONS.find((o) => o.value !== mode)
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'reach-only',
+      onclick: (e) => {
+        // The card underneath is a toggle too; without this a press would flip
+        // the mode and have the card flip it straight back.
+        e.stopPropagation()
+        onMode(other.value)
+      },
+    },
+    `Show ${other.label.toLowerCase()}`
+  )
+}
+
 function seedMode(settings) {
   if (modeSeeded) return
   modeSeeded = true
@@ -108,7 +173,7 @@ function seedMode(settings) {
  */
 let lastKcal = 0
 
-function calorieBlock({ value, target, mode, live = true, control = null }) {
+function calorieBlock({ value, target, mode, live = true, control = null, swapping = false }) {
   const { pct } = progress(value, target)
   // Round the operands, then difference — same rule the rings use.
   const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
@@ -120,7 +185,22 @@ function calorieBlock({ value, target, mode, live = true, control = null }) {
   // would leave its own total behind as the next card's starting point, so
   // paging would tick from yesterday's calories rather than from what the
   // number on screen actually said.
-  number.dataset.value = String(live ? lastKcal : shown)
+  /**
+   * A mode switch does not count.
+   *
+   * The count-up was deliberately built to run across a toggle — the note above
+   * `lastKcal` says so, "1105 running up to 1732 rather than appearing" — and
+   * that was the wrong call. **Counting means the number changed.** On a toggle
+   * the number did not change; the question did. 3366 winding down to 1236
+   * asserts that a thousand calories left the day, and the eye reads a count as
+   * new data arriving, so it lands as the card glitching rather than as the
+   * card answering.
+   *
+   * Seeding `from` with the destination makes `countTo` write it outright, so
+   * the swap is a swap. It still counts for everything that IS a data change:
+   * logging, editing, deleting.
+   */
+  number.dataset.value = String(swapping ? shown : live ? lastKcal : shown)
   if (live) lastKcal = shown
   countTo(number, shown, { format: (n) => kcal(n) })
 
@@ -161,7 +241,7 @@ function calorieBlock({ value, target, mode, live = true, control = null }) {
     ),
     h(
       'div',
-      { class: 'flex items-baseline gap-[8px]' },
+      { class: `reading${swapping ? ' reading-swap' : ''} flex items-baseline gap-[8px]` },
       number,
       // The qualifier the rings use, in the row's own size: the target in
       // consumed mode, the word in remaining.
@@ -216,18 +296,14 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode }
         target: targets.kcal,
         mode: cardMode,
         live,
+        swapping: live && modeSwap,
         // Drawn on the neighbours too, not just the live card. They are the
         // real card at rest and a drag brings them fully into view — one that
-        // arrived without the control, or with it in the other position, would
-        // be a lie that resolves halfway through the gesture. `inert` is what
+        // arrived without the indicator, or with it on the other dot, would be
+        // a lie that resolves halfway through the gesture. `inert` is what
         // keeps them from being operable; it is not their job to look
         // different.
-        control: segmentedSmall({
-          options: MODE_OPTIONS,
-          value: cardMode,
-          onChange: onMode,
-          label: 'Show eaten or remaining',
-        }),
+        control: modeReach(cardMode, onMode),
       }),
       // Fixed order: protein, fat, carbs. Equal diameter, evenly distributed —
       // comparable to each other, which is the one thing concentric rings
@@ -247,6 +323,7 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode }
             // every render would replay somebody's entrance.
             key: live ? macro : `${macro}:${position}`,
             animate: live,
+            swapping: live && modeSwap,
           })
         )
       )
@@ -296,7 +373,13 @@ function dayDeck({ current, prev, next }) {
     if (next === cardMode) return
     cardMode = next
     haptic()
+    // Raised for the length of the repaint and lowered again on the far side.
+    // Nothing schedules in between — `paint` builds its subtree synchronously —
+    // so the flag is read by exactly the elements this switch created, and the
+    // next repaint from any other cause finds it down.
+    modeSwap = true
     for (const c of cards) c.paint()
+    modeSwap = false
     saveCardMode(next).catch(() => {})
   }
 
@@ -316,7 +399,7 @@ function dayDeck({ current, prev, next }) {
   //
   // No guard against a swipe landing here as a tap — `swipePages` swallows that
   // click in the capture phase before it reaches this. The switch's own clicks
-  // stop short of here on their own; see `segmentedSmall`.
+  // stop short of here on their own; see `modeReach`.
   live.el.addEventListener('click', () => {
     setMode(cardMode === 'consumed' ? 'remaining' : 'consumed')
   })

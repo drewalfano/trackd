@@ -129,15 +129,55 @@
    * h=-95.8 and C=0.173 in both, and the pair reads as one blue at two
    * strengths rather than as two blues.
    */
+  /**
+   * v1.2.0 — the fills are drawn, and they move between themes now.
+   *
+   * These are picked off the ring mockup rather than derived: `#2049B2`,
+   * `#F27E11`, `#C0189B`, with their own darker stop under each. Two of the
+   * three were already in the app as the EDGE shades — the mockup builds the
+   * ring on what this palette had been treating as the dark end and goes darker
+   * still from there.
+   *
+   * **The old rule was that a fill never changes between themes, and it is the
+   * rule that has to give.** It is why the fills had been lighter and weaker
+   * than anything drawn: one value had to clear 3:1 on a white card AND on the
+   * near-black one, which pinned every fill into about a stop and a half and
+   * spent the lightness before the hue was chosen. `#2049B2` is 7.90:1 on white
+   * and 1.91:1 on the dark card. No single hex serves both, so the drawn blue
+   * could not exist while that rule stood.
+   *
+   * Type has moved between themes since v1.1.0 for exactly this reason. Marks
+   * now do the same, and the invariant that replaces it is a better one: **hue
+   * and chroma are constant across themes, lightness is not.** The colour is
+   * the same colour in both; only how far it sits from its ground changes.
+   *
+   * Two of the six picks needed moving, both fat, and both by the smallest step
+   * that clears the gate:
+   *
+   *   `#F27E11` is **2.70:1 on a white card** where a mark owes 3 — a light
+   *   amber on white is the one thing this palette has failed at before, and it
+   *   failed the same way again. Down 0.032 of lightness to `#e67500`.
+   *
+   *   `#C86304` is **3.52:1 on the canvas** where type owes 4.5, and the edge
+   *   is also the text token. Down to `#ae5400`.
+   *
+   * Protein and carbs are used exactly as picked. Kcal was not drawn and keeps
+   * its v1.1.9 values, which already follow the same construction.
+   *
+   * The dark fills are the same hue and chroma lifted until the mark clears 3:1
+   * on `#262626` — protein by 0.108, carbs by 0.024, fat and kcal not at all.
+   * Every edge is its own fill at ΔL −0.14 in light and +0.15 in dark. All of
+   * it is measured in `npm test`; change a hex and it will tell you.
+   */
   --color-kcal: #1aa06b;
-  --color-protein: #4d7cea;
-  --color-fat: #df7807;
-  --color-carbs: #e13da9;
+  --color-protein: #2049b2;
+  --color-fat: #e67500;
+  --color-carbs: #c0189b;
 
-  --color-kcal-edge: #027d51;
-  --color-protein-edge: #2049b2;
-  --color-fat-edge: #a85901;
-  --color-carbs-edge: #c2138e;
+  --color-kcal-edge: #007149;
+  --color-protein-edge: #062577;
+  --color-fat-edge: #ae5400;
+  --color-carbs-edge: #8e0a71;
 
   --color-kcal-text: var(--color-kcal-edge);
   --color-protein-text: var(--color-protein-edge);
@@ -224,13 +264,56 @@
   --color-outline: #333333;
   /* The darker shades go the wrong way against a dark ground — the light-mode
      blue is 1.91:1 on this card. Macro text lifts to a tint here, at the same
-     hue and near enough the same chroma, so the palette reads as one set across
-     both themes rather than as two. 5.51:1 (carbs) to 7.14:1 (kcal).
-     The FILLS are untouched — those still never move between themes. */
-  --color-kcal-text: #50c78f;
-  --color-protein-text: #6b9aff;
-  --color-fat-text: #f48b2d;
-  --color-carbs-text: #ff5ec4;
+     hue and the same chroma, so the palette reads as one set across both themes
+     rather than as two. 5.54:1 (carbs) to 7.13:1 (kcal). */
+  --color-kcal-text: #4fc78f;
+  --color-protein-text: #6c9aff;
+  --color-fat-text: #f68934;
+  --color-carbs-text: #fa61d0;
+
+  /**
+   * The FILLS move too, as of v1.2.0, and they did not used to.
+   *
+   * Holding one fill across both themes is what kept them pale: a single value
+   * had to clear 3:1 on white AND on this card, which is a band of about a stop
+   * and a half, and the lightness was spent before the hue was chosen. The
+   * drawn blue `#2049b2` is 1.91:1 here — the mark would have been a smudge.
+   *
+   * Same hue, same chroma, lifted only as far as the 3:1 needs: protein by
+   * 0.108, carbs by 0.024, fat and kcal not at all. The colour is the same
+   * colour in both themes; only its distance from the ground changes.
+   */
+  --color-kcal: #1aa06b;
+  --color-protein: #3c6ad6;
+  --color-fat: #e67500;
+  --color-carbs: #c824a2;
+
+  /**
+   * The EDGE lifts here too, and it did not used to.
+   *
+   * That was fine while the edge was only ever type or a chip behind white
+   * text. v1.1.7 made it a MARK — the second lap of the ring — and a mark owes
+   * 3:1 against what it sits on. The light-mode edges run 1.91:1 (protein) to
+   * 2.95:1 (fat) on this card: all four under, and the coil in dark mode was
+   * darker paint on a dark ground.
+   *
+   * So the step inverts with the theme. Light: the strand DARKENS as it laps.
+   * Dark: it BRIGHTENS. Both say the same thing — the strand moved away from
+   * the shade it started at — and each does it in the direction its ground
+   * leaves room for.
+   *
+   * The step is +0.15 against light's −0.14, and the asymmetry is measured
+   * rather than eyeballed. Matching the ΔL exactly gave a visibly weaker pair
+   * here — 1.56:1 on kcal against 1.82:1 in light — because contrast ratios
+   * compress as luminance rises, so the same lightness move buys less
+   * separation going up than coming down. 0.15 lands the pairs at 1.74–1.83,
+   * alongside light's 1.77–1.83. The constant that matters is the separation,
+   * not the number that produces it, and `npm test` measures the separation.
+   */
+  --color-kcal-edge: #5ad098;
+  --color-protein-edge: #6d9bff;
+  --color-fat-edge: #ffb482;
+  --color-carbs-edge: #fd5ed2;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -241,10 +324,18 @@
     --color-surface: #262626;
     --color-muted: #949494;
     --color-outline: #333333;
-    --color-kcal-text: #50c78f;
-    --color-protein-text: #6b9aff;
-    --color-fat-text: #f48b2d;
-    --color-carbs-text: #ff5ec4;
+    --color-kcal-text: #4fc78f;
+    --color-protein-text: #6c9aff;
+    --color-fat-text: #f68934;
+    --color-carbs-text: #fa61d0;
+    --color-kcal: #1aa06b;
+    --color-protein: #3c6ad6;
+    --color-fat: #e67500;
+    --color-carbs: #c824a2;
+    --color-kcal-edge: #5ad098;
+    --color-protein-edge: #6d9bff;
+    --color-fat-edge: #ffb482;
+    --color-carbs-edge: #fd5ed2;
   }
 }
 
@@ -657,6 +748,10 @@
   .ring-arc {
     transition: stroke-dashoffset 250ms cubic-bezier(0.16, 1, 0.3, 1);
   }
+
+  /* The gap the second lap cuts in the first travels on the same curve as the
+     lap that cuts it, which is what `.ring-arc` above is for — see GAP in
+     ring.js for why it is a hole rather than a shadow. */
 
   /* ------------------------------------------------------------------ bars */
 
@@ -1108,38 +1203,68 @@
    * somewhere. This is a state, and states in this app are a track with a
    * selection inside it.
    */
-  .segmented-xs {
-    display: inline-flex;
-    gap: 2px;
-    padding: 2px;
-    border-radius: 999px;
-    background: var(--color-canvas);
+  /**
+   * A control with no pixels.
+   *
+   * Not `display: none` and not `visibility: hidden` — both of those take it
+   * out of the accessibility tree as well as off the screen, which is the one
+   * thing it exists to stay in. A 1px clipped box is the standard way to be
+   * reachable and unseen at the same time.
+   *
+   * It takes no space in the flex row it sits in, so the header band is exactly
+   * as tall as the heading. See `modeReach` in screens/today.js for why the day
+   * card has nothing visible to press.
+   */
+  .reach-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
     border: 0;
-    flex: none;
-  }
-
-  .segment-xs {
-    min-height: 24px;
-    padding: 0 10px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1;
-    color: var(--color-muted);
-    border: 1px solid transparent;
+    overflow: hidden;
     white-space: nowrap;
-  }
-  .segment-xs[aria-pressed='true'] {
-    background: var(--color-surface);
-    border-color: var(--color-ink);
-    color: var(--color-ink);
+    clip-path: inset(50%);
   }
 
-  /* The neighbours in the deck draw the control so a drag reveals the real
-     card, but only the live day's is reachable. Belt and braces with the
-     `aria-hidden` and `tabindex` the neighbour cards already carry. */
-  .day-card[aria-hidden='true'] .segmented-xs {
+  /* Only the live day's is reachable — a neighbour is two thirds off screen and
+     its control has nothing to switch. Belt and braces with the `aria-hidden`
+     and `inert` the neighbour cards already carry. */
+  .day-card[aria-hidden='true'] .reach-only {
     pointer-events: none;
+  }
+
+  /**
+   * The swap between readings.
+   *
+   * Every piece of text a mode switch rewrites carries `.reading`, and gets
+   * `.reading-swap` for the one repaint that switch causes. So the calorie
+   * number and all three ring centres move together, as one answer to one tap,
+   * rather than four elements that happened to change at the same time.
+   *
+   * It rises rather than falls, and only 3px. The gesture is "here is the other
+   * side of this", not "here is something new", so it wants to read as a card
+   * turning over rather than as content arriving. Anything longer than about
+   * 200ms stops being feedback and becomes a transition you wait through, on a
+   * control whose whole complaint was that it did not feel like anything.
+   */
+  @keyframes reading-swap {
+    from {
+      opacity: 0;
+      transform: translateY(3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .reading-swap {
+    animation: reading-swap 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .reading-swap {
+      animation: none;
+    }
   }
 
   /* ------------------------------------------------------------- tab bar */
@@ -1162,11 +1287,27 @@
    * radii reads flat, because the eye sees the seams between them rather than a
    * ramp. Radii and mask windows are in `BLUR_RAMP` in main.js.
    *
-   * Then two scrims. The veil is the CANVAS colour, so content dissolves into
-   * the page instead of being greyed out — that is what makes the tab bar look
-   * like it is floating above a surface rather than pasted onto one. The shade
-   * is a low black gradient that only really shows in the last 60px, giving the
-   * bar an edge to sit against.
+   * Then ONE scrim, the veil, which is the canvas colour — so content dissolves
+   * into the page rather than being greyed out, and the bar reads as floating
+   * above a surface rather than pasted onto one.
+   *
+   * There used to be a second scrim over it: a low black gradient, 10% in light
+   * and 34% in dark, to give the bar an edge to sit against. It is gone, and
+   * black is the reason. Black over the canvas does not darken the canvas, it
+   * DESATURATES it — #f0f0f0 under 10% black is a flat dead grey, and the word
+   * for that is muddy. In dark it was worse in a different way: it pooled to
+   * something darker than the page itself, so the bottom of every screen had a
+   * dirty patch under it that belonged to no object.
+   *
+   * The fix was not a better shade of black. It was noticing the veil had been
+   * left at 92% — 8% of live content still showing through — and that the black
+   * existed only to hide what that 8% let past. Taking the veil to the full
+   * canvas colour removes the leak and the patch together, and the bottom of
+   * the screen is then exactly the page colour, which is the one tone that
+   * cannot look dirty on the page.
+   *
+   * The bar keeps its own edge without help: it carries `--color-surface` and a
+   * 1px outline, and that is what an edge is for.
    */
   .tabbar-fade {
     position: fixed;
@@ -1189,32 +1330,20 @@
     display: block;
   }
 
+  /* Opaque canvas for the first 34% — the 54px the home indicator and the
+     bottom of the pill live in, where there is nothing to be gained by letting
+     a log row show through. Then a long ramp over the remaining 105px, which is
+     what keeps the band from ending on a visible line. One colour throughout,
+     so there is no second hue to go muddy. */
   .tabbar-fade > .fade-veil {
     background: linear-gradient(
       to top,
-      color-mix(in srgb, var(--color-canvas) 92%, transparent) 0%,
-      color-mix(in srgb, var(--color-canvas) 80%, transparent) 22%,
-      color-mix(in srgb, var(--color-canvas) 52%, transparent) 48%,
-      color-mix(in srgb, var(--color-canvas) 20%, transparent) 72%,
+      var(--color-canvas) 0%,
+      var(--color-canvas) 34%,
+      color-mix(in srgb, var(--color-canvas) 86%, transparent) 48%,
+      color-mix(in srgb, var(--color-canvas) 54%, transparent) 66%,
+      color-mix(in srgb, var(--color-canvas) 22%, transparent) 82%,
       transparent 100%
-    );
-  }
-
-  .tabbar-fade > .fade-shade {
-    background: linear-gradient(
-      to top,
-      color-mix(in srgb, #000 10%, transparent) 0%,
-      color-mix(in srgb, #000 4%, transparent) 22%,
-      transparent 55%
-    );
-  }
-  :root[data-theme='dark'] .tabbar-fade > .fade-shade,
-  :root[data-theme='system'] .tabbar-fade > .fade-shade {
-    background: linear-gradient(
-      to top,
-      color-mix(in srgb, #000 34%, transparent) 0%,
-      color-mix(in srgb, #000 14%, transparent) 24%,
-      transparent 58%
     );
   }
 

@@ -6,6 +6,279 @@ case study, not a byproduct of it.
 
 ---
 
+## v1.2.0 — the drawn colours, and the rule that was stopping them
+
+From use — [NOTES-use-audit.md](NOTES-use-audit.md), U7. Three notes on one
+screenshot of the rings: *the colour choices are all over the place*, *the fat
+colour is two different and looks brown/muddy*, *the pink could go a touch dark*.
+
+### What "all over the place" turned out to mean
+
+Converted to OKLCH, the four fill→edge steps were ΔL **−0.087** (carbs), −0.105
+(kcal), −0.129 (fat) and **−0.164** (protein). Protein's edge was nearly twice
+the step carbs' was.
+
+So it was not four wrong colours. It was four unrelated *distances*, each picked
+on its own and never held up against the others — which is exactly what a set
+looks like when it has been assembled rather than constructed. Every edge is now
+its fill at ΔL −0.14 in light and +0.15 in dark.
+
+### The brown was not a bad hex
+
+At fat's old hue of 57° and its edge's lightness, sRGB has 0.130 of chroma left
+to give, and the old edge was already taking 0.131 of it. **There was no better
+orange available.** A dark orange with no chroma left in it is brown; that is
+what brown is. No amount of picking fixes that at 57°.
+
+### Then the colours arrived, and they were better
+
+Picked off the ring mockup: `#2049B2`, `#F27E11`, `#C0189B`, each with a darker
+stop under it. Two of the three were already tokens — the mockup builds the ring
+on what this palette had been treating as its *dark* end, and goes darker still.
+
+Measured against the gates, four of the six missed:
+
+| pick | gate | measured |
+| --- | --- | --- |
+| `#2049B2` fill | 3:1 on the dark card | **1.91** |
+| `#C0189B` fill | 3:1 on the dark card | **2.77** |
+| `#F27E11` fill | 3:1 on a white card | **2.70** |
+| `#C86304` edge | 4.5:1 as type on canvas | **3.52** |
+
+The last two are fat, and fat failing on white is this palette's oldest bug
+recurring — v1.1.6 has the same story about the gold. Both moved down by the
+smallest step that clears: `#e67500` and `#ae5400`.
+
+The first two are not a fault in the colours. **They are the old rule failing.**
+
+### The fills move between themes now
+
+The rule was that a fill never changes with the theme, and it is why every fill
+in this app had been paler than anything drawn for it. One value clearing 3:1 on
+white *and* on near-black lives in about a stop and a half, and the lightness was
+therefore spent before the hue was chosen. `#2049B2` is 7.90:1 on white and
+1.91:1 on the dark card; no single hex serves both, so the drawn blue could not
+exist while that rule stood.
+
+Type has moved between themes since v1.1.0 for precisely this reason. Marks now
+do the same. The invariant that replaces it is a better one: **hue and chroma
+hold across themes, lightness does not.** It is the same colour in both; only its
+distance from the ground changes. Dark fills are lifted only as far as the gate
+needs — protein 0.108, carbs 0.024, fat and kcal not at all.
+
+Protein and carbs are used exactly as picked. Kcal was not drawn and keeps its
+construction.
+
+### The edge became a mark and nothing had noticed
+
+v1.1.7 made the edge the ring's second lap. Until then it was type, or a chip
+behind white text, both covered by the AA rows. A lap is a **mark**, and owes
+3:1 — where the light-mode edges ran 1.91:1 (protein) to 2.95:1 (fat) on the
+dark card. All four under. The coil in dark mode was darker paint on dark ground.
+
+The step therefore inverts with the theme. **Light: the strand darkens as it
+laps. Dark: it brightens.** Both say the strand moved away from where it
+started, each in the direction its ground has room for. The dark step is +0.15
+against light's −0.14, and the asymmetry is measured rather than eyeballed:
+matching them exactly gave a visibly weaker pair (1.56:1 on kcal against 1.82:1
+in light), because contrast ratios compress as luminance rises.
+
+### Two new rows in the test, and one of them earned its place immediately
+
+`npm test` now measures the edge **as a mark** in both themes, and the
+**separation within each pair** in both themes. The second is the invariant this
+version is really about: the ring's argument is that the second lap is the first
+lap's colour *moved*, so a pair that closes up stops saying anything.
+
+It failed on the first attempt at the dark step, which is the only evidence
+worth having that a test is doing work. 107 → 123 passing.
+
+### And the ramp was too long
+
+`BLEND` drops from a quarter turn to a sixth. At 112% the whole second lap sat
+inside a quarter-turn blend, so 22g over looked very close to exactly on target —
+the v1.1.7 complaint returning at the overages that actually happen rather than
+at the extremes.
+
+---
+
+## v1.1.8 — the tab bar stops making a mess at the bottom of the screen
+
+Second finding from real use — [NOTES-use-audit.md](NOTES-use-audit.md), U3.
+Logged as one complaint, "the tab bar background feels unfinished"; it was three
+faults with three different causes, and separating them was most of the work.
+
+### The blur was over text with no reason to be blurred
+
+The band is 159px. The bar occupies the bottom 88 of it — 20px inset plus 68px
+tall — so **the top 71px of the band is open page**, and the mildest blur layer
+was running the full height. That put a 1.5px blur across seventy pixels of
+content that is nowhere near the bar, which on Today is usually a whole log row.
+
+Blur under a floating bar is paying for one thing: content about to pass beneath
+it should recede before it gets there. Seventy pixels up, nothing is about to
+pass beneath anything. It was a cost with no matching benefit, and the reading
+was exactly right — text that should be legible, slightly out of focus, for no
+reason a person could name.
+
+The ramp now tapers out by 62% of the band, 98px, ten above the top edge of the
+bar. Close enough to the bar that it is doing its job, clear of anything worth
+reading, and not ending on a line of its own.
+
+### The black was the muddiness
+
+The bottom carried two scrims: a veil in the canvas colour, then a black
+gradient over it — 10% in light, 34% in dark.
+
+**Black over the canvas does not darken the canvas, it desaturates it.** #f0f0f0
+under 10% black is a flat dead grey, which is what "muddy" and "dirty" are the
+words for. In dark it failed differently and worse: it pooled to something
+*darker than the page itself*, so the bottom of every screen had a patch under
+it that belonged to no object and could not be explained by anything on screen.
+
+The fix was not a better black, and it was not researching what competitors use.
+It was noticing why the black was there at all. The veil had been left at 92% —
+8% of live content still coming through — and the black existed only to muddy
+what that 8% let past. **Take the veil to the full canvas colour and both go at
+once.** It now holds solid for the first 34% of the band, the 54px containing
+the home indicator and the bottom of the pill, then ramps out over the remaining
+105px.
+
+The bottom of the screen is now exactly the page colour, which is the one tone
+on the screen that cannot look dirty on the page.
+
+Losing the shade costs the bar the edge it was sitting against, and it does not
+need one: it carries `--color-surface` and a 1px outline, which is what an edge
+is for. Five layers down to four, one of them deleted rather than tuned.
+
+---
+
+## v1.1.7 — the ring laps itself
+
+One change, and it reverses a decision made three versions ago. First finding
+from real use rather than from a read of the code — see
+[NOTES-use-audit.md](NOTES-use-audit.md), U1.
+
+### Going over draws a second lap
+
+**Past the target the ring keeps going, in the darker edge shade, over the lap
+it already drew.** It had saturated: the arc closed at 100% and stopped, and
+everything past that was left to the number in the middle.
+
+The original reasoning is still in the file and it was not stupid — a ring is a
+0–100% container, a second lap is ambiguous about how many laps have gone by,
+and the text was already stating the magnitude exactly. What it missed is that
+it made `54g over` and `exactly on target` the same picture. Two states that
+could not be less alike, rendered identically, and the app's whole argument is
+that **over is information**. A mark with nowhere to put the excess cannot say
+the one thing this app exists to say without shame.
+
+That it survived to be shipped is the interesting part. It was reasoned about
+carefully, written down, and wrong — and it took using the app on a day that
+went over to see it, because the state simply never came up while building. The
+bars had already solved this in v1.1.1 with the overage segment; the rings, added
+later, quietly regressed it. **Same fact, two marks, two different answers** —
+which is the failure the component vocabulary exists to prevent.
+
+Three details:
+
+**The lap is the edge shade, not a new colour.** `MACRO_EDGE` already means "the
+part past the target" on `bar-over`. Reusing it makes overage one encoding across
+both marks rather than a ring-specific invention, and it costs no new tokens.
+
+**It arrives at that shade gradually, not at 12 o'clock.** The first build
+stepped straight from fill to edge where the second lap began, and the step drew
+a hard vertical seam at exactly the point the strand is supposed to be
+continuous. The ring stopped reading as one thing that kept going and started
+reading as two rings stacked up — a literal second ring rather than a coil.
+
+So the strand now leaves the first lap at the first lap's own colour and deepens
+into the edge shade over the following quarter turn. The seam is gone, and the
+colour changes job while it's at it: it is no longer announcing *that* a second
+lap has begun — the geometry already said that — but saying *how far into it*
+you are. 103% is the strand barely lifting off; 200% is fully dark. That is a
+reading the previous version could not give at all.
+
+A quarter turn is the shortest blend that survives the small overages. At 105%
+the entire second lap falls inside it, which is correct: being 5% over should
+look like being barely over, not like a new ring appearing.
+
+The lap is painted at full length and **revealed by a mask** rather than grown
+directly, so the ramp stays fixed to the strand. Growing it would stretch the
+blend as the day went on, and the shade at any point would depend on how far
+over you were rather than on where it sits in the coil.
+
+**The ramp is a real gradient, not ten steps of `color-mix`.** Segments were the
+first attempt and they banded — at 84px each step is six device pixels wide at
+3x, so the blend read as a staircase, which is worse than the hard seam it
+replaced. A seam is at least deliberate.
+
+The gradient's axis is positional rather than path-length based, which is the
+property that matters: full shade at the top of the ring, edge shade a quarter
+turn later, and everything past that padded. The colour at any point on the
+strand depends on **where it is**, not on how far over you are, so the ramp is
+nailed to the ring and cannot slide.
+
+**Nothing marks the crossing but the cap itself.** Two other answers were built
+first and both are gone.
+
+A **drop shadow** under the leading cap — what Apple's activity rings use, and
+the reference this was worked against. It reads, and it was still wrong here:
+depth is a channel this app does not otherwise use. Every mark in it is flat, so
+one shadow in one place would have been the only lit object on the screen.
+
+Then a **2px gap** cut as a hole in the lap below, outlining the cap. Cheaper,
+flatter, in the vocabulary already here — an edge rather than a light source. It
+was also nearly invisible at 84px, and once the ramp underneath was smooth it
+turned out to be answering a question that had stopped being asked. A round cap
+in the darker shade, sitting on a lighter strand, reads as lapping unaided.
+
+The order is worth keeping, because it is what actually happened: shadow → gap →
+neither. Each removal only became obvious once the thing before it was built and
+looked at, and none of the three could have been picked on paper.
+
+**It stops at two laps.** Past 200% the second lap closes too and the ring stops
+counting. A third lap is not something a circle can say without becoming a
+puzzle, and by then the centre number is doing the work anyway — the reading
+becomes "at least twice over", which is true, legible, and enough.
+
+The `MIN_ARC` floor applies to the second lap as it does to the first, so 1g over
+draws a short arc rather than a dot at 12 o'clock. Both laps animate, and both
+keep their previous length while there is somewhere to run from, so deleting the
+entry that put you over unwinds the lap instead of snapping it away.
+
+### Two bugs found by drawing it large
+
+Neither would have surfaced at 84px, and both were found by scaling one ring to
+3x on screen and looking at it. Worth the thirty seconds it costs.
+
+**A patch of the darkest paint on the strand, hanging at 11 o'clock.** The mask
+that reveals the second lap was round-capped at both ends, and the cap at the
+*start* reaches half a stroke backwards past 12 o'clock — which on a closed path
+is the far end of the ring. It was uncovering the tail of the strand and leaving
+it there, detached, on a ring that was only 129% full. The body is now square at
+both ends, which is correct anyway: the strand leaves the first lap where the
+first lap stopped, so a cap there is a second nose on something that never
+ended. The round tip is a separate zero-length dash parked on the leading end.
+
+**A carbs ring painting itself with the fat gradient.** `url(#id)` resolves
+against the whole document and takes the first match, so the per-ring counter
+was not enough — a second copy of the module starts counting at one again and
+every ring it draws reaches into the first copy's gradients. The ids are now
+namespaced per module instance. The symptom is the memorable part: not a crash,
+not a blank, just the wrong macro's colour, sometimes.
+
+Verified at 100 / 103 / 110 / 129 / 150 / 180 / 200%, in both schemes, on all
+three macros, and at 3x. Contrast suite unchanged at 107 passing. **Still
+unverified on device.**
+
+One thing left open: at 103% the whole second lap sits inside the blend, so it
+is very nearly the same picture as 100%. That is the blend behaving as designed
+— barely over should look barely over — but it is the original complaint in
+miniature, and `BLEND` is the one number that trades the two against each other.
+
+---
+
 ## v1.1.6 — the status bar joins the scrim, and the add sheet gets its spacing back
 
 Four changes, all of them about a sheet's relationship to the space around it.
