@@ -185,6 +185,22 @@ function overStrand(macro, overLen) {
     const mix = Math.round(((i + 1) / RAMP_STEPS) * 100)
     arcs.push(span(i * step, (i + 1) * step, `color-mix(in srgb, ${edge} ${mix}%, ${fill})`))
   }
+
+  /**
+   * Half a stroke of overrun past the end, in the finished shade.
+   *
+   * The mask's round tip is a disc centred ON the cap, so it reaches STROKE/2
+   * beyond it — and a mask can only round paint that is there. While the strand
+   * was painted round the whole circle there always was some; the moment the
+   * ramp became proportional and stopped at the cap, the disc had nothing to
+   * uncover on its far side and the end came out square with a bite taken out
+   * of it. This is the paint the cap is cut from.
+   *
+   * Clamped at C so it cannot wrap. A dash that ran past the end of the path
+   * would reappear at 12 o'clock, where the mask body is also revealing, and
+   * paint the darkest shade on the strand over the lightest part of it.
+   */
+  arcs.push(span(len, Math.min(C, len + STROKE), edge))
   return arcs
 }
 
