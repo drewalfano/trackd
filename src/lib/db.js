@@ -474,6 +474,52 @@ export async function quickAddFoods(limit = 8) {
   return out
 }
 
+/* --------------------------------------------------------- portion memory */
+
+/**
+ * What a phrase means, in amounts, for one particular food.
+ *
+ * "a few handfuls of dried apricots" is not a quantity, and no amount of
+ * parsing will make it one. But it is the same amount every time YOU say it,
+ * and once you have corrected it to 40 g the app never needs to ask again.
+ *
+ * **Stored on the food record, which is what makes the rule structural.** The
+ * spec's constraint is that a correction persists only when it attaches to a
+ * real food — correcting "a small serving of the gnocchi bake" teaches nothing,
+ * because there is no gnocchi bake to teach. Keeping the memory in a store of
+ * its own would leave that as a rule to be remembered at every call site;
+ * keeping it here means there is nowhere to write it when the food does not
+ * exist. It is also deleted with the food, exported with the food and imported
+ * with the food, none of which needed writing.
+ *
+ * This is the same shape `touchFood` already maintains — `lastQuantity` and
+ * `lastUnit` are the phrase-less version of exactly this — so it is one more
+ * field on a record that already remembers how you eat.
+ */
+
+/** Phrases differ in whitespace and case far more often than in meaning. */
+export const portionKey = (phrase) =>
+  String(phrase || '').toLowerCase().trim().replace(/\s+/g, ' ')
+
+/** @returns the remembered amount, or null. Sync: the food is already in hand. */
+export function recallPortion(food, phrase) {
+  const key = portionKey(phrase)
+  if (!key) return null
+  return food?.portions?.[key] || null
+}
+
+export async function rememberPortion(foodId, phrase, { quantity, unit }) {
+  const key = portionKey(phrase)
+  if (!foodId || !key || quantity == null) return null
+  const d = await db()
+  const food = await d.get('foods', foodId)
+  if (!food) return null
+  food.portions = { ...(food.portions || {}), [key]: { quantity: Number(quantity), unit } }
+  await write(async () => d.put('foods', food))
+  emit('foods')
+  return food.portions[key]
+}
+
 /* ----------------------------------------------------------------- entries */
 
 export async function listEntries(date) {

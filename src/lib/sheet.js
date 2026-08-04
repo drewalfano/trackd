@@ -94,7 +94,7 @@ export function openSheet({ title, render, footer = null }) {
   const body = h('div', {
     class: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-[20px] pb-[20px]',
   })
-  const footerEl = h('div', { class: 'px-[20px] pb-[20px] empty:hidden' })
+  const footerEl = h('div', { class: 'sheet-footer px-[20px] pb-[20px] pt-[10px] empty:hidden' })
 
   const panel = h(
     'div',

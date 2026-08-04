@@ -49,6 +49,7 @@ import { pluralize, round, kgToUnit, unitToKg } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
 import { openOnboardingOverlay } from './onboarding.js'
+import { getAiKey, setAiKey, clearAiKey } from '../lib/aiKey.js'
 import { VERSION, REPO_URL } from '../config.js'
 
 /**
@@ -734,6 +735,103 @@ export function settingsScreen() {
       }
       paintCalc()
 
+      /* ----------------------------------------------------- ai describe */
+
+      /**
+       * The key field, and nothing that uses the key.
+       *
+       * It is a `.field` with a chip appended rather than a new shared input,
+       * because `textInput` already spreads its extra props onto the element
+       * and `type: 'password'` is the only thing that makes this field
+       * different. One caller does not earn a component, and `ui.js` is the
+       * app's whole visual vocabulary — a `secretInput` in there would be a
+       * word the system does not otherwise speak.
+       *
+       * Show/Hide is a `chip-sm` for the same reason: it is the pattern this
+       * screen already uses for a small inline action ("Use that",
+       * "Recalculate"), and it costs the icon set nothing. There is no eye
+       * glyph in `icons.js` and the file's own header argues against the set
+       * growing.
+       */
+      let storedKey = getAiKey()
+      let keyDraft = storedKey
+      let keyShown = false
+
+      const keyField = textInput({
+        value: storedKey,
+        type: 'password',
+        placeholder: 'Paste your key',
+        autocomplete: 'off',
+        autocorrect: 'off',
+        autocapitalize: 'off',
+        spellcheck: 'false',
+        onInput: (v) => {
+          keyDraft = v
+          syncKey()
+        },
+      })
+
+      const revealBtn = h(
+        'button',
+        {
+          class: 'chip-sm shrink-0',
+          onclick: () => {
+            keyShown = !keyShown
+            keyField.input.type = keyShown ? 'text' : 'password'
+            revealBtn.textContent = keyShown ? 'Hide' : 'Show'
+          },
+        },
+        'Show'
+      )
+      keyField.appendChild(revealBtn)
+
+      const saveKeyBtn = h(
+        'button',
+        {
+          class: 'btn-primary',
+          disabled: true,
+          onclick: () => {
+            setAiKey(keyDraft)
+            storedKey = getAiKey()
+            keyDraft = storedKey
+            keyField.input.value = storedKey
+            syncKey()
+            toast('Key saved')
+          },
+        },
+        'Save'
+      )
+
+      // Clearing is reversible by pasting the key back, so it does not confirm
+      // the way the Data section's destructive rows do.
+      const clearKeyBtn = h(
+        'button',
+        {
+          class: 'chip-sm self-start',
+          onclick: () => {
+            clearAiKey()
+            storedKey = ''
+            keyDraft = ''
+            keyField.input.value = ''
+            keyShown = false
+            keyField.input.type = 'password'
+            revealBtn.textContent = 'Show'
+            syncKey()
+            toast('Key cleared')
+          },
+        },
+        'Clear'
+      )
+
+      const clearKeySlot = h('div', { class: 'empty:hidden' })
+
+      function syncKey() {
+        const draft = keyDraft.trim()
+        saveKeyBtn.disabled = !draft || draft === storedKey
+        clearKeySlot.replaceChildren(...(storedKey ? [clearKeyBtn] : []))
+      }
+      syncKey()
+
       /* ------------------------------------------------------------ rows */
 
       const prefRow = (label, control) =>
@@ -977,6 +1075,28 @@ export function settingsScreen() {
               chevron: true,
               onclick: () => editBlocksSheet(settings).then(rerender),
             })
+          )
+        ),
+
+        // The intro line under this heading is deliberately absent: it is still
+        // with the author. Everything here works without it.
+        h(
+          'section',
+          { class: 'flex flex-col gap-[10px]' },
+          h('div', { class: 'section-title' }, 'AI Describe'),
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+            labelledField({
+              label: 'API key',
+              hint:
+                'Without a key, AI Describe still reads what it can and matches it against ' +
+                'your foods. The key is for the rest — dishes with no entry anywhere, and ' +
+                'wording the rules will not split.',
+              children: keyField,
+            }),
+            saveKeyBtn,
+            clearKeySlot
           )
         ),
 

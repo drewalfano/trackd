@@ -67,6 +67,21 @@ const P = {
   scan:
     '<path d="M4 8.5V6a2 2 0 012-2h2.5M15.5 4H18a2 2 0 012 2v2.5M20 15.5V18a2 2 0 01-2 2h-2.5M8.5 20H6a2 2 0 01-2-2v-2.5"/><path d="M8.5 8.5v7M11.5 8.5v7M14.5 8.5v7M17 8.5v7"/>',
   custom: '<rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 9v6M9 12h6"/>',
+  /**
+   * Two four-point stars, the larger one off-centre.
+   *
+   * The convention every app has landed on for "a model did this", and the one
+   * place this set borrows a meaning from outside itself rather than drawing
+   * the thing. There is no picture of "describe it in words" — a speech bubble
+   * would say "chat", which this deliberately is not, and a pencil is already
+   * the app's edit glyph.
+   *
+   * Concave curves rather than straight-sided points: at 24px a star drawn with
+   * straight edges reads as a plus sign with the corners knocked off.
+   */
+  sparkle:
+    '<path d="M11 3.5l1.6 4.4a2 2 0 001.2 1.2l4.4 1.6-4.4 1.6a2 2 0 00-1.2 1.2L11 17.9l-1.6-4.4a2 2 0 00-1.2-1.2L3.8 10.7l4.4-1.6a2 2 0 001.2-1.2z"/>' +
+    '<path d="M17.8 15.2l.6 1.6a1 1 0 00.6.6l1.6.6-1.6.6a1 1 0 00-.6.6l-.6 1.6-.6-1.6a1 1 0 00-.6-.6l-1.6-.6 1.6-.6a1 1 0 00.6-.6z"/>',
   barcode: '<path d="M4 6v12M8 6v12M11.5 6v12M15 6v12M20 6v12"/>',
   camera:
     '<path d="M3 8.5A2.5 2.5 0 015.5 6h1.7a1 1 0 00.83-.45l.94-1.4A1 1 0 019.8 3.7h4.4a1 1 0 01.83.45l.94 1.4A1 1 0 0016.8 6h1.7A2.5 2.5 0 0121 8.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 17.5z"/><circle cx="12" cy="13" r="3.5"/>',

@@ -1,5 +1,16 @@
 import { computeMacros } from './compute.js'
-import { getFood, putEntry, touchFood, putMeal, getMeal } from './db.js'
+import {
+  getFood,
+  putEntry,
+  touchFood,
+  putMeal,
+  getMeal,
+  listFoods,
+  identityKey,
+  rememberPortion,
+} from './db.js'
+import { adoptDraft } from './off.js'
+import { classifyItem } from './describeResolve.js'
 import { round } from './format.js'
 
 /**
@@ -72,8 +83,47 @@ export async function saveEntriesAsMeal(name, entries) {
 export async function logPlate(plate) {
   const entries = []
   for (const item of plate.items) {
-    const food = await getFood(item.foodId)
+    const kind = classifyItem(item)
+
+    /**
+     * An estimate becomes an ordinary entry and nothing marks it.
+     *
+     * This is the same record `quickAdd` writes for a custom entry — no food,
+     * a name, and a `computed` block — which is exactly the spec's intent:
+     * once it has been reviewed and committed it is a normal log entry, not a
+     * flagged one. The log, the day total and History cannot tell it apart
+     * because there is nothing to tell apart.
+     */
+    if (kind === 'estimated') {
+      entries.push(
+        await putEntry({
+          date: plate.date,
+          block: plate.block,
+          foodId: null,
+          source: 'describe',
+          foodName: item.name || 'Unnamed',
+          quantity: Number(item.quantity) || 1,
+          unit: item.unit || 'serving',
+          computed: {
+            kcal: round(item.computed.kcal, 1),
+            protein: round(item.computed.protein, 1),
+            fat: round(item.computed.fat, 1),
+            carbs: round(item.computed.carbs, 1),
+          },
+        })
+      )
+      continue
+    }
+
+    // Nothing without an amount or a match reaches here — the plate blocks the
+    // commit — but skipping is the safe reading rather than logging a zero.
+    if (kind !== 'matched') continue
+
+    // A staple or an Open Food Facts product becomes one of your foods at the
+    // moment it is committed, and not before.
+    const food = item.foodId ? await getFood(item.foodId) : await adoptForLog(item.draft)
     if (!food) continue // deleted mid-assembly; skip rather than fail the plate
+
     entries.push(
       await logFood({
         food,
@@ -83,8 +133,37 @@ export async function logPlate(plate) {
         block: plate.block,
       })
     )
+
+    /**
+     * Spec 5: a corrected amount is remembered, but only against a real food.
+     *
+     * `corrected` is set by the plate when YOU change the amount, so the app
+     * never learns from a number it supplied itself. Done here rather than at
+     * the moment of the edit because a draft has no food record to write to
+     * until this line has created one.
+     */
+    if (item.corrected && item.phrase) {
+      await rememberPortion(food.id, item.phrase, { quantity: item.quantity, unit: item.unit })
+    }
   }
   return entries
+}
+
+/**
+ * A draft becomes a food, reusing an existing record rather than duplicating.
+ *
+ * `adoptDraft` already owns "an Open Food Facts draft becomes one of your
+ * foods", including the barcode reuse, so this adds only the one thing it does
+ * not do: the name-identity check `adoptStaple` uses, which is what a staple
+ * needs since it has no barcode. `identityKey` already prefers a barcode when
+ * there is one, so the single lookup covers both and `adoptDraft` handles
+ * everything after it.
+ */
+async function adoptForLog(draft) {
+  if (!draft) return null
+  const library = await listFoods()
+  const existing = library.find((f) => identityKey(f) === identityKey(draft))
+  return existing || adoptDraft(draft)
 }
 
 /**

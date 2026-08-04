@@ -1788,6 +1788,48 @@
   }
 }
 
+/**
+ * The pinned footer, given the tab bar's treatment.
+ *
+ * The footer is a flex sibling of the scroller rather than something laid over
+ * it, so nothing was ever passing behind the buttons — but the scroller's
+ * bottom edge is a hard clip, and a row of segments caught halfway through it
+ * reads exactly as if it were. "Morning" sliced through the middle of its own
+ * letters by a grey slab is the version of this that looks broken.
+ *
+ * `.tabbar-fade` solved the same problem on the page: opaque canvas where the
+ * controls sit, then a ramp long enough that the band does not end on a visible
+ * line. This is that, at the height a sheet needs — the fade is drawn upward
+ * from the footer's top edge, over the last of the scroll, and the footer comes
+ * after the scroller in the DOM so it paints above it without a z-index.
+ *
+ * One colour throughout, canvas, for the reason the tab bar gives: a second hue
+ * in the ramp goes muddy against whatever is scrolling under it.
+ */
+.sheet-footer {
+  position: relative;
+  background: var(--color-canvas);
+}
+
+.sheet-footer::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  /* 24, not 40. The band only has to catch the sliver of content the clip
+     would have cut through — reaching further up starts dimming things that
+     are still fully on screen and being read, which is its own kind of wrong. */
+  height: 24px;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    var(--color-canvas) 0%,
+    color-mix(in srgb, var(--color-canvas) 72%, transparent) 45%,
+    color-mix(in srgb, var(--color-canvas) 28%, transparent) 72%,
+    transparent 100%
+  );
+}
+
 .sheet-panel {
   animation: sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }

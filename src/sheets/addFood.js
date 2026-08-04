@@ -28,6 +28,7 @@ import { pushMeal } from './meal.js'
 import { pushQuickAdd } from './quickAdd.js'
 import { pushCustom } from './custom.js'
 import { pushScan } from './scan.js'
+import { pushDescribe } from './describe.js'
 
 /**
  * The add sheet.
@@ -230,15 +231,28 @@ function actionButton({ iconName, label, onclick }) {
     'button',
     {
       class:
-        'flex min-h-[72px] flex-1 items-center justify-center gap-[10px] rounded-[24px] ' +
-        'bg-surface text-ink',
+        'flex min-h-[89px] min-w-0 flex-1 flex-col items-center justify-center gap-[6px] ' +
+        'rounded-[24px] bg-surface text-ink',
       onclick,
     },
-    // 24 and 16, both off the mock's own frame: 72 tall with 24 of padding top
-    // and bottom leaves exactly 24 for the row, and the label is set to fill it.
-    // The old 13px was sized to sit under an icon rather than beside one.
+    /**
+     * Icon ABOVE the label again, and 89 tall rather than 72.
+     *
+     * The side-by-side arrangement was the right answer for two buttons and
+     * stops being one at three. Across a 375 sheet, three flex children with
+     * the page's 10px gaps come to 105 each — and "Describe" set at 16px beside
+     * a 24px icon needs about 96 of that before any padding, so the row either
+     * wrapped or the labels shrank to a size nothing else in the app uses.
+     *
+     * Stacked, the constraint moves from width to height and the height is
+     * ours to spend: 89 is the number this button carried before it went
+     * side-by-side, so the sheet is back to a layout it has already been
+     * measured in. The label drops to 14 for the same reason it was 13 the
+     * last time it sat under an icon — a caption under a mark reads smaller
+     * than a word beside one.
+     */
     icon(iconName, { size: 24 }),
-    h('span', { class: 'text-[16px] font-semibold' }, label)
+    h('span', { class: 'text-[14px] font-semibold' }, label)
   )
 }
 
@@ -357,7 +371,7 @@ export async function openAddFood({ date = state.date, block } = {}) {
        * The plate keeps the day and block it was started with, so assembling at
        * 11pm and committing after midnight still lands where you meant.
        */
-      const addToPlate = async (newItems, label) => {
+      const addToPlate = async (newItems, label, { silent = false } = {}) => {
         const plate = await getPlate()
         const next = {
           items: [...plate.items, ...newItems],
@@ -367,7 +381,9 @@ export async function openAddFood({ date = state.date, block } = {}) {
         }
         await savePlate(next)
         await paintPlate()
-        toast(`${label} added to your plate`)
+        // Describe opens the plate on top of the toast that would announce it,
+        // so the toast would be reporting a screen already in front of you.
+        if (!silent) toast(`${label} added to your plate`)
       }
 
       const commitPlate = async () => {
@@ -783,6 +799,34 @@ export async function openAddFood({ date = state.date, block } = {}) {
           iconName: 'scan',
           label: 'Scan',
           onclick: () => pushScan(ctx, { date, block: targetBlock, onStage: stageOne }),
+        }),
+        /**
+         * The third route, and the only one that starts from a sentence rather
+         * than from a food.
+         *
+         * It sits with Custom and Scan because it belongs to the same family:
+         * these are the three ways in for something the app has not already
+         * got. It is always here, with or without a key — the rules parser and
+         * the resolution chain are the feature, and the key only buys the parts
+         * they refuse to guess at.
+         */
+        actionButton({
+          iconName: 'sparkle',
+          label: 'Describe',
+          onclick: () =>
+            pushDescribe(ctx, {
+              onItems: async (newItems) => {
+                await addToPlate(newItems, 'Description', { silent: true })
+                const current = await getPlate()
+                pushPlate(ctx, {
+                  plate: current,
+                  onCommitted: (entries) => {
+                    ctx.close()
+                    plateLoggedToast(entries)
+                  },
+                })
+              },
+            }),
         })
       )
 
