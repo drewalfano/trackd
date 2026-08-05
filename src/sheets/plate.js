@@ -338,23 +338,74 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
         )
         const sendable = resolved.filter((r) => r.state === 'unmatched')
 
+        /**
+         * Clearing lives on the totals tile, beside the number it would zero.
+         *
+         * It used to sit at the very bottom, under Day and Block, on the
+         * reasoning that it is the least likely action and should not read as a
+         * third primary next to the footer. That kept it quiet and also kept it
+         * hidden: on a plate of any length it is below the fold, after two
+         * controls nobody scrolls past looking for a way out, and "start again"
+         * is a thing you want early rather than after a scroll.
+         *
+         * The tile is the honest home for it. It is the one element that
+         * describes the plate as a whole, so the control that discards the plate
+         * as a whole belongs on it — the same pairing `sectionLabel` uses for a
+         * heading and its action. It stays a `chip-sm`, so moving it up buys
+         * discoverability without claiming any more weight than it had, and the
+         * confirm still stands between it and anything irreversible.
+         */
+        const clearBtn = h(
+          'button',
+          {
+            class: 'chip-sm shrink-0',
+            onclick: async () => {
+              const ok = await confirm({
+                title: 'Clear the plate?',
+                message: 'Nothing has been logged yet, so nothing comes off your day.',
+                confirmLabel: 'Clear',
+              })
+              if (!ok) return
+              await clearPlate()
+              ctx.close()
+              toast('Plate cleared')
+            },
+          },
+          'Clear plate'
+        )
+
         repaint(
           body,
 
+          /**
+           * The reading on the left, the action on the right, centred against
+           * the pair.
+           *
+           * Sitting the chip in the first row instead lined it up with the
+           * calorie figure and left a hole under it, so the tile read as three
+           * things in an L rather than two things side by side. The totals are
+           * one block — a number and the macros that make it up — and the chip
+           * answers to the block, not to its first line.
+           */
           h(
             'div',
-            { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' },
+            { class: 'panel flex items-center justify-between gap-[20px] px-[20px] py-[20px]' },
             h(
               'div',
-              { class: 'flex items-baseline gap-[10px]' },
+              { class: 'flex min-w-0 flex-col gap-[10px]' },
               h(
-                'span',
-                { class: 'tnum text-[30px] font-semibold leading-none' },
-                String(Math.round(totals.kcal))
+                'div',
+                { class: 'flex items-baseline gap-[10px]' },
+                h(
+                  'span',
+                  { class: 'tnum text-[30px] font-semibold leading-none' },
+                  String(Math.round(totals.kcal))
+                ),
+                h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal')
               ),
-              h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal')
+              macroLine(totals, { size: 14, omit: ['kcal'] })
             ),
-            macroLine(totals, { size: 14, omit: ['kcal'] })
+            clearBtn
           ),
 
           /**
@@ -444,29 +495,6 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
               },
               blockNames: settings.blockNames,
             })
-          ),
-
-          // Clearing is the one destructive action here and the least likely,
-          // so it reads as a link rather than a slab. It also keeps the body
-          // from ending in a full-width button butted against the pinned
-          // footer, which made three actions look like three primaries.
-          h(
-            'button',
-            {
-              class: 'chip-sm self-center',
-              onclick: async () => {
-                const ok = await confirm({
-                  title: 'Clear the plate?',
-                  message: 'Nothing has been logged yet, so nothing comes off your day.',
-                  confirmLabel: 'Clear',
-                })
-                if (!ok) return
-                await clearPlate()
-                ctx.close()
-                toast('Plate cleared')
-              },
-            },
-            'Clear plate'
           )
         )
 
