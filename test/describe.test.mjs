@@ -111,6 +111,31 @@ eq('the item after an "and" survives it', orphan.items.map((i) => i.food), ['bre
 
 eq('order is preserved', parseDescription('a scone, gnocchi bits, and an apple').parts.map((p) => p.kind), ['span', 'item'])
 
+/**
+ * Composition, not accompaniment. Splitting these produced `french toast made`,
+ * which is a phantom — a food that does not exist, sent off to be looked up.
+ */
+eq(
+  'made with is one food',
+  parseDescription('french toast made with 2 eggs and homemade bread').items.map((i) => i.food),
+  ['french toast made with 2 eggs and homemade bread']
+)
+eq(
+  'cooked in is one food',
+  parseDescription('chicken cooked in butter').items.map((i) => i.food),
+  ['chicken cooked in butter']
+)
+eq(
+  'plain with still splits',
+  parseDescription('an omelette with a house salad').items.map((i) => i.food),
+  ['omelette', 'house salad']
+)
+eq(
+  'a composition clause does not swallow the next comma item',
+  parseDescription('french toast made with 2 eggs, a raspberry scone').items.map((i) => i.food),
+  ['french toast made with 2 eggs', 'raspberry scone']
+)
+
 /* ------------------------------------------------------------------ edges */
 
 eq('empty input', parseDescription('').items, [])

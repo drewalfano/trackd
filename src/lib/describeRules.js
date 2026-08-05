@@ -154,6 +154,44 @@ function stripPreamble(text) {
  */
 const WITH_SPLIT = /\s+(?:with|alongside|and also)\s+(?=(?:a|an|the|some|two|three|four|\d)\b)/gi
 
+/**
+ * `with` after one of these is composition, not accompaniment.
+ *
+ * "An omelette with a house salad" is two foods. "French toast made with 2 eggs
+ * and homemade bread" is one food and a description of how it was made, and
+ * splitting it produced `french toast made` — a phantom, and a worse failure
+ * than any amount of under-splitting, because it names a food that does not
+ * exist and then goes looking for it.
+ *
+ * The verb is the whole signal and it is a reliable one: nobody writes "made
+ * with" about a side dish. Everything from that verb to the end of the chunk is
+ * treated as part of the name, which does over-capture — "chicken cooked in
+ * butter and a side salad" comes back as one item rather than two. That is the
+ * same trade the comma-run refusal makes and it falls the same way: one item
+ * carrying too much is visible on the plate and can be fixed or sent on, where
+ * a phantom is a confident wrong answer nobody asked for.
+ *
+ * `served with` is deliberately absent. It means the opposite of the rest.
+ */
+const COMPOSITION =
+  /\b(?:made|cooked|baked|prepared|filled|stuffed|topped|mixed|blended|fried|scrambled|tossed)\s+(?:with|from|of|in)\b[^,]*/gi
+
+/**
+ * Separators inside a composition clause are hidden from the splitter and put
+ * back afterwards, so the clause survives segmentation as one piece without
+ * `segment` needing to know anything about food.
+ */
+const AND_MASK = '\u0001'
+const WITH_MASK = '\u0002'
+
+const maskComposition = (text) =>
+  text.replace(COMPOSITION, (clause) =>
+    clause.replace(/\s+and\s+/gi, AND_MASK).replace(/\s+with\s+/gi, WITH_MASK)
+  )
+
+const unmask = (text) =>
+  text.split(AND_MASK).join(' and ').split(WITH_MASK).join(' with ')
+
 /** Splits, and remembers which separator produced each fragment. See `segment`. */
 function segment(text) {
   const prepared = text.replace(WITH_SPLIT, ', ')
@@ -375,7 +413,12 @@ export function parseDescription(input) {
   const empty = { parts: [], items: [], spans: [] }
   if (typeof input !== 'string' || !input.trim()) return empty
 
-  const fragments = segment(stripPreamble(input))
+  // Composition clauses are hidden from the splitter and restored immediately
+  // after, so every fragment downstream reads as it was written.
+  const fragments = segment(maskComposition(stripPreamble(input))).map((f) => ({
+    ...f,
+    text: unmask(f.text),
+  }))
   if (!fragments.length) return empty
 
   // The first fragment always opens an item; after that, an "and" boundary or a
