@@ -540,6 +540,49 @@
     --nav-height: 68px;
     /* Figma: the blur rect is 402 x 159, bottom-anchored. */
     --nav-fade: 159px;
+
+    /**
+     * The height of the screen, for anchoring anything that floats at its bottom.
+     * One definition, because getting it wrong is not a local mistake — see
+     * `.screen-floor`.
+     *
+     * `svh` here is for a Safari TAB, where it is the visible area with the
+     * toolbars showing and a bar anchored to it cannot end up underneath them.
+     * The standalone override below is the interesting half.
+     */
+    --screen-h: 100svh;
+  }
+
+  /**
+   * Installed, the screen is `lvh` — and NOT `dvh`, which is the trap this app
+   * fell into for a whole deploy.
+   *
+   * Captured on Drew's iPhone 17 Pro, three states, same build:
+   *
+   *                        scrolling   short   sheet open
+   *     screen.height            874     874          874
+   *     100vh                    874     874          874
+   *     100lvh                   874     874          874
+   *     100dvh                   874     812          812
+   *     innerHeight              874     812          812
+   *     visualViewport.height    874     812          812
+   *     documentElement.clientHeight  812  812        812
+   *
+   * `dvh` is the DYNAMIC viewport, and on a screen with nothing to scroll iOS
+   * collapses it to the small one. So an anchor built on `dvh` asks for the
+   * screen and is handed the short box on exactly the screens that were broken —
+   * which is what happened: the tab bar landed 82px off the bottom instead of 20,
+   * and `82 = 62 + 20` to the pixel.
+   *
+   * `innerHeight` and `visualViewport.height` collapse with it, so measuring the
+   * screen from JS is the same mistake wearing different clothes. `vh` and `lvh`
+   * are the only two that held 874 in all three states, and `lvh` is the one that
+   * says what it means: the LARGE viewport, which is the screen.
+   */
+  @media (display-mode: standalone) {
+    :root {
+      --screen-h: 100lvh;
+    }
   }
 
   /**
@@ -2004,11 +2047,11 @@
    */
   /* Bottom-anchored the long way round — see `.screen-floor`. A band that has to
      be exactly `--nav-fade` tall does not want a flex column, so it takes the
-     same `100dvh` and offsets its own top instead. */
+     same screen height and offsets its own top instead. */
   .tabbar-fade {
     position: fixed;
     inset-inline: 0;
-    top: calc(100dvh - var(--nav-fade));
+    top: calc(var(--screen-h) - var(--nav-fade));
     height: var(--nav-fade);
     z-index: 30;
     pointer-events: none;
@@ -2169,16 +2212,17 @@
    * two earlier fixes missed: both were aimed at the document's height, and the
    * document's height was never the variable.
    *
-   * So nothing anchors to the bottom any more. The element spans `100dvh` from
+   * So nothing anchors to the bottom any more. The element spans the screen from
    * the TOP, where there is only one answer, and lays its content out at the far
-   * end. `dvh` because it is the only unit that measured the truth; `svh` would
-   * reintroduce the same 62px by hand.
+   * end. The height comes from `--screen-h`, which is where the choice of unit is
+   * made and argued — this was `100dvh` inline for a deploy, and `dvh` is the one
+   * unit that collapses on exactly the screens that were broken.
    */
   .screen-floor {
     position: fixed;
     inset-inline: 0;
     top: 0;
-    height: 100dvh;
+    height: var(--screen-h);
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
@@ -2191,7 +2235,7 @@
     position: fixed;
     inset-inline: 0;
     top: 0;
-    height: 100dvh;
+    height: var(--screen-h);
   }
 
   .safe-b {

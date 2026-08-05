@@ -648,6 +648,7 @@ export function viewportScreen() {
         'screen.height',
         'innerHeight',
         'documentElement.clientHeight',
+        '--screen-h',
         '100dvh',
         'scrollable',
         'body pinned',

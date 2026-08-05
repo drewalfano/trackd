@@ -475,10 +475,10 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
 
   const root = h(
     'div',
-    // `dvh`, not `svh` — this container's height is what pins the footer
-    // button, and `svh` measured 62px short of the screen on the installed PWA.
-    // See `.screen-floor` in styles.css.
-    { class: 'flex h-dvh flex-col bg-canvas' },
+    // `--screen-h`, not `svh` and not `dvh` — this container's height is what
+    // pins the footer button, and both of those measure 62px short of the screen
+    // on the installed PWA. See the token, and `.screen-floor`.
+    { class: 'flex h-[var(--screen-h)] flex-col bg-canvas' },
     header,
     body,
     footer

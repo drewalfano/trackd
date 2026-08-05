@@ -386,8 +386,9 @@ function renderStorageBlocked() {
     h(
       'div',
       {
-        // `dvh` for the reason given on `.screen-floor`: `svh` is 62px short.
-        class: 'mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-3 px-6',
+        // `--screen-h` for the reason given on that token: both `svh` and `dvh`
+        // come back 62px short of the screen on the installed PWA.
+        class: 'mx-auto flex min-h-[var(--screen-h)] max-w-md flex-col justify-center gap-3 px-6',
         /**
          * The one surface that is not a `.screen`, so it carries its own
          * insets. It is centred and short enough never to reach the status bar

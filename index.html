@@ -19,13 +19,33 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Macros" />
     <!--
-      The pairing `viewport-fit=cover` needs. `default` insets the web view below
-      an opaque status bar, which on a notched device leaves the layout extending
-      up while `env(safe-area-inset-top)` reports 0 — so the inset `.screen`
-      already asks for never fires. `black-translucent` puts the content under
-      the status bar and makes that inset real.
+      `default`, and this is the line that caused the bottom-of-the-screen bug.
+
+      It was `black-translucent` for two days, changed in 8b524bb on the reasoning
+      that `default` insets the web view below an opaque status bar, so
+      `env(safe-area-inset-top)` reports 0 and the inset `.screen` asks for never
+      fires. That commit said UNVERIFIED ON DEVICE, and this is what it cost.
+
+      `black-translucent` puts the content under the status bar, and WebKit then
+      reports a LAYOUT viewport of the screen less the top inset — 812 against a
+      874 screen on Drew's 17 Pro — while the web view still covers all 874.
+      Everything anchored to the bottom then depends on which of those two heights
+      WebKit feels like using, and it does not use one consistently: on a
+      scrollable screen `bottom: 0` and `100dvh` resolve to 874, on a screen with
+      nothing to scroll they collapse to 812. Hence a tab bar that rode up only on
+      days with nothing logged, and sheets that stopped 62px short.
+
+      The inset it was reaching for is not needed under `default`: iOS has already
+      moved the web view below the status bar, so `0 + 20px` IS the right top
+      padding and `.screen`'s existing calc produces it. The trade is the status
+      bar's own appearance, which `theme-color` and lib/statusBar.js drive — that
+      pairing works better here than under `black-translucent`, which forces white
+      glyphs and is wrong over the light theme.
+
+      Keep this as `default`. `--screen-h` in styles.css hardens the app against
+      the short layout viewport either way, but this is the cause.
     -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />
 
     <script>

@@ -30,7 +30,8 @@ const STATE = 'mt-sheet'
  *
  * The height is given rather than left to `height: auto`, which would shrink the
  * pinned body to its content, and rather than `bottom: 0`, which is the edge
- * `.screen-floor` in styles.css exists because WebKit will not commit to. The box
+ * `.screen-floor` in styles.css exists because WebKit will not commit to. It uses
+ * `--screen-h` for the same reason everything else does: `dvh` is short here. The box
  * runs from `-lockedScrollY` to the bottom of the screen — so the page still
  * shows the row it was showing, and the `overflow: hidden` clip lands a full
  * viewport below the fold rather than mid-screen.
@@ -43,7 +44,7 @@ function lockScroll(lock) {
     lockedScrollY = window.scrollY
     style.position = 'fixed'
     style.top = `-${lockedScrollY}px`
-    style.height = `calc(100dvh + ${lockedScrollY}px)`
+    style.height = `calc(var(--screen-h) + ${lockedScrollY}px)`
     style.left = '0'
     style.right = '0'
     style.overflow = 'hidden'

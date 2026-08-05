@@ -85,6 +85,10 @@ export function readViewport() {
     'visualViewport.pageTop': vv ? round1(vv.pageTop) : '—',
     'visualViewport.scale': vv ? round1(vv.scale) : '—',
 
+    /* The token every anchor in the app now resolves through. If this does not
+       equal `screen.height` on the phone, nothing bottom-anchored can be right. */
+    '--screen-h': round1(measure('height:var(--screen-h)').height),
+
     '100vh': round1(measure('height:100vh').height),
     '100svh': round1(measure('height:100svh').height),
     '100lvh': round1(measure('height:100lvh').height),
