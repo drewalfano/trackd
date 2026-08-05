@@ -48,6 +48,45 @@ function lockScroll(lock) {
   }
 }
 
+/**
+ * A pinned `<body>` with no sheet on screen, released.
+ *
+ * This has gone wrong once already and the note on `onPop` describes what it
+ * cost: a sheet whose history entry was misread never reached `destroy`, so
+ * `lockScroll(false)` never ran and the body stayed at `position: fixed;
+ * overflow: hidden` for the rest of the session. **On iOS that is not a quiet
+ * failure.** A pinned layout viewport drags fixed chrome off the bottom of the
+ * screen — the tab bar stops sitting 20px up, the sheet's own bottom edge stops
+ * meeting the screen's, and a list ends well above where the screen does.
+ *
+ * That specific route is closed: history entries carry the sheet's id, and
+ * `destroy` is idempotent. This is not a substitute for either. It is the
+ * admission that the balance of one `lockScroll(true)` against one
+ * `lockScroll(false)` is a property of every close path there is — the close
+ * button, the scrim, Escape, the swipe, the hardware back, a sheet replaced by
+ * another mid-teardown — and that the cost of getting it wrong is paid on the
+ * screen the app is looked at first, silently, until the app is relaunched.
+ *
+ * So the invariant is checked rather than argued: no sheet in the document
+ * means the body is not pinned. Checked on the events that bracket where the
+ * failure would be noticed — coming back to a backgrounded PWA, a viewport
+ * change, a restore from the page cache — rather than on a timer, because there
+ * is nothing here worth a wakeup.
+ *
+ * `active` is deliberately not the test on its own. It stays set through the
+ * 200ms exit animation, and what matters is whether anything is actually on
+ * screen holding the lock, which is a fact about the document.
+ */
+function releaseOrphanedLock() {
+  if (active || document.querySelector('.sheet-scrim')) return
+  if (document.body.style.position !== 'fixed') return
+  lockScroll(false)
+}
+
+window.addEventListener('pageshow', releaseOrphanedLock)
+window.addEventListener('resize', releaseOrphanedLock)
+document.addEventListener('visibilitychange', releaseOrphanedLock)
+
 export function isSheetOpen() {
   return !!active
 }
