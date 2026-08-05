@@ -1,7 +1,9 @@
 import { h, repaint } from '../lib/dom.js'
 import { toast } from '../lib/toast.js'
 import { parseDescription } from '../lib/describeRules.js'
-import { resolveParsed } from '../lib/describeResolve.js'
+import { resolveParsed, resolveModelItems } from '../lib/describeResolve.js'
+import { describeLeftovers } from '../lib/describeModel.js'
+import { hasAiKey } from '../lib/aiKey.js'
 import { notice, slot } from '../lib/ui.js'
 
 /**
@@ -52,7 +54,9 @@ export function pushDescribe(ctx, { onItems }) {
     render: (c) => {
       let text = ''
       let working = false
+      let controller = null
       const status = slot()
+      c.onDispose(() => controller?.abort())
 
       const field = describeField({
         value: '',
@@ -61,7 +65,7 @@ export function pushDescribe(ctx, { onItems }) {
         placeholder: 'An omelette, a house salad and 1.5 pieces of sourdough',
         onInput: (v) => {
           text = v
-          readBtn.disabled = !v.trim() || working
+          setBusy(null)
         },
       })
 
@@ -76,8 +80,7 @@ export function pushDescribe(ctx, { onItems }) {
             if (!input) return
 
             working = true
-            readBtn.disabled = true
-            readBtn.textContent = 'Reading…'
+            setBusy('Reading…')
             repaint(status)
 
             try {
@@ -118,15 +121,88 @@ export function pushDescribe(ctx, { onItems }) {
               toast(err.message || 'Could not read that')
             } finally {
               working = false
-              readBtn.disabled = !text.trim()
-              readBtn.textContent = 'Make a plate'
+              setBusy(null)
             }
           },
         },
         'Make a plate'
       )
 
-      c.setFooter(readBtn)
+      /**
+       * The override, for when the rules get the SHAPE wrong.
+       *
+       * Every other way into Gemini sends fragments, because the rules have
+       * already placed everything they could and only the leftovers are worth
+       * anyone else's opinion. This one exists because that assumes the rules
+       * split correctly in the first place, and when they do not there is
+       * nothing to hand over — "french toast made with 2 eggs and homemade
+       * bread" arrived as three confident items, and no amount of editing three
+       * rows puts them back together.
+       *
+       * So this skips the parse entirely and sends the sentence as written, as
+       * a single unplaced span, which is exactly the case the prompt's SPLIT
+       * half already handles. It is a second button rather than a fallback the
+       * app chooses for you: the whole sentence leaving the device is a bigger
+       * thing than a fragment leaving it, and it should be a thing you did.
+       */
+      const sendAllBtn = h(
+        'button',
+        {
+          class: 'btn-secondary',
+          disabled: true,
+          onclick: async () => {
+            if (working) return
+            const input = text.trim()
+            if (!input) return
+
+            working = true
+            setBusy('Sending…')
+            repaint(status)
+
+            controller?.abort()
+            controller = new AbortController()
+
+            try {
+              const returned = await describeLeftovers({
+                spans: [input],
+                unresolved: [],
+                signal: controller.signal,
+              })
+              const items = await resolveModelItems(returned, { signal: controller.signal })
+              if (!items.length) {
+                repaint(
+                  status,
+                  notice('Gemini did not find a food in that.', { iconName: 'alert' })
+                )
+                return
+              }
+              await onItems(items)
+            } catch (err) {
+              if (err.name === 'AbortError') return
+              toast(err.message || 'Could not reach Gemini')
+            } finally {
+              working = false
+              setBusy(null)
+            }
+          },
+        },
+        'Send it all to Gemini'
+      )
+
+      /** One place that knows what the two buttons say and when they are off. */
+      function setBusy(label) {
+        const empty = !text.trim()
+        readBtn.disabled = empty || working
+        sendAllBtn.disabled = empty || working
+        readBtn.textContent = label === 'Reading…' ? label : 'Make a plate'
+        sendAllBtn.textContent = label === 'Sending…' ? label : 'Send it all to Gemini'
+      }
+
+      c.setFooter(
+        hasAiKey()
+          ? h('div', { class: 'flex flex-col gap-[10px]' }, readBtn, sendAllBtn)
+          : readBtn
+      )
 
       /**
        * A field, one line of grey, and the button. Nothing else.

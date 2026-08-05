@@ -148,10 +148,31 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                   icon('pencil', { size: 16 })
                 )
 
+        const body = foodRowBody({ name, sub, totals: macros, missing: state === 'missing' })
+
         return h(
           'div',
           { class: 'row' },
-          foodRowBody({ name, sub, totals: macros, missing: state === 'missing' }),
+          /**
+           * On an unmatched row the body is the way to fix the WORDS.
+           *
+           * It costs no new control — that half of the row is dead space on
+           * these rows, since there is no food to open — and it is the only
+           * place the text that would be sent can be corrected before sending
+           * it. A row reading "french toast made" can become the sentence it
+           * should have been.
+           */
+          state === 'unmatched'
+            ? h(
+                'button',
+                {
+                  class: 'min-w-0 flex-1 text-left',
+                  'aria-label': `Edit the words for ${name}`,
+                  onclick: () => openEditText(i, item),
+                },
+                body
+              )
+            : body,
           action,
           h(
             'button',
@@ -171,6 +192,59 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
             icon('close', { size: 16 })
           )
         )
+      }
+
+      /**
+       * Correct the words on a row before anything is done with them.
+       *
+       * The text on an unmatched row is both what the search starts from and
+       * what would be sent, so this is the one place to fix a phrase the rules
+       * read wrongly — without which the only options are accepting it or
+       * deleting the row.
+       */
+      function openEditText(index, item) {
+        ctx.push({
+          title: 'Edit',
+          render: (c) => {
+            let value = item.text || item.name || ''
+            const save = h(
+              'button',
+              {
+                class: 'btn-primary',
+                onclick: async () => {
+                  const next = value.trim()
+                  if (!next) return
+                  items = items.map((it, j) =>
+                    j === index ? { ...it, name: next, text: next } : it
+                  )
+                  await persist()
+                  repaintAll()
+                  c.pop()
+                },
+              },
+              'Update'
+            )
+            c.setFooter(save)
+
+            return h(
+              'div',
+              { class: 'flex flex-col gap-[10px] pb-[10px]' },
+              textInput({
+                value,
+                autofocus: true,
+                onInput: (v) => {
+                  value = v
+                  save.disabled = !v.trim()
+                },
+              }),
+              h(
+                'p',
+                { class: 'px-0 text-[12px] leading-snug text-muted' },
+                'What the app searches for, and what it would send if you ask Gemini.'
+              )
+            )
+          },
+        })
       }
 
       /** Attach a food to a row that has none. The keyless way through. */
