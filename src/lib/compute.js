@@ -148,22 +148,58 @@ export function sanityCheck(per100, unit = 'g') {
 export const AVERAGES_MIN_DAYS = 4
 
 /**
+ * What separates a day someone stopped logging from a day they ate lightly.
+ *
+ * Nothing in the data says which is which, so this asks for TWO signals to agree
+ * before writing a day off, because either alone gets it wrong in a way that
+ * matters. Calories alone would discard a real fast; period count alone would
+ * discard a single large meal that was genuinely the whole day.
+ *
+ * Both are guesses, and they are constants rather than inline numbers so they
+ * can be argued with. A day is partial when it is confined to fewer than two of
+ * the three periods AND lands under 60% of the calorie target.
+ */
+export const PARTIAL_DAY_KCAL_FRACTION = 0.6
+export const PARTIAL_DAY_MIN_PERIODS = 2
+
+/** Untracked days are not partial — they are absent, and counted separately. */
+export function isPartialDay(day, targets) {
+  const entries = day.entries || []
+  if (!entries.length) return false
+  const periods = new Set(entries.map((e) => e.block)).size
+  const target = Number(targets?.kcal) || 0
+  if (target <= 0) return false
+  const low = (day.totals?.kcal || 0) < target * PARTIAL_DAY_KCAL_FRACTION
+  return periods < PARTIAL_DAY_MIN_PERIODS && low
+}
+
+/**
  * The weekly read, or an admission that there isn't one yet.
  *
  * `kcal` and `protein` come back as null below the threshold rather than as
  * numbers the caller is trusted not to render. A wrong number presented
  * confidently is worse than no number, and the only way to guarantee the screen
  * cannot show one is to not hand it over.
+ *
+ * **Partial days are excluded from the mean and counted in the return.** A day
+ * with breakfast on it and nothing after is not a 400-calorie day, and averaging
+ * it in produces a deficit that never happened — quietly, and worse every week
+ * it repeats. Excluding it silently would be the same failure wearing better
+ * numbers, which is why `complete` and `partial` both come back: every caller is
+ * expected to state what the average is drawn from.
  */
-export function weeklyAverages(days, minDays = AVERAGES_MIN_DAYS) {
+export function weeklyAverages(days, targets, minDays = AVERAGES_MIN_DAYS) {
   const recent = days.slice(0, 7)
   const tracked = recent.filter((d) => d.entries?.length)
-  const enough = tracked.length >= minDays
+  const complete = tracked.filter((d) => !isPartialDay(d, targets))
+  const enough = complete.length >= minDays
   const mean = (key) =>
-    tracked.reduce((sum, d) => sum + (d.totals?.[key] || 0), 0) / tracked.length
+    complete.reduce((sum, d) => sum + (d.totals?.[key] || 0), 0) / complete.length
 
   return {
     tracked: tracked.length,
+    complete: complete.length,
+    partial: tracked.length - complete.length,
     of: 7,
     enough,
     kcal: enough ? mean('kcal') : null,

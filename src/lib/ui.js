@@ -2,7 +2,7 @@ import { h, countTo, setTabularText, fitText } from './dom.js'
 import { icon } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
 import { g, kcal, round, cmToFtIn, ftInToCm } from './format.js'
-import { formatDateSub, formatDayLabel, isFuture } from './dates.js'
+
 
 /**
  * The component vocabulary. Everything visual that appears on more than one
@@ -67,71 +67,6 @@ export const macroEdgeColor = (macro) => MACRO_EDGE[macro]
 /* ------------------------------------------------------------------ header */
 
 /**
- * Centred title, muted date beneath, circular chevrons either side.
- * Future dates are permitted but muted — you can log ahead, it just does not
- * look like today.
- */
-export function screenHeader({ title, date, onPrev, onNext, onPickDate, subtitle }) {
-  const future = date ? isFuture(date) : false
-
-  const dateInput =
-    onPickDate &&
-    h('input', {
-      type: 'date',
-      value: date,
-      class: 'pointer-events-none absolute inset-0 h-full w-full opacity-0',
-      tabindex: '-1',
-      'aria-hidden': 'true',
-      onchange: (e) => e.target.value && onPickDate(e.target.value),
-    })
-
-  return h(
-    'header',
-    { class: 'flex items-center gap-[10px]' },
-    onPrev
-      ? h(
-          'button',
-          { class: 'icon-btn', 'aria-label': 'Previous day', onclick: onPrev },
-          icon('chevronLeft', { size: 20, stroke: 2 })
-        )
-      : h('div', { class: 'w-11 shrink-0' }),
-    h(
-      'button',
-      {
-        class: 'relative min-w-0 flex-1',
-        style: future ? { opacity: '0.5' } : null,
-        disabled: !onPickDate,
-        onclick: (e) => {
-          const input = e.currentTarget.querySelector('input')
-          if (!input) return
-          input.style.pointerEvents = 'auto'
-          if (typeof input.showPicker === 'function') input.showPicker()
-          else input.click()
-        },
-      },
-      h(
-        'div',
-        { class: 'truncate text-title font-semibold' },
-        title
-      ),
-      h(
-        'div',
-        { class: 'truncate text-[12px] leading-tight text-muted' },
-        subtitle ?? (date ? formatDateSub(date) : '')
-      ),
-      dateInput
-    ),
-    onNext
-      ? h(
-          'button',
-          { class: 'icon-btn', 'aria-label': 'Next day', onclick: onNext },
-          icon('chevronRight', { size: 20, stroke: 2 })
-        )
-      : h('div', { class: 'w-11 shrink-0' })
-  )
-}
-
-/**
  * The page header the redesign settled on: a circular button, a centred title,
  * a circular button. Either side may be absent and leaves a spacer, so the
  * title stays optically centred whether it is flanked by two controls, one, or
@@ -156,6 +91,8 @@ export function navHeader({
   onForward,
   forwardLabel = 'Forward',
   forwardDisabled = false,
+  onTitle = null,
+  titleLabel,
 }) {
   const spacer = () => h('div', { class: 'w-11 shrink-0' })
   const btn = (label, handler, name, disabled = false) =>
@@ -165,10 +102,45 @@ export function navHeader({
       icon(name, { size: 20, stroke: 2 })
     )
 
+  /**
+   * A tappable title carries no mark, and the button sits INSIDE the heading.
+   *
+   * No chevron beside the date. The row already has two, and a third of the same
+   * family reads as a third step rather than as "this opens something" — and the
+   * app has made this call before: the day card on Today is a toggle with
+   * nothing on it to say so, for the same reason. The cost is the same one
+   * written up on `.day-card-toggle` and is stated rather than hidden: nothing
+   * advertises the gesture, so it is either already known or never found.
+   *
+   * `h1 > button` rather than `button > h1` — a heading takes phrasing content
+   * and a button is phrasing content, so this nests the way the content model
+   * allows. It also leaves `fitText` measuring the same `h1` it always did, so
+   * the shrink that keeps `Wed, Jan 13, 2027` clear of the chevrons is
+   * untouched.
+   *
+   * The padding-and-negative-margin pair grows the hit area to about 45px
+   * without growing the row: the target gets the vertical space, the layout box
+   * does not.
+   */
   // `truncate` stays as the backstop for anything `fitText` cannot shrink to
   // fit by the floor — better a clipped title than one at 14px.
   const heading = fitText(
-    h('h1', { class: 'min-w-0 flex-1 truncate text-center text-title font-semibold' }, title)
+    h(
+      'h1',
+      { class: 'min-w-0 flex-1 truncate text-center text-title font-semibold' },
+      onTitle
+        ? h(
+            'button',
+            {
+              class: '-my-[6px] max-w-full truncate py-[6px]',
+              'aria-haspopup': 'dialog',
+              'aria-label': titleLabel ?? `${title}. Pick a day`,
+              onclick: onTitle,
+            },
+            title
+          )
+        : title
+    )
   )
 
   return h(
@@ -180,17 +152,6 @@ export function navHeader({
       ? btn(forwardLabel, onForward, 'chevronRight', forwardDisabled)
       : spacer()
   )
-}
-
-/** Header for a date-navigating screen. Title doubles as the relative day. */
-export function dayHeader({ date, setDate, title }) {
-  return screenHeader({
-    title: title ?? formatDayLabel(date),
-    date,
-    onPrev: () => setDate(-1),
-    onNext: () => setDate(1),
-    onPickDate: (value) => setDate(value),
-  })
 }
 
 /** Plain screen title for the destinations that do not navigate by day. */

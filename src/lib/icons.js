@@ -39,9 +39,27 @@ export const FILLED = {
     '<circle cx="8.2" cy="10.2" r="1.05"/><circle cx="12" cy="10.2" r="1.05"/><circle cx="15.8" cy="10.2" r="1.05"/>' +
     '<circle cx="8.2" cy="13.9" r="1.05"/><circle cx="12" cy="13.9" r="1.05"/><circle cx="15.8" cy="13.9" r="1.05"/>',
 
-  weightFilled:
-    // Ring handle over a solid trapezoid body.
-    '<path fill-rule="evenodd" d="M12 1.9a2.35 2.35 0 0 1 1.1 4.43V7h1.62a2.5 2.5 0 0 1 2.44 1.95l2.06 9.1A2.5 2.5 0 0 1 16.78 21H7.22a2.5 2.5 0 0 1-2.44-3.05l2.06-9.1A2.5 2.5 0 0 1 9.28 7h1.62v-.67A2.35 2.35 0 0 1 12 1.9Zm0 1.7a.85.85 0 1 0 0 1.7.85.85 0 0 0 0-1.7Z"/>',
+  /**
+   * Three ascending pill bars.
+   *
+   * Replaces the scale that labelled this tab while it was called Weight. The
+   * tab holds nutrition history as well now, and a scale named one of the two
+   * things on it — the same problem the tab's own name had.
+   *
+   * Pills rather than square bars, and that is the whole reason this reads as
+   * belonging to the app rather than to an icon set: every progress mark in
+   * Trackd is a fully rounded bar or ring, so `rx` is half the width and the
+   * bars come out as the same shape the screen behind them is full of.
+   *
+   * Bars rather than a rising line, though the screen's hero is a line chart. A
+   * hairline zigzag has to survive being drawn at 22px in a tab bar, where it
+   * is the one glyph with no label-sized detail to spare; three solid pills
+   * carry at that size and a 2px polyline does not.
+   */
+  chartFilled:
+    '<rect x="3.6" y="13" width="4.2" height="7.4" rx="2.1"/>' +
+    '<rect x="9.9" y="8.6" width="4.2" height="11.8" rx="2.1"/>' +
+    '<rect x="16.2" y="3.6" width="4.2" height="16.8" rx="2.1"/>',
 
   gearFilled: gearPath(),
 }

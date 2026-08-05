@@ -1,7 +1,7 @@
 import { h } from './dom.js'
 import { deleteEntry, putEntry, getSettings, uid } from './db.js'
 import { toast } from './toast.js'
-import { openSheet } from './sheet.js'
+import { presentSheet } from './sheet.js'
 import { blockSelector, segmented, macroLine } from './ui.js'
 import { addDays, formatDayLabel, todayStr } from './dates.js'
 
@@ -20,13 +20,17 @@ export async function deleteEntryWithUndo(entry) {
 /**
  * Long-press duplicate: same food and quantity, a block and day you choose.
  * Covers "I ate that again" and the 1 AM meal that belongs to yesterday.
+ *
+ * `host` is the sheet this was launched from, when it was launched from one —
+ * the log. Passed on to `presentSheet`, which pushes a panel rather than
+ * replacing the sheet the row lives in.
  */
-export async function openDuplicateSheet(entry) {
+export async function openDuplicateSheet(entry, host) {
   const settings = await getSettings()
   let block = entry.block
   let date = entry.date
 
-  return openSheet({
+  return presentSheet({
     title: 'Duplicate',
     render: (ctx) => {
       const dayOptions = [
@@ -116,5 +120,5 @@ export async function openDuplicateSheet(entry) {
         )
       )
     },
-  })
+  }, host)
 }

@@ -77,6 +77,33 @@
   --color-outline: #d9d9d9;
 
   /**
+   * The sheet's ground — a named elevation level that currently aliases canvas.
+   *
+   * A sheet over a scrim IS a third level, above the page and below the cards
+   * inside it, and until now it had no name: `.sheet-panel` simply said
+   * `bg-canvas`. Naming it is worth doing on its own, because the log is now a
+   * sheet and "what colour is a sheet" became a question more than one surface
+   * asks.
+   *
+   * **It deliberately does not lift, and dark mode is the reason.** The obvious
+   * move is to raise it above the page the way iOS raises a modal, and it was
+   * measured before being rejected. In dark, page is `#141414` and a card is
+   * `#262626` — 1.22:1, which is the step that says "card" without a border.
+   * Lifting the sheet to `#1c1c1c` puts the cards inside it at **1.13:1**
+   * against their own ground: under the 1.14 Material treats as the floor for
+   * two adjacent dark surfaces, and worse than what it replaced. The sheet would
+   * read as elevated by making every card on it read as flat.
+   *
+   * What draws the sheet's edge instead is the pair already doing it: the scrim
+   * darkening the page behind, and the 1px `border-t` on `.sheet-panel` — see
+   * the note in lib/sheet.js for why that one stroke survived the move to fills.
+   *
+   * So this is a token with a constraint attached rather than a value waiting to
+   * be tuned. Raising it is only available once cards have somewhere to go.
+   */
+  --color-sheet: var(--color-canvas);
+
+  /**
    * Fixed order everywhere: calories, protein, fat, carbs.
    *
    * Each macro is three values. `--color-X` is the FILL. `--color-X-edge` is a
@@ -1030,6 +1057,177 @@
     line-height: 1;
   }
 
+  /**
+   * The thin bar, for the log sheet's summary.
+   *
+   * `.bar-track` is 32px because it has to hold the `+74` segment INSIDE the
+   * fill. Four of those stacked is 260px of summary before the first entry, on
+   * a sheet whose whole argument is that it shows you the day — so the drill-down
+   * would open on a card and push the log itself under the fold.
+   *
+   * So the overage comes out of the bar and sits beside the numbers as
+   * `.chip-over`, and what is left can be 6px. Same fill colour, same edge
+   * colour, same meaning; the excess is simply stated next to the figure it is
+   * excess to rather than drawn inside the mark.
+   *
+   * The track is a tint of ink rather than `--color-surface`, because this bar
+   * sits ON a card rather than on the page — a white track on a white card is
+   * not a track. Same construction History's macro ticks already use.
+   */
+  .bar-thin {
+    height: 6px;
+    width: 100%;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  }
+
+  .bar-thin-fill {
+    height: 100%;
+    border-radius: 999px;
+    transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /**
+   * Over target, as a chip beside the number.
+   *
+   * White on the edge shade, which is the one pairing in the palette measured
+   * for exactly this — `npm test` asserts 4.5:1 on all four edges. Deliberately
+   * the same white-on-edge as `.bar-over`, so "past the target" reads as one
+   * idea whether it is drawn inside a fat bar or beside a thin one.
+   */
+  .chip-over {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    height: 18px;
+    padding: 0 7px;
+    border-radius: 999px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  /**
+   * An empty period in the log.
+   *
+   * A populated period gets `.section-head .section-label` — 20px semibold ink,
+   * a real heading over a real list. An empty one is the same row with the card
+   * taken away, and it should not shout at the same volume as the block that
+   * actually has your breakfast in it. 16px medium muted is the step down: still
+   * plainly the period's name, no longer competing with the sections that have
+   * something to say.
+   */
+  .block-empty-label {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--color-muted);
+  }
+
+  /**
+   * The date picker's month grid.
+   *
+   * Sized for a thumb first: at 390pt the sheet's body is 350 wide, so seven
+   * columns give 50 each and a day is a 44px target — the number iOS asks for,
+   * and the one a floating popover anchored under a header could not have
+   * afforded. That is most of why this is a pushed panel rather than a dropdown.
+   *
+   * The selected day is solid ink and today is a 1px ink ring, which is the
+   * app's existing selected/unselected pair — `.chip` goes solid ink when
+   * chosen, `.chip-sm` is the outlined version of the same shape. No accent
+   * colour is introduced: the four hues mean macro identity and nothing else,
+   * and a blue "today" would be protein.
+   */
+  .cal-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cal-month {
+    flex: 1;
+    text-align: center;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .cal-dow-row,
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .cal-grid {
+    gap: 2px;
+  }
+
+  .cal-dow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 24px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--color-muted);
+  }
+
+  /**
+   * Square, so the selected day is a circle.
+   *
+   * It was `height: 44px` in a column that comes out about 46 wide at 390pt, and
+   * `border-radius: 999px` on a 46×44 box is not a circle — it is a pill, and at
+   * two pixels of difference it reads as a circle with its top and bottom shaved
+   * flat rather than as a deliberate shape.
+   *
+   * `aspect-ratio` rather than a second fixed number, so it holds at any column
+   * width: the cell takes the width the grid gives it, up to the 44 the touch
+   * target wants, and the height follows. On a narrower screen it stays round
+   * instead of inverting into a tall pill.
+   */
+  .cal-day {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: 44px;
+    margin-inline: auto;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-ink);
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 120ms ease-out;
+  }
+
+  /* Days either side of the month on show. Real days, still pickable — see the
+     note on `monthCells` — but not what this month is about. */
+  .cal-day[data-outside='true'] {
+    color: var(--color-muted);
+  }
+
+  .cal-day[data-today='true'] {
+    box-shadow: inset 0 0 0 1px var(--color-ink);
+  }
+
+  .cal-day[aria-pressed='true'] {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+    font-weight: 700;
+  }
+
+  /* Same 0.3 the icon buttons and the primary button use, so "unavailable"
+     reads one way across the app. */
+  .cal-day:disabled {
+    opacity: 0.3;
+  }
+
+  .cal-day:active:not(:disabled) {
+    transform: scale(0.9);
+  }
+
   /* --------------------------------------------------------------- controls */
 
   /* Circular icon button: chevrons, close, swipe actions. */
@@ -1447,8 +1645,25 @@
     border: 0;
     color: var(--color-canvas);
   }
+  /**
+   * Disabled is a paler FILL, not a transparent button.
+   *
+   * It was `opacity: 0.3`, which was fine for as long as nothing was ever behind
+   * it — the footer used to be an opaque slab. Now that the footer floats and
+   * the sheet's list scrolls underneath, a translucent button shows the rows
+   * passing behind it and reads as broken rather than as unavailable.
+   *
+   * The values are the exact composite the opacity produced, so nothing changes
+   * visually on either theme: at 30% over the page, an ink fill lands on a 30/70
+   * ink-canvas mix, and the label — already `--color-canvas` — composites to
+   * itself and does not move at all.
+   *
+   * `.icon-btn:disabled` keeps its opacity. Those sit on solid chrome, never
+   * over a scroller, so it has nothing to reveal.
+   */
   .btn-primary:disabled {
-    opacity: 0.3;
+    background: color-mix(in srgb, var(--color-ink) 30%, var(--color-canvas));
+    color: var(--color-canvas);
   }
 
   .btn-secondary {
@@ -1480,6 +1695,28 @@
     background: var(--color-surface);
     border: 0;
     border-radius: var(--radius-card);
+  }
+
+  /**
+   * A field inside a card inverts to the page tint.
+   *
+   * `.field` is a surface, and so is the card — so the moment one sits in the
+   * other the control disappears into its own container and the only thing left
+   * marking it is the placeholder. The app's other answer to this is
+   * `numberInput({ bare: true })`, which drops the pill entirely and lets the
+   * row be the container; that suits a settings row with a label opposite, and
+   * not a field that is the whole point of the group it is in.
+   *
+   * So the pill stays and swaps grounds. Canvas on surface is the same 1.14
+   * separation as surface on canvas, read the other way round, and it is the
+   * step this palette already uses to mean "a thing inside another thing" — in
+   * dark it lands at 1.22, where the field goes darker than the card rather than
+   * lighter, which is what an inset control should do in both themes.
+   */
+  .day-card .field,
+  .card .field,
+  .panel .field {
+    background: var(--color-canvas);
   }
 
   .chip {
@@ -1562,6 +1799,7 @@
     background: var(--color-canvas);
     border: 0;
   }
+
 
   /**
    * The travelling selection — the same idea as `.tab-pill` at a smaller size,
@@ -1954,31 +2192,95 @@
  * One colour throughout, canvas, for the reason the tab bar gives: a second hue
  * in the ramp goes muddy against whatever is scrolling under it.
  */
+/**
+ * Transparent, like the tab bar's `nav`. The opaque part is the band behind it —
+ * see `.sheet-fade`, which is what lets content recede under the button instead
+ * of being cut off by a slab.
+ *
+ * **No `position` here.** It used to declare `relative`, and that quietly beat
+ * the `absolute` utility the element now carries: this rule is unlayered, and
+ * Tailwind's utilities sit in a layer, so an equal-specificity selector out here
+ * wins every time. The footer stayed in flow, the scroller kept ending at its
+ * top edge, and the float that this whole change is about never happened.
+ * Positioning is the element's to declare.
+ */
 .sheet-footer {
-  position: relative;
-  background: var(--color-canvas);
+  background: none;
 }
 
-.sheet-footer::before {
-  content: '';
+/**
+ * The tab bar's band, on the sheet's footer.
+ *
+ * **What was blocking a straight copy was not the geometry — it was the footer
+ * being an opaque slab.** The two controls are the same object: a rounded
+ * control 20px off the bottom edge with 20px gutters, 56px tall against the
+ * bar's 68. But `nav` is transparent and lets `.tabbar-fade` do all the
+ * covering, while this footer painted flat canvas across its whole box. That
+ * slab is what cut rows off dead and left a grey strip above the button, and no
+ * amount of tuning the band above it could fix a hard edge below it.
+ *
+ * So the footer goes transparent and the band moves down to cover it, anchored
+ * at `bottom: 0` rather than above — which is exactly how the tab bar is built.
+ *
+ * 147px, not 159, because the control is 56px rather than 68. That is a uniform
+ * scale of the whole arrangement, so every percentage below is the tab bar's
+ * unchanged, and `FADE_RAMP` is shared verbatim.
+ */
+.sheet-fade {
   position: absolute;
   inset-inline: 0;
-  bottom: 100%;
-  /* 24, not 40. The band only has to catch the sliver of content the clip
-     would have cut through — reaching further up starts dimming things that
-     are still fully on screen and being read, which is its own kind of wrong. */
-  height: 24px;
+  bottom: 0;
+  height: 147px;
   pointer-events: none;
+}
+
+/* Nothing scrolls under the button on this panel, so there is nothing for the
+   band to do but dim the bottom of it. `syncFooterFade` in lib/sheet.js sets the
+   flag — the same rule, and the same `display: none`, as `.tabbar-fade`. */
+.sheet-fade[data-active='false'] {
+  display: none;
+}
+
+.sheet-fade > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+/* The tab bar's veil, stop for stop. See `.fade-veil`. */
+.sheet-fade > .sheet-fade-veil {
   background: linear-gradient(
     to top,
     var(--color-canvas) 0%,
-    color-mix(in srgb, var(--color-canvas) 72%, transparent) 45%,
-    color-mix(in srgb, var(--color-canvas) 28%, transparent) 72%,
+    var(--color-canvas) 33%,
+    color-mix(in srgb, var(--color-canvas) 86%, transparent) 44%,
+    color-mix(in srgb, var(--color-canvas) 54%, transparent) 63%,
+    color-mix(in srgb, var(--color-canvas) 22%, transparent) 80%,
     transparent 100%
   );
 }
 
+/**
+ * The band is absolutely positioned, so it would otherwise paint over the button
+ * it exists to sit behind. Positioning the footer's real content puts it back on
+ * top without a z-index fight.
+ */
+.sheet-footer > *:not(.sheet-fade) {
+  position: relative;
+}
+
+/**
+ * The radius and the ground moved off the element's class list and onto here.
+ *
+ * Both were literals in lib/sheet.js — `rounded-t-[24px]` and `bg-canvas` — so
+ * the one surface in the app whose corner is its most recognisable feature was
+ * the one place `--radius-sheet` was not being read. Top corners only: the
+ * bottom of a sheet is the bottom of the screen.
+ */
 .sheet-panel {
+  border-top-left-radius: var(--radius-sheet);
+  border-top-right-radius: var(--radius-sheet);
+  background: var(--color-sheet);
   animation: sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .sheet-panel[data-closing='true'] {

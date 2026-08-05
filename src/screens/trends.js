@@ -1,0 +1,786 @@
+import { h, s } from '../lib/dom.js'
+import { icon } from '../lib/icons.js'
+import { createScreen } from '../lib/screen.js'
+import {
+  listWeights,
+  getWeight,
+  putWeight,
+  getSettings,
+  entriesInRange,
+  firstLoggedDate,
+} from '../lib/db.js'
+import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
+import {
+  sumEntries,
+  progress,
+  weeklyAverages,
+  isPartialDay,
+  AVERAGES_MIN_DAYS,
+  MACRO_META,
+} from '../lib/compute.js'
+import {
+  card,
+  segmentedWide,
+  numberInput,
+  notice,
+  emptyState,
+  tnum,
+  digits,
+  navHeader,
+  macroColor,
+  macroTextColor,
+} from '../lib/ui.js'
+import { kgToUnit, unitToKg, weight as fmtWeight, signed, kcal, g } from '../lib/format.js'
+import { formatDayLabel, todayStr, addDays, daysBetween } from '../lib/dates.js'
+import { toast } from '../lib/toast.js'
+import { openWeighInSheet } from '../sheets/weighIn.js'
+import { openLogSheet } from '../sheets/log.js'
+import { setDate } from '../state.js'
+
+/**
+ * Trends. Weight, then history.
+ *
+ * **The tab was called Weight, which was the only tab named after a data type
+ * rather than a job.** Today, Trends and Settings all name what you are doing;
+ * Weight named what was stored. It was already a trends screen — a chart over
+ * time — so nutrition history is the same shape of thing rather than a fourth
+ * tab, and the two belong on one screen because the question people actually
+ * have is whether the intake explains the outcome.
+ *
+ * History moved here wholesale from `screens/history.js`, which no longer
+ * exists. It had been reachable only through the Log, which was the wrong place
+ * for it twice over: a destination behind a modal, and a multi-day view behind a
+ * single-day one.
+ *
+ * The chart is deliberately neutral — none of the four macros own body weight,
+ * so borrowing one of their hues here would break the rule that colour means
+ * macro identity. Ink for the trend, muted grey for the raw dots.
+ */
+
+let range = 30 // module-level so the toggle survives a re-render
+
+const CHART_W = 340
+const CHART_H = 150
+const PAD = { top: 10, right: 6, bottom: 8, left: 6 }
+
+function chart(points, unit) {
+  const drawn = points.filter((p) => p.kg != null || p.trend != null)
+  if (drawn.length < 2) return null
+
+  const values = []
+  for (const p of drawn) {
+    if (p.kg != null) values.push(kgToUnit(p.kg, unit))
+    if (p.trend != null) values.push(kgToUnit(p.trend, unit))
+  }
+  let min = Math.min(...values)
+  let max = Math.max(...values)
+  // Never let a flat fortnight render as a jagged line across the full height.
+  const pad = Math.max((max - min) * 0.15, 0.4)
+  min -= pad
+  max += pad
+
+  const innerW = CHART_W - PAD.left - PAD.right
+  const innerH = CHART_H - PAD.top - PAD.bottom
+  const x = (i) => PAD.left + (i / (points.length - 1 || 1)) * innerW
+  const y = (v) => PAD.top + innerH - ((v - min) / (max - min || 1)) * innerH
+
+  const trendPath = []
+  points.forEach((p, i) => {
+    if (p.trend == null) return
+    const px = x(i)
+    const py = y(kgToUnit(p.trend, unit))
+    trendPath.push(`${trendPath.length ? 'L' : 'M'}${px.toFixed(1)} ${py.toFixed(1)}`)
+  })
+
+  const gridlines = [max - pad, (max + min) / 2, min + pad].map((v) =>
+    s('g', {}, [
+      s('line', {
+        x1: PAD.left,
+        x2: CHART_W - PAD.right,
+        y1: y(v).toFixed(1),
+        y2: y(v).toFixed(1),
+        stroke: 'var(--color-outline)',
+        'stroke-width': '1',
+      }),
+      s(
+        'text',
+        {
+          x: PAD.left + 2,
+          y: (y(v) - 4).toFixed(1),
+          fill: 'var(--color-muted)',
+          'font-size': '9',
+        },
+        fmtWeight(unitToKg(v, unit), unit),
+      ),
+    ]),
+  )
+
+  return s(
+    'svg',
+    {
+      viewBox: `0 0 ${CHART_W} ${CHART_H}`,
+      class: 'w-full',
+      role: 'img',
+      'aria-label': 'Weight trend chart',
+    },
+    gridlines,
+    // Raw daily readings sit behind and stay muted.
+    points.map((p, i) =>
+      p.kg == null
+        ? null
+        : s('circle', {
+            cx: x(i).toFixed(1),
+            cy: y(kgToUnit(p.kg, unit)).toFixed(1),
+            r: '2',
+            fill: 'var(--color-muted)',
+            opacity: '0.55',
+          }),
+    ),
+    trendPath.length > 1
+      ? s('path', {
+          d: trendPath.join(''),
+          fill: 'none',
+          stroke: 'var(--color-ink)',
+          'stroke-width': '2',
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          'vector-effect': 'non-scaling-stroke',
+        })
+      : null,
+  )
+}
+
+/* ----------------------------------------------------------------- history */
+
+/**
+ * The mini ring. Same construction as the hero rings on Today, at a tenth the
+ * area.
+ *
+ * These were flat bars, and rings are the better mark here for the reason the
+ * dashboard already uses them: the app's language for "how much of a target"
+ * is a ring, and a list that answers the same question with a different shape
+ * makes the reader translate between two vocabularies to compare a day against
+ * the card they just came from.
+ *
+ * Everything about how it is drawn is inherited rather than reinvented — see
+ * lib/ring.js. The track is the macro's own hue at 20%, not a neutral, so an
+ * untracked day still reads as three labelled macro rings rather than three
+ * identical grey circles. The arc starts at 12 o'clock, runs clockwise, and is
+ * round-capped. Zero draws no arc at all, and anything above zero draws at
+ * least one stroke width — below that the two caps meet and the arc renders as
+ * a dot at 12 o'clock, which reads as a fault rather than as "nearly nothing".
+ *
+ * It saturates at the target, as the hero rings do. Overage is carried by the
+ * calorie figure beside it and by the `title`, not by the mark.
+ */
+const RING_SIZE = 20
+const RING_STROKE = 3
+const RING_R = (RING_SIZE - RING_STROKE) / 2
+const RING_C = 2 * Math.PI * RING_R
+
+function miniRing(macro, value, target) {
+  const { pct } = progress(value, target)
+  const len = pct <= 0 ? 0 : Math.max(RING_STROKE, (pct / 100) * RING_C)
+
+  const onRing = (extra) => ({
+    cx: RING_SIZE / 2,
+    cy: RING_SIZE / 2,
+    r: RING_R,
+    fill: 'none',
+    'stroke-width': RING_STROKE,
+    transform: `rotate(-90 ${RING_SIZE / 2} ${RING_SIZE / 2})`,
+    ...extra,
+  })
+
+  return s(
+    'svg',
+    {
+      width: RING_SIZE,
+      height: RING_SIZE,
+      viewBox: `0 0 ${RING_SIZE} ${RING_SIZE}`,
+      'aria-hidden': 'true',
+    },
+    s(
+      'circle',
+      onRing({
+        stroke: `color-mix(in srgb, ${macroColor(macro)} 20%, transparent)`,
+      }),
+    ),
+    len > 0
+      ? s(
+          'circle',
+          onRing({
+            stroke: macroColor(macro),
+            'stroke-linecap': 'round',
+            'stroke-dasharray': RING_C,
+            'stroke-dashoffset': RING_C - len,
+          }),
+        )
+      : null,
+  )
+}
+
+/**
+ * Three rings showing how close protein, fat and carbs landed.
+ *
+ * Labelled, because this is the only place the macro hues appear at this size
+ * and colour alone is not a label — for the eight percent of men who cannot
+ * separate the red from the gold, three grey circles is all this would be. The
+ * letter is the macro's own initial from `MACRO_META`, so it stays in step if
+ * the palette ever moves.
+ *
+ * The `title` stays as well: it carries the actual grams, which no ring can.
+ */
+function macroTicks(totals, targets) {
+  return h(
+    'div',
+    { class: 'flex shrink-0 gap-[10px]' },
+    ['protein', 'fat', 'carbs'].map((macro) =>
+      h(
+        'div',
+        {
+          class: 'flex flex-col items-center gap-[3px]',
+          title: `${g(totals[macro])} / ${g(targets[macro])} ${macro}`,
+        },
+        miniRing(macro, totals[macro], targets[macro]),
+        h(
+          'span',
+          {
+            class: 'text-[9px] font-semibold leading-none',
+            style: { color: macroTextColor(macro) },
+            'aria-hidden': 'true',
+          },
+          MACRO_META[macro].letter,
+        ),
+      ),
+    ),
+  )
+}
+
+/**
+ * The weekly averages, or the reason there aren't any.
+ *
+ * Under the threshold this renders no mean at all. The caption that used to sit
+ * beneath the figures was honest and lost anyway — it was 12px muted text under
+ * a 30px semibold number, and the number lands first. Type hierarchy beats
+ * copy, so the fix has to be structural rather than a better sentence.
+ *
+ * **Every figure states its denominator.** `weeklyAverages` drops partial days
+ * from the mean — see `isPartialDay` — and an average whose basis the reader
+ * cannot see is exactly as misleading as the corrupted one it replaced. So the
+ * caption names the days counted and, when there are any, the days left out.
+ */
+function averagesStrip(week, targets) {
+  /**
+   * The target gets its own line, held together.
+   *
+   * It used to ride on the caption as `average cal · target 2837`, and in a column
+   * this narrow that wrapped in the worst available place — after the word
+   * `target`, leaving the figure it names stranded on the line below. A label
+   * separated from its number by a line break is not a label.
+   *
+   * So the two facts are two lines, and the target line is `nowrap`: it is four
+   * characters and a word, it always fits, and it must never be broken again.
+   */
+  const figure = (value, caption, target) =>
+    h(
+      'div',
+      { class: 'flex min-w-0 flex-col' },
+      tnum(value, 'text-title font-semibold leading-tight'),
+      h('span', { class: 'text-[12px] leading-snug text-muted' }, caption),
+      target
+        ? h('span', { class: 'whitespace-nowrap text-[12px] leading-snug text-muted' }, target)
+        : null,
+    )
+
+  if (!week.enough) {
+    const remaining = AVERAGES_MIN_DAYS - week.complete
+    return h(
+      'div',
+      { class: 'day-card flex flex-col gap-[20px]' },
+      h('span', { class: 'section-label' }, 'Last 7 days'),
+      figure(`${week.complete} of ${week.of}`, 'full days logged'),
+      h(
+        'p',
+        { class: 'text-[12px] leading-snug text-muted' },
+        `Averages start at ${AVERAGES_MIN_DAYS} full days — ${remaining} more to go. ` +
+          'An average of one day is just that day.',
+      ),
+    )
+  }
+
+  const basis =
+    week.partial > 0
+      ? `${week.complete} full days · ${week.partial} partial left out`
+      : `${week.complete} full days`
+
+  return h(
+    'div',
+    { class: 'day-card flex flex-col gap-[20px]' },
+    h(
+      'div',
+      { class: 'flex items-baseline justify-between gap-[10px]' },
+      h('span', { class: 'section-label' }, 'Last 7 days'),
+      h('span', { class: 'text-[12px] text-muted' }, basis),
+    ),
+    /**
+     * Two equal halves, not two content-width columns.
+     *
+     * It was a plain flex row, and that only looked balanced by accident: the
+     * captions used to wrap, and the wrapping was what pushed each column wide
+     * enough to fill the card. Stopping the wrap collapsed both to the width of
+     * their own text and left the pair huddled against the left edge with the
+     * right third empty. A grid says what the layout actually intends — two
+     * figures, equal weight, side by side — instead of depending on the text
+     * being too long to fit.
+     */
+    h(
+      'div',
+      { class: 'grid grid-cols-2 gap-[30px]' },
+      figure(kcal(week.kcal), 'average cal', `target ${kcal(targets.kcal)}`),
+      figure(g(week.protein), 'average protein', `target ${g(targets.protein)}`),
+    ),
+  )
+}
+
+/**
+ * One day. Tapping it sets the shared date and opens the Log sheet over this
+ * screen, which is now the route to an older day — the sheet stopped carrying
+ * its own date controls, so this is where day browsing lives.
+ */
+/**
+ * **An untracked day is the same row as any other, at the same size.**
+ *
+ * It used to be a hairline: a 12px muted date, a rule across the middle, and the
+ * words "not tracked" — about a third the height of the days either side of it.
+ * That drew the day you did not log as a lesser kind of object, and it is not
+ * one. Looking back at a week, a gap is as much of the answer as a number is;
+ * three missed days in a row is the most important thing that week has to say,
+ * and it was the quietest thing on the screen.
+ *
+ * So the size, the type and the structure are shared, and what differs is the
+ * DATA — empty tick tracks and an em dash where the calories go. The app makes
+ * this argument elsewhere and it holds here: the empty track is the zero state,
+ * and a dash cannot be mistaken for data. Nothing is dimmed to say "less
+ * important", because it is not.
+ *
+ * **The tap goes where every other row's tap goes.** It used to open the add
+ * sheet for that day, on the reasoning that an empty day's obvious next action
+ * is filling it — which was fair while the row looked nothing like its
+ * neighbours. Now that it does, two rows that are drawn identically have to do
+ * the same thing, so this opens that day's log like the rest. The log's own
+ * empty state carries the Add affordance one tap further in.
+ */
+function dayRow(day, targets) {
+  const tracked = day.entries.length > 0
+  const partial = tracked && isPartialDay(day, targets)
+
+  return h(
+    'button',
+    {
+      class: 'row',
+      onclick: () => {
+        setDate(day.date)
+        openLogSheet()
+      },
+    },
+    h(
+      'div',
+      { class: 'min-w-0 flex-1' },
+      h('div', { class: 'truncate text-[16px] font-semibold' }, formatDayLabel(day.date)),
+      h(
+        'div',
+        { class: 'mt-[2px] text-[12px] text-muted' },
+        tracked
+          ? `${day.entries.length} item${day.entries.length === 1 ? '' : 's'}` +
+              // Named on the row it applies to, not just counted in the caption
+              // above. A number that says two days were left out is only
+              // actionable if you can see which two.
+              (partial ? ' · partial' : '')
+          : 'Not tracked',
+      ),
+    ),
+    macroTicks(day.totals, targets),
+    /**
+     * Calories as a number, with no mark under it.
+     *
+     * A bar was tried here, mirroring Today's number-then-proportion
+     * arrangement, on the argument that calories was the one value on the row
+     * carrying no mark at all. Built and removed: at three rings, three letters,
+     * a figure, a unit and a chevron, the row was already at its limit, and the
+     * bar was the ninth thing on it.
+     *
+     * What settled it is that the bar was the cheapest of the marks to lose.
+     * The rings carry three values against target where it carried one, and
+     * calories is the largest type on the row — hierarchy is already marking it
+     * as the headline. The column is fixed-width with tabular figures, so 2420
+     * against 1803 is comparable straight down the list without help. The bar
+     * was restating what the column already does.
+     *
+     * A fixed width so the digits do not drift and the dash lands where the
+     * numbers do.
+     */
+    h(
+      'span',
+      { class: 'w-[70px] shrink-0 text-right text-[16px] font-semibold' },
+      tracked
+        ? [
+            tnum(kcal(day.totals.kcal)),
+            h('span', { class: 'ml-[4px] text-[12px] font-normal text-muted' }, 'cal'),
+          ]
+        : h('span', { class: 'text-muted' }, '—'),
+    ),
+    icon('chevronRight', { size: 16, class: 'shrink-0 text-muted' }),
+  )
+}
+
+/** The last N days as {date, entries, totals}, newest first. */
+async function loadDays(span) {
+  const today = todayStr()
+  const start = addDays(today, -span)
+  const all = await entriesInRange(start, today)
+  const byDate = new Map()
+  for (const entry of all) {
+    if (!byDate.has(entry.date)) byDate.set(entry.date, [])
+    byDate.get(entry.date).push(entry)
+  }
+  return Array.from({ length: span + 1 }, (_, i) => {
+    const date = addDays(today, -i)
+    const entries = byDate.get(date) || []
+    return { date, entries, totals: sumEntries(entries) }
+  })
+}
+
+export function trendsScreen() {
+  return createScreen(
+    async ({ rerender }) => {
+      const [weights, settings, first] = await Promise.all([
+        listWeights(),
+        getSettings(),
+        firstLoggedDate(),
+      ])
+      const unit = settings.weightUnit
+      const today = todayStr()
+      const todayEntry = await getWeight(today)
+
+      /**
+       * Always at least a full week, capped at 180 days.
+       *
+       * The floor is the fix for the empty-looking first week: the walk used to
+       * start at the first logged day, so one day tracked drew exactly one row
+       * and the screen was mostly dead space under a card about seven days. The
+       * window now has a stable shape from the start and fills in rather than
+       * growing. The cap stops a year of use building a thousand rows at once.
+       */
+      const days = first
+        ? await loadDays(Math.max(6, Math.min(daysBetween(first, today), 180)))
+        : null
+      const week = days ? weeklyAverages(days, settings.targets) : null
+
+      /**
+       * 10 between a heading and what it labels, 20 between the groups under it.
+       *
+       * A heading and its content are one thing, not two — the same step Today
+       * uses under `Logged`, and the rule `ui.js` states at the top: 10 inside a
+       * group, 20 between groups. All three sections on this screen follow it, so
+       * the headings sit at a consistent distance from the tiles they name.
+       */
+      const historySection = h(
+        'section',
+        { class: 'flex flex-col gap-[10px]' },
+        h('div', { class: 'section-title' }, 'History'),
+        days
+          ? h(
+              'div',
+              { class: 'flex flex-col gap-[20px]' },
+              averagesStrip(week, settings.targets),
+              card(days.map((day) => dayRow(day, settings.targets))),
+            )
+          : emptyState(
+              'No history yet',
+              'Once you have logged a few days, this is where the weekly averages live.',
+            ),
+      )
+
+      const allPoints = computeTrend(weights, settings.trendWindow)
+      const points = windowPoints(allPoints, range)
+      const latest = weights[weights.length - 1] || null
+      const latestTrend = [...allPoints].reverse().find((p) => p.trend != null)?.trend ?? null
+      const rate = ratePerWeek(points)
+
+      /* ----------------------------------------------------------- input */
+
+      let draft = todayEntry ? String(kgToUnit(todayEntry.kg, unit).toFixed(1)) : ''
+      const saveBtn = h(
+        'button',
+        {
+          class: 'btn-primary btn-compact',
+          disabled: !draft,
+          onclick: async () => {
+            const value = Number(draft)
+            if (!(value > 0)) return
+            await putWeight(today, unitToKg(value, unit))
+            toast(todayEntry ? 'Weight updated' : 'Weight saved')
+          },
+        },
+        todayEntry ? 'Update' : 'Save',
+      )
+
+      const input = numberInput({
+        value: draft,
+        suffix: unit,
+        placeholder: '—',
+        step: '0.1',
+        onInput: (v) => {
+          draft = v
+          saveBtn.disabled = !(Number(v) > 0)
+        },
+      })
+
+      /**
+       * The controls sit in a tile, like every other group on this screen.
+       *
+       * They used to sit bare on the canvas, which was survivable when this was
+       * a screen about one thing and stopped being so the moment history moved
+       * in underneath: the averages and the day list are both tiles, so the one
+       * group that was not read as unfinished rather than as different.
+       *
+       * The heading stays outside it. That is the app's pattern everywhere —
+       * `Logged` on Today, `History` below — a label on the page, the content in
+       * a card beneath.
+       */
+      const entryBlock = h(
+        'section',
+        { class: 'flex flex-col gap-[10px]' },
+        h(
+          'div',
+          { class: 'section-head' },
+          h('div', { class: 'section-label' }, 'Today’s weight'),
+          /**
+           * No `Remove` chip here any more.
+           *
+           * It deleted today's reading, which is a real thing that `Update`
+           * cannot do — replacing a value is not the same as returning to no
+           * value, and the trend recalculates differently. But it was the exact
+           * action the weigh-in sheet below already offered: that sheet opened
+           * on today by default, showed today's reading, and carried its own
+           * Remove. So this was a second door onto the same room, given
+           * heading-level prominence, for the least common action in the group.
+           */
+          null,
+        ),
+        card(
+          h(
+            'div',
+            {
+              /**
+               * The plain 20 all round, which is what a card's inset is.
+               *
+               * It was briefly 10 at the bottom when the hint was showing, and
+               * that was right for the arrangement it was written against: a
+               * hairline and the `All weigh-ins` row sat underneath, and the
+               * caption needed to be the same apparent distance from that rule
+               * as the row's label was on the other side of it.
+               *
+               * That row has moved up to the section head, so there is no rule
+               * to balance against any more — the group IS the card, and 10
+               * against the card's own edge just reads as cramped.
+               */
+              class: 'flex flex-col gap-[10px] px-[20px] py-[20px]',
+            },
+            h(
+              'div',
+              { class: 'flex items-center gap-[10px]' },
+              h('div', { class: 'min-w-0 flex-1' }, input),
+              saveBtn,
+            ),
+            todayEntry
+              ? h(
+                  'p',
+                  { class: 'text-[12px] text-muted' },
+                  'Saving again replaces today’s value rather than adding a second one.',
+                )
+              : null,
+          ),
+        ),
+      )
+
+      if (!weights.length) {
+        return h(
+          'div',
+          { class: 'flex flex-col gap-[20px] pb-[20px]' },
+          heading(),
+          h(
+            'section',
+            { class: 'flex flex-col gap-[20px]' },
+            h(
+              'div',
+              { class: 'flex flex-col gap-[10px]' },
+              h('div', { class: 'section-title' }, 'Weight'),
+              emptyState(
+                'No weigh-ins yet',
+                'Add today’s weight below. The trend line appears after a week of readings.',
+              ),
+            ),
+            entryBlock,
+          ),
+          historySection,
+        )
+      }
+
+      /* ---------------------------------------------------------- header */
+
+      const rangeRow = segmentedWide({
+        options: [
+          { value: 30, label: '30 days' },
+          { value: 90, label: '90 days' },
+          { value: null, label: 'All' },
+        ],
+        value: range,
+        onChange: (v) => {
+          range = v
+          rerender()
+        },
+      })
+
+      const chartNode = chart(points, unit)
+
+      return h(
+        'div',
+        { class: 'flex flex-col gap-[20px] pb-[20px]' },
+        heading(),
+
+        /**
+         * `Weight` and `History`, each under a heading of its own.
+         *
+         * The chart had none, because for the tab's whole life it was the only
+         * thing on the screen and the page title named it. Once history arrived
+         * with a heading, the group without one read as page furniture rather
+         * than as the first of two.
+         *
+         * The entry controls sit inside this section rather than after it: the
+         * chart and the field are the same subject, and separating them would
+         * make the section a chart with a stray form beneath it.
+         */
+        h(
+          'section',
+          { class: 'flex flex-col gap-[20px]' },
+
+          /* Heading and chart are one group at 10; the 20 stays between the
+             groups under it — chart, notice, entry. */
+          h(
+            'div',
+            { class: 'flex flex-col gap-[10px]' },
+
+            /**
+             * `All weigh-ins` belongs to the section, not to today's field.
+             *
+             * It was the last row of the `Today's weight` card, which put a door
+             * onto the entire record inside the one group scoped to a single day
+             * of it. Up here it is the same shape as `Logged` and `Full log` on
+             * Today: a heading names a group, and the control opposite goes to
+             * all of it.
+             *
+             * Sitting over the chart is the better adjacency anyway — the chart
+             * is the drawing, this is the readings behind it.
+             *
+             * No count on it, for the reason the log chip lost its own: a
+             * destination's label should say where it goes, not how much is
+             * there, or it has to be re-read every time it changes.
+             */
+            h(
+              'div',
+              { class: 'section-head' },
+              h('div', { class: 'section-label' }, 'Weight'),
+              h(
+                'button',
+                { class: 'chip-sm', onclick: () => openWeighInSheet() },
+                'All weigh-ins'
+              )
+            ),
+
+            h(
+              'div',
+              { class: 'day-card flex flex-col gap-[20px]' },
+              h(
+                'div',
+                { class: 'flex items-end justify-between' },
+                h(
+                  'div',
+                  { class: 'flex flex-col' },
+                  h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Current'),
+                  h(
+                    'div',
+                    { class: 'flex items-baseline gap-[10px]' },
+                    tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold'),
+                    h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+                  ),
+                  h('span', { class: 'text-[12px] text-muted' }, formatDayLabel(latest.date)),
+                ),
+                h(
+                  'div',
+                  { class: 'flex flex-col items-end' },
+                  h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Trend'),
+                  h(
+                    'div',
+                    { class: 'flex items-baseline gap-[10px]' },
+                    h(
+                      'span',
+                      { class: 'tnum text-title font-semibold' },
+                      ...digits(latestTrend == null ? '—' : fmtWeight(latestTrend, unit)),
+                    ),
+                    h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+                  ),
+                  // Nothing at all when there is no rate yet. The notice below the
+                  // card already says what is missing and how far off it is, and
+                  // the trend figure above is already an em-dash — a second dash
+                  // under the first says the same thing twice, in the weaker of the
+                  // two positions.
+                  rate == null
+                    ? null
+                    : h(
+                        'span',
+                        { class: 'text-[12px] text-muted' },
+                        `${signed(kgToUnit(rate, unit))} ${unit} / week`,
+                      ),
+                ),
+              ),
+
+              chartNode ||
+                h(
+                  'div',
+                  { class: 'py-[30px] text-center text-[12px] text-muted' },
+                  'Two readings are needed before there is anything to draw.',
+                ),
+
+              rangeRow,
+            ),
+          ),
+
+          weights.length < MIN_ENTRIES_FOR_TREND
+            ? notice(
+                `The trend line needs ${MIN_ENTRIES_FOR_TREND} weigh-ins before it means anything. ` +
+                  `You have ${weights.length}.`,
+              )
+            : null,
+
+          entryBlock,
+        ),
+
+        historySection,
+      )
+    },
+    // `entries` joins the watch list now that history lives here. `watchDate`
+    // stays false: this screen is anchored to today and to its own range, and
+    // opening the Log sheet from a row sets the shared date — re-rendering the
+    // whole screen underneath the sheet that just opened would be work nobody
+    // can see.
+    { watch: ['weights', 'settings', 'entries'], watchDate: false },
+  )
+}
+
+/** Root tab, so no chevrons — the spacers keep the title optically centred
+    against Today, which does have them. */
+function heading() {
+  return navHeader({ title: 'Trends' })
+}

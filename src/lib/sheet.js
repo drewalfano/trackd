@@ -1,5 +1,6 @@
 import { h, clear, swipeToDismiss } from './dom.js'
 import { icon } from './icons.js'
+import { fadeLayers, FADE_RAMP } from './fade.js'
 import { setScrimmed } from './statusBar.js'
 
 /**
@@ -51,9 +52,51 @@ export function isSheetOpen() {
   return !!active
 }
 
-export function openSheet({ title, render, footer = null }) {
+/**
+ * Open a spec as a sheet, or as a PANEL on a sheet that is already open.
+ *
+ * `openSheet` destroys any live sheet before building its own — "one sheet at a
+ * time", and every top-level entry point in the app relies on that. It stopped
+ * being the whole story when the Log screen became a sheet, because everything
+ * you can do to a row in there — edit, duplicate, save as meal, add to a block —
+ * is itself an `openSheet` call. Each one would have destroyed the log out from
+ * under the finger, and closing it would have landed you on Today rather than
+ * back in the log you were reading.
+ *
+ * The panel stack already models exactly this: a sheet within a sheet, with a
+ * back chevron and a history entry to unwind. So the fix is not a second sheet,
+ * it is the caller saying which one it is inside. `host` is the ctx of the sheet
+ * the action was launched FROM, and is threaded down from the log's row
+ * handlers. Absent — every other caller in the app — this is `openSheet`
+ * unchanged, which is why nothing else had to move.
+ */
+export function presentSheet(spec, host) {
+  return host ? host.push(spec) : openSheet(spec)
+}
+
+/**
+ * `inset` is the gap left above the sheet. The default 20 is the notch clearance
+ * every sheet has always had; a sheet that is meant to read as temporary asks
+ * for more, so the page behind it stays visibly the page behind it.
+ *
+ * There was briefly a `header` option here too, letting the root panel swap the
+ * default back/title/close row for one of its own. The log was its only caller
+ * and used it for a date stepper, which turned out to be the duplicate of a
+ * control already visible on Today through the scrim. With the stepper gone the
+ * log wants a plain title like everything else, so the option went with it.
+ */
+export function openSheet({ title, render, footer = null, inset = 20 }) {
   // One sheet at a time. A second open replaces the first.
   if (active) active.destroy()
+
+  /**
+   * Where focus goes when this closes.
+   *
+   * Captured before anything is built, because building the panel is what moves
+   * focus off it. Restored in `destroy` rather than `teardown` so it lands after
+   * the exit animation, not in the middle of one.
+   */
+  const opener = document.activeElement
 
   let resolveResult
   const result = new Promise((r) => (resolveResult = r))
@@ -93,10 +136,76 @@ export function openSheet({ title, render, footer = null }) {
    * that already has its own 20. Panels lay out their content; the chrome
    * decides where the content stops.
    */
+  /**
+   * `isolate` matters now that the footer floats over this.
+   *
+   * Anything positioned inside a panel is free to set its own `z-index` — the
+   * segmented control's segments carry `z-index: 1` so the travelling pill sits
+   * under its labels — and while the footer was a flex sibling BELOW the
+   * scroller that never mattered. Overlapping it, those inner stacks were
+   * climbing straight over the footer: a disabled `Add` button with `Afternoon`
+   * printed across it.
+   *
+   * Isolating the scroller contains every one of them, so no panel can reach the
+   * chrome no matter what it does internally. Raising the footer's own z-index
+   * would have fixed this instance and left the next one to be found by eye.
+   */
   const body = h('div', {
-    class: 'min-h-0 flex-1 overflow-y-auto overscroll-contain px-[20px] pb-[20px]',
+    class: 'isolate min-h-0 flex-1 overflow-y-auto overscroll-contain px-[20px]',
   })
-  const footerEl = h('div', { class: 'sheet-footer px-[20px] pb-[20px] pt-[10px] empty:hidden' })
+
+  /**
+   * The footer FLOATS over the scroller; it is not a slab below it.
+   *
+   * This is the whole difference between the sheet's bottom edge and the tab
+   * bar's, and it took three attempts at the gradient to notice that the
+   * gradient was never the problem. The tab bar works because the page scrolls
+   * UNDER it — `.screen` reserves the bar's height as bottom padding, so a card
+   * runs on behind the bar and you see live, softened content around it. The
+   * footer was a flex sibling, which meant the scroller ENDED at its top edge:
+   * the card stopped dead there, and below it was bare canvas. No band above a
+   * hard edge like that can look like content receding, because there is no
+   * content down there to recede.
+   *
+   * So the footer is taken out of flow and the scroller is padded by its height
+   * instead.
+   *
+   * A flat 20 from the bottom, with no safe-area inset added — the same call the
+   * tab bar makes and for the same reason, written up on `--nav-inset`: the
+   * 34pt inset is sized for content running edge to edge, and adding it under a
+   * floating control pushes it visibly high. A pill only has to clear the home
+   * indicator, which is about 13pt. Footerless sheets still get the full inset,
+   * in the body's own padding below.
+   */
+  const footerEl = h('div', {
+    // `pt-[20px]`, not 10. The body reserves this whole box as its bottom
+    // padding, so the footer's own top inset IS the gap between the last of the
+    // content and the button — and 20 is what that gap is everywhere else.
+    class: 'sheet-footer absolute inset-x-0 bottom-0 px-[20px] pb-[20px] pt-[20px] empty:hidden',
+  })
+
+  /**
+   * The same progressive blur the tab bar uses, at the sheet's own anchor.
+   *
+   * This was a flat 24px gradient and nothing else, which put a hard-edged band
+   * of canvas directly under the footer while the tab bar — the other floating
+   * control in the app, often on screen at the same moment — faded over 159px
+   * with three layers of blur behind it. Two pieces of chrome doing the same job
+   * on the same page, and content arrived at one of them sharp and at the other
+   * softened.
+   *
+   * Built as a real element rather than `::before` because three backdrop
+   * filters need three boxes and a pseudo-element gives you two. It is added and
+   * removed WITH the footer's content in `syncHeader`, so `empty:hidden` still
+   * works — a permanent child would make every footerless sheet render an empty
+   * slab.
+   */
+  const footerFade = h(
+    'div',
+    { class: 'sheet-fade', 'aria-hidden': 'true' },
+    fadeLayers(FADE_RAMP),
+    h('span', { class: 'sheet-fade-veil' })
+  )
 
   const panel = h(
     'div',
@@ -112,13 +221,20 @@ export function openSheet({ title, render, footer = null }) {
        * a card on a page; it is a surface meeting a dimmed one, and in dark mode
        * the hairline is the only thing drawing it.
        */
-      class:
-        'sheet-panel absolute inset-x-0 bottom-0 flex flex-col rounded-t-[24px] border-t border-outline bg-canvas safe-b',
+      // `safe-b` moved to the footer, which is the bottom-most element now that
+      // it floats. The body carries the same inset in its own padding.
+      class: 'sheet-panel absolute inset-x-0 bottom-0 flex flex-col border-t border-outline',
       style: {
-        maxHeight: 'calc(100svh - env(safe-area-inset-top, 0px) - 20px)',
+        maxHeight: `calc(100svh - env(safe-area-inset-top, 0px) - ${inset}px)`,
       },
       role: 'dialog',
       'aria-modal': 'true',
+      /**
+       * Focusable so the dialog itself can take focus on open. Without a target
+       * of its own, focus stays on whatever was behind the scrim, and the trap
+       * below has nothing to trap.
+       */
+      tabindex: '-1',
       onclick: (e) => e.stopPropagation(),
     },
     header,
@@ -139,8 +255,50 @@ export function openSheet({ title, render, footer = null }) {
     const top = panels[panels.length - 1]
     titleEl.textContent = top?.title ?? ''
     backBtn.style.display = panels.length > 1 ? '' : 'none'
-    footerEl.replaceChildren(...(top?.footerNode ? [top.footerNode] : []))
+    const hasFooter = !!top?.footerNode
+    footerEl.replaceChildren(...(hasFooter ? [footerFade, top.footerNode] : []))
+    /**
+     * Reserve the floating footer's height at the foot of the scroller, so the
+     * last row can be scrolled clear of the button rather than parking under it
+     * permanently. Measured rather than assumed, because a footer is one button
+     * on most sheets and two on the weigh-in editor.
+     *
+     * After a frame, since the height is only knowable once the new content has
+     * laid out.
+     */
+    requestAnimationFrame(() => {
+      body.style.paddingBottom = hasFooter
+        ? `${footerEl.offsetHeight}px`
+        : 'calc(20px + env(safe-area-inset-bottom, 0px))'
+      syncFooterFade()
+    })
   }
+
+  /**
+   * The fade only exists for content passing under the button.
+   *
+   * On a panel short enough not to scroll, nothing ever does — and what is left
+   * is a wash of canvas over the bottom of a grid that was never going to move.
+   * The date picker is the clear case: seven columns that fit exactly, with its
+   * last row dimmed for no reason.
+   *
+   * This is the rule `syncFade` already applies to the tab bar, and it is
+   * applied the same way for the same reason: `display: none` rather than
+   * opacity, so the backdrop-filter layers stop compositing as well as stop
+   * showing. That cost is paid every frame while the band exists.
+   */
+  function syncFooterFade() {
+    footerFade.dataset.active = String(body.scrollHeight > body.clientHeight + 1)
+  }
+
+  /**
+   * A panel's height is not known when it is appended — the log reads IndexedDB
+   * and paints into its body afterwards, and the picker re-renders a new month
+   * in place. Watching the mounted node catches both, where a single check after
+   * `showTop` would only ever see the first frame.
+   */
+  const contentObserver =
+    typeof ResizeObserver === 'function' ? new ResizeObserver(syncFooterFade) : null
 
   function showTop() {
     const top = panels[panels.length - 1]
@@ -148,6 +306,8 @@ export function openSheet({ title, render, footer = null }) {
     if (top?.node) body.appendChild(top.node)
     syncHeader()
     body.scrollTop = top?.scrollTop ?? 0
+    contentObserver?.disconnect()
+    if (top?.node) contentObserver?.observe(top.node)
   }
 
   function makeCtx(entry) {
@@ -216,8 +376,22 @@ export function openSheet({ title, render, footer = null }) {
     for (const entry of panels) runDisposers(entry)
     window.removeEventListener('popstate', onPop)
     document.removeEventListener('keydown', onKey)
+    /**
+     * Whether the focus we are about to strip belonged to us.
+     *
+     * Read BEFORE the scrim leaves the document, since `contains` stops being
+     * true the moment it does. If focus had already moved on — a replacing sheet
+     * has taken it, or the user clicked into the page — it is not ours to put
+     * back, and yanking it to the opener would be the sheet interrupting
+     * whatever came after it.
+     */
+    contentObserver?.disconnect()
+    const heldFocus = scrim.contains(document.activeElement)
     scrim.remove()
     lockScroll(false)
+    if (heldFocus && opener?.isConnected && typeof opener.focus === 'function') {
+      opener.focus({ preventScroll: true })
+    }
     if (active?.scrim === scrim) active = null
   }
 
@@ -271,8 +445,66 @@ export function openSheet({ title, render, footer = null }) {
     showTop()
   }
 
+  const FOCUSABLE =
+    'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), ' +
+    'textarea:not(:disabled), [tabindex]:not([tabindex="-1"])'
+
+  /**
+   * Only what is actually reachable. A panel that has been pushed past keeps its
+   * DOM so its scroll position and form state survive being come back to, and
+   * the hidden `input[type=date]` behind a date label is deliberately not a tab
+   * stop — neither should answer the Tab key.
+   */
+  function focusables() {
+    return [...panel.querySelectorAll(FOCUSABLE)].filter(
+      (el) =>
+        /**
+         * `tabIndex < 0` is checked on the ELEMENT rather than left to the
+         * selector, which cannot catch it. The date label's picker is an
+         * `input` carrying `tabindex="-1"`, so it matches
+         * `input:not(:disabled)` on its own and slips past the
+         * `[tabindex]:not([tabindex="-1"])` clause entirely. It is a full-size
+         * transparent overlay, so it passes the visibility test too — and being
+         * in this list at the wrong end would hand Tab to something the browser
+         * itself will not focus, and the cycle would stall there.
+         */
+        el.tabIndex >= 0 &&
+        (el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement)
+    )
+  }
+
   function onKey(e) {
-    if (e.key === 'Escape') closeAll()
+    if (e.key === 'Escape') {
+      closeAll()
+      return
+    }
+    if (e.key !== 'Tab') return
+
+    /**
+     * The trap. A modal that can be tabbed out of is a modal in appearance
+     * only — behind it sits a whole screen of live controls that are covered,
+     * inert to the eye, and perfectly reachable by keyboard.
+     */
+    const list = focusables()
+    if (!list.length) {
+      e.preventDefault()
+      panel.focus({ preventScroll: true })
+      return
+    }
+    const first = list[0]
+    const last = list[list.length - 1]
+    const current = document.activeElement
+
+    if (!panel.contains(current)) {
+      e.preventDefault()
+      ;(e.shiftKey ? last : first).focus({ preventScroll: true })
+    } else if (e.shiftKey && current === first) {
+      e.preventDefault()
+      last.focus({ preventScroll: true })
+    } else if (!e.shiftKey && current === last) {
+      e.preventDefault()
+      first.focus({ preventScroll: true })
+    }
   }
 
   /**
@@ -293,6 +525,21 @@ export function openSheet({ title, render, footer = null }) {
 
   active = { scrim, destroy, closeAll }
   pushPanel({ title, render, footer })
+
+  /**
+   * Focus the dialog itself rather than the first control in it.
+   *
+   * The first control is whatever happens to be top-left — a close button, a
+   * back chevron, a day step — and starting there both announces the wrong
+   * thing and puts the very first Enter on a control nobody was reaching for.
+   * The panel carries `role="dialog"`, so landing on it is what gets the sheet
+   * announced, and one Tab from there reaches the same controls in order.
+   *
+   * `preventScroll` because the panel is inside a fixed, scroll-locked scrim on
+   * iOS, where focusing a tall element is enough to shift the layout viewport
+   * out from under everything.
+   */
+  panel.focus({ preventScroll: true })
 
   return result
 }

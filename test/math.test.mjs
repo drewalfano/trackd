@@ -94,13 +94,44 @@ eq('block prefill: 17:00', D.blockForTime(new Date(2026, 0, 1, 17), { afternoon:
 const day = (kcal, protein) => ({ entries: [{}], totals: { kcal, protein } })
 const blank = () => ({ entries: [], totals: { kcal: 0, protein: 0 } })
 
-eq('one tracked day yields no average at all', C.weeklyAverages([day(1235, 90), blank(), blank()]), { tracked: 1, of: 7, enough: false, kcal: null, protein: null })
+eq('one tracked day yields no average at all', C.weeklyAverages([day(1235, 90), blank(), blank()]), { tracked: 1, complete: 1, partial: 0, of: 7, enough: false, kcal: null, protein: null })
 eq('three is still not enough', C.weeklyAverages([day(2000, 150), day(2000, 150), day(2000, 150)]).enough, false)
 eq('four is', C.weeklyAverages(Array.from({ length: 4 }, () => day(2000, 150))).enough, true)
 eq('the mean divides by tracked days, not by seven', C.weeklyAverages([day(2000, 150), day(2400, 170), day(2000, 150), day(2400, 170), blank(), blank(), blank()]).kcal, 2200)
 eq('untracked days do not drag the mean toward zero', C.weeklyAverages(Array.from({ length: 5 }, () => day(2000, 150)).concat([blank(), blank()])).kcal, 2000)
 eq('only the last seven days count', C.weeklyAverages(Array.from({ length: 10 }, (_, i) => day(i < 7 ? 2000 : 9999, 150))).kcal, 2000)
-eq('nothing tracked is zero tracked, not a divide by zero', C.weeklyAverages([blank(), blank()]), { tracked: 0, of: 7, enough: false, kcal: null, protein: null })
+eq('nothing tracked is zero tracked, not a divide by zero', C.weeklyAverages([blank(), blank()]), { tracked: 0, complete: 0, partial: 0, of: 7, enough: false, kcal: null, protein: null })
+
+/**
+ * Partial days.
+ *
+ * The failure this guards against is silent and compounding: a day someone
+ * logged breakfast on and then forgot is not a 400-calorie day, but a naive mean
+ * files it as one and reports a deficit that never happened. Both signals have
+ * to agree before a day is written off — see `isPartialDay` — because either
+ * alone discards something real.
+ */
+const dayIn = (kcal, blocks) => ({ entries: blocks.map((b) => ({ block: b })), totals: { kcal, protein: 100 } })
+const TARGETS = { kcal: 2000, protein: 150 }
+
+eq('one period and well under target is partial', C.isPartialDay(dayIn(600, ['morning']), TARGETS), true)
+eq('the same calories spread over two periods is a real light day', C.isPartialDay(dayIn(600, ['morning', 'night']), TARGETS), false)
+eq('one big meal is the whole day, not half of one', C.isPartialDay(dayIn(1400, ['night']), TARGETS), false)
+eq('exactly at the fraction is not partial', C.isPartialDay(dayIn(1200, ['morning']), TARGETS), false)
+eq('an untracked day is absent, not partial', C.isPartialDay({ entries: [], totals: { kcal: 0 } }, TARGETS), false)
+/* Without a target there is nothing to be a fraction OF, so the rule switches
+   itself off rather than guessing. This is what keeps the mean tests above
+   honest — they pass no targets, so none of their days are partial. */
+eq('no target means nothing is partial', C.isPartialDay(dayIn(600, ['morning']), {}), false)
+
+const withPartial = Array.from({ length: 4 }, () => dayIn(2000, ['morning', 'afternoon', 'night'])).concat([dayIn(400, ['morning'])])
+eq('a partial day does not drag the mean down', C.weeklyAverages(withPartial, TARGETS).kcal, 2000)
+eq('and is counted so the screen can say so', C.weeklyAverages(withPartial, TARGETS).partial, 1)
+eq('the denominator is complete days, not tracked ones', C.weeklyAverages(withPartial, TARGETS).complete, 4)
+eq('tracked still counts everything logged', C.weeklyAverages(withPartial, TARGETS).tracked, 5)
+/* Four complete days is the threshold, so dropping one partial day below it has
+   to withhold the mean rather than quietly average three. */
+eq('excluding a partial day can drop you under the threshold', C.weeklyAverages(Array.from({ length: 3 }, () => dayIn(2000, ['morning', 'night'])).concat([dayIn(400, ['morning'])]), TARGETS).enough, false)
 
 /* ----------------------------------------------------------------- height */
 
@@ -303,6 +334,30 @@ atLeast('muted on canvas', token('muted'), token('canvas'), AA)
 atLeast('muted on surface', token('muted'), token('surface'), AA)
 atLeast('ink on dark canvas', token('ink', darkBlock), token('canvas', darkBlock), 7)
 atLeast('muted on dark surface', token('muted', darkBlock), token('surface', darkBlock), AA)
+
+/**
+ * The sheet's ground, and the measurement that pins it.
+ *
+ * `--color-sheet` is the third elevation level — page, sheet, then the cards on
+ * the sheet — and it deliberately aliases canvas rather than lifting above it.
+ * The alias is asserted rather than assumed, because it is what makes the token
+ * follow each theme's page without needing an override in the dark block.
+ *
+ * The pair below is the reason it must not be tuned upward. A card has to stay
+ * readable AS a card on whatever the sheet is, and the two themes currently sit
+ * at 1.14 in light and 1.22 in dark. Lifting the dark sheet to `#1c1c1c` drops
+ * its cards to 1.1267, which is what the floor is set to catch: the sheet cannot
+ * buy its own elevation with the separation of everything sitting on it.
+ *
+ * 1.13 rather than the 1.14 Material names, because light is 1.1397 and would
+ * fail its own status quo. The gap between that and the 1.1267 this exists to
+ * reject is narrow, and it is the real gap — a floor rounded up to look tidier
+ * would fail a surface that ships today.
+ */
+eq('sheet aliases canvas', /--color-sheet:\s*var\(--color-canvas\)/.test(css), true)
+const SURFACE_PAIR = 1.13
+atLeast('card on sheet', token('surface'), token('sheet'), SURFACE_PAIR)
+atLeast('card on sheet, dark', token('surface', darkBlock), token('canvas', darkBlock), SURFACE_PAIR)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

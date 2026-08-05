@@ -1,33 +1,54 @@
 import { h, repaint } from '../lib/dom.js'
+import { icon } from '../lib/icons.js'
 import { openSheet } from '../lib/sheet.js'
 import { toast, confirm } from '../lib/toast.js'
-import { getWeight, putWeight, deleteWeight, getSettings } from '../lib/db.js'
-import { dateInput, numberInput, labelledField, notice, slot } from '../lib/ui.js'
-import { kgToUnit, unitToKg } from '../lib/format.js'
+import {
+  getWeight,
+  putWeight,
+  deleteWeight,
+  listWeights,
+  getSettings,
+  onChange,
+} from '../lib/db.js'
+import { card, dateInput, numberInput, labelledField, notice, slot, tnum, emptyRow } from '../lib/ui.js'
+import { kgToUnit, unitToKg, weight as fmtWeight } from '../lib/format.js'
 import { dayPhrase, formatDayLabel, todayStr } from '../lib/dates.js'
 
 /**
- * A weigh-in for a day that is not today.
+ * Every weigh-in, and the editor for one of them.
  *
- * The Weight tab's own field is deliberately today-only — weighing yourself is
- * a morning habit and the field should be one tap from the tab, not a form. But
- * that left no way to enter a morning you missed, and no way to correct or
- * remove any reading except today's. The trend refuses to draw under seven
- * readings, so on a screen whose whole job is a smoothed line, a hole you
- * cannot fill costs more than it looks.
+ * The Weight tab's own field is deliberately today-only — weighing yourself is a
+ * morning habit and the field should be one tap from the tab, not a form. This
+ * is where the rest of the record lives.
  *
- * This is the back door: pick a day, see what is already there, save or remove.
- * One record per day still — `putWeight` overwrites rather than appending, so
- * saving onto an existing day is an edit, and the sheet says so.
+ * **It used to be a single-day form, and that was the wrong shape.** It opened on
+ * today by default, which made it an exact duplicate of the `Remove` chip that
+ * sat above it: both edited or deleted today's reading, one of them from a
+ * heading row, for the least common action in the group. And a screen whose
+ * whole subject is a line through sixty readings offered no way to see those
+ * readings — only a date picker to guess at them one at a time.
+ *
+ * So the root is the list. The single-day editor is still here, unchanged in what
+ * it does, but reached by tapping the day you want rather than by hunting for it
+ * in a picker. `Add a day` opens the same editor with nothing in it.
+ *
+ * One record per day throughout: `putWeight` overwrites rather than appending, so
+ * saving onto an existing day is an edit, and the editor says so.
  */
-export async function openWeighInSheet({ date = todayStr() } = {}) {
-  const settings = await getSettings()
-  const unit = settings.weightUnit
 
-  return openSheet({
+/**
+ * The editor for one day, as a pushed panel.
+ *
+ * The date stays editable rather than being fixed by the row you arrived
+ * through. Logging to the wrong morning is the mistake this whole surface exists
+ * to fix, and correcting it should not mean deleting one day and creating
+ * another.
+ */
+function dayPanel({ day: initialDay, unit }) {
+  return {
     title: 'Weigh-in',
     render: (ctx) => {
-      let day = date
+      let day = initialDay
       let draft = ''
       let existing = null
 
@@ -53,7 +74,9 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
             if (!(value > 0)) return
             saveBtn.disabled = true
             await putWeight(day, unitToKg(value, unit))
-            ctx.close()
+            // Back to the list, which is subscribed to `weights` and will have
+            // repainted by the time it is on screen again.
+            ctx.pop()
             toast(`${existing ? 'Updated' : 'Saved'} ${dayPhrase(day)}`)
           },
         },
@@ -72,7 +95,7 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
             })
             if (!ok) return
             await deleteWeight(day)
-            ctx.close()
+            ctx.pop()
             toast('Weigh-in removed')
           },
         },
@@ -83,12 +106,7 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
         saveBtn.disabled = !(Number(draft) > 0)
         saveBtn.textContent = existing ? 'Update' : 'Save'
         ctx.setFooter(
-          h(
-            'div',
-            { class: 'flex flex-col gap-[10px]' },
-            saveBtn,
-            ...(existing ? [removeBtn] : [])
-          )
+          h('div', { class: 'flex flex-col gap-[10px]' }, saveBtn, ...(existing ? [removeBtn] : []))
         )
       }
 
@@ -130,6 +148,84 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
         labelledField({ label: 'Weight', children: amount }),
         status
       )
+    },
+  }
+}
+
+export async function openWeighInSheet() {
+  const [settings, initial] = await Promise.all([getSettings(), listWeights()])
+  const unit = settings.weightUnit
+  let weights = initial
+
+  return openSheet({
+    title: 'Weigh-ins',
+    render: (ctx) => {
+      const body = h('div')
+
+      const addBtn = h(
+        'button',
+        {
+          class: 'btn-primary',
+          onclick: () => ctx.push(dayPanel({ day: todayStr(), unit })),
+        },
+        'Add a day'
+      )
+      ctx.setFooter(addBtn)
+
+      const paint = () => {
+        repaint(
+          body,
+          card(
+            weights.length
+              ? // Newest first. The record is read backwards from now, the same
+                // way the History list on Trends is.
+                [...weights]
+                  .reverse()
+                  .map((w) =>
+                    h(
+                      'button',
+                      {
+                        class: 'row row-single justify-between',
+                        onclick: () => ctx.push(dayPanel({ day: w.date, unit })),
+                      },
+                      h(
+                        'span',
+                        { class: 'min-w-0 flex-1 truncate text-[14px] font-semibold' },
+                        formatDayLabel(w.date)
+                      ),
+                      h(
+                        'span',
+                        { class: 'shrink-0 text-[14px]' },
+                        tnum(fmtWeight(w.kg, unit)),
+                        h('span', { class: 'ml-[4px] text-[12px] text-muted' }, unit)
+                      ),
+                      icon('chevronRight', { size: 20, class: 'shrink-0 text-muted' })
+                    )
+                  )
+              : emptyRow('No weigh-ins yet')
+          )
+        )
+      }
+
+      paint()
+
+      /**
+       * The list outlives every edit made through it, since those happen in a
+       * panel pushed on top of this one. Subscribing is what makes popping back
+       * land on the corrected record rather than the one that was there when the
+       * sheet opened — a panel keeps its DOM while it is buried.
+       */
+      ctx.onDispose(
+        onChange((scope) => {
+          if (scope !== 'weights' && scope !== 'all') return
+          listWeights().then((next) => {
+            weights = next
+            paint()
+          })
+        })
+      )
+
+      return body
     },
   })
 }

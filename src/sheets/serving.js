@@ -1,6 +1,6 @@
 import { h } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
-import { openSheet } from '../lib/sheet.js'
+import { openSheet, presentSheet } from '../lib/sheet.js'
 import { toast, confirm } from '../lib/toast.js'
 import {
   getFood,
@@ -400,8 +400,12 @@ export async function openServingSheet({ food, date, block }) {
  * A quick add lands in the same branch, because it never had a food to begin
  * with. Same controls, different reason, so it must not be told its food was
  * deleted — nothing was.
+ *
+ * `host` is the sheet this was opened from, when there is one. From the log it
+ * pushes a panel rather than replacing the sheet the row is in; from Today,
+ * where there is no sheet to be inside, it opens one as it always did.
  */
-export async function openEditEntry(entry) {
+export async function openEditEntry(entry, host) {
   const [food, settings] = await Promise.all([
     entry.foodId ? getFood(entry.foodId) : null,
     getSettings(),
@@ -409,7 +413,7 @@ export async function openEditEntry(entry) {
   const isQuickAdd = entry.source === QUICK_ADD_SOURCE || !entry.foodId
 
   if (!food) {
-    return openSheet({
+    return presentSheet({
       title: 'Edit entry',
       render: (ctx) => {
         let block = entry.block
@@ -480,7 +484,7 @@ export async function openEditEntry(entry) {
           h('div', { class: 'flex flex-col gap-[10px]' }, h('div', { class: 'section-label' }, 'Block'), blockRow)
         )
       },
-    })
+    }, host)
   }
 
   const panel = servingPanel({
@@ -517,11 +521,11 @@ export async function openEditEntry(entry) {
   })
 
   let close = () => {}
-  return openSheet({
+  return presentSheet({
     title: panel.title,
     render: (ctx) => {
       close = () => ctx.close()
       return panel.render(ctx)
     },
-  })
+  }, host)
 }

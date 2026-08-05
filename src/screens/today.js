@@ -19,8 +19,10 @@ import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
 import { quickLogFood, defaultServing } from '../lib/logging.js'
 import { toast } from '../lib/toast.js'
 import { openEditEntry, openServingSheet } from '../sheets/serving.js'
+import { openLogSheet } from '../sheets/log.js'
+import { openSheet } from '../lib/sheet.js'
+import { datePickerPanel } from '../lib/datePicker.js'
 import { state, setDate } from '../state.js'
-import { navigate } from '../router.js'
 
 /**
  * Today. A dashboard card, then the log.
@@ -434,6 +436,46 @@ function dayDeck({ current, prev, next }) {
   return deck
 }
 
+/* ----------------------------------------------------------------- the log */
+
+/**
+ * How many entries the card shows before it hands over to the sheet.
+ *
+ * Eight, matching the quick-add rail, and for a related reason: past that a
+ * preview stops being a preview. The card's job on this screen is "what have I
+ * eaten today", answered at a glance under the dashboard — a fourteen-item day
+ * scrolled past the fold turns the summary card into a header for a list, which
+ * is the shape the Log sheet exists to be.
+ */
+const LOG_PREVIEW_MAX = 8
+
+/**
+ * The way into the Log sheet, in the section head.
+ *
+ * It was briefly the last row of the card instead, on the argument that "there
+ * is more of this" belongs at the end of the list it continues. Tried and
+ * reverted: at the bottom it is only found by scrolling past the eight rows it
+ * exists to say are not all of them, so the one day you most want it — a long
+ * one — is the day it sits furthest from the thumb. In the head it is in the
+ * same place regardless of how much is under it.
+ *
+ * **It renders at every count, and reads the same at every count.** The sheet
+ * holds the day's targets, the time blocks and the date picker, so it has to be
+ * reachable from a three-item day as well as a twenty-item one — an affordance
+ * that appears only once a list is long enough is one most people meet for the
+ * first time on the day they least want to go looking.
+ *
+ * It briefly carried `(4 more)` when the list was capped, on the argument that
+ * nothing else says the eight rows are a selection. Removed: a control that
+ * changes its own label is a control you have to re-read, and this one is a
+ * fixed destination — the label is where it goes, not how much is behind it. The
+ * cost is that a long day and a short one now look alike from here, which is
+ * what the sheet is one tap away to answer.
+ */
+function fullLogChip(onOpen) {
+  return h('button', { class: 'chip-sm', onclick: onOpen }, 'Full log')
+}
+
 /* ------------------------------------------------------------- quick add */
 
 /**
@@ -595,6 +637,22 @@ export function todayScreen() {
           onForward: () => setDate(1),
           forwardLabel: 'Next day',
           forwardDisabled: isToday(state.date),
+          /**
+           * The date is a control as well as a label.
+           *
+           * The chevrons step one day, which is right for yesterday and useless
+           * for the day before last month. This is the jump, and it is the app's
+           * own month grid rather than the platform's — see lib/datePicker.js
+           * for why `showPicker()` is not an option here.
+           *
+           * Opened as a sheet rather than pushed as a panel, because Today is a
+           * screen with no sheet to push onto. The spec is the same object
+           * either way; picking a day pops it, which at the root of a sheet
+           * means closing it.
+           */
+          onTitle: () =>
+            openSheet(datePickerPanel({ value: state.date, onPick: setDate })),
+          titleLabel: `${formatDayHeader(state.date)}. Pick a day`,
         }),
 
         // Targets are `settings.targets` for every card in the deck, including
@@ -624,11 +682,12 @@ export function todayScreen() {
          * than labelling a list, and it has to make sense with one muted line
          * under it as well as with six rows.
          *
-         * No item count on the right, which the brief asked for. That side is
-         * already spoken for by Full Log, and Full Log is not decoration — it
-         * is the only way to the Log screen and therefore the only way to
-         * History. The count is also the weakest fact available: it sits
-         * directly above the list it counts.
+         * No bare item count on the right. That side carries `Full log`, which
+         * is not decoration — it is the only way to the Log sheet, and
+         * therefore to the day's targets, its time blocks and the date picker.
+         * The count rides along with it rather than standing alone, where it
+         * would be the weakest fact available: it sits directly above the list
+         * it counts.
          */
         h(
           'section',
@@ -637,7 +696,7 @@ export function todayScreen() {
             'div',
             { class: 'section-head' },
             h('div', { class: 'section-label' }, 'Logged'),
-            h('button', { class: 'chip-sm', onclick: () => navigate('log') }, 'Full Log')
+            fullLogChip(openLogSheet)
           ),
           // Newest first, which is the opposite of the full Log screen and
           // is meant to be. `listEntries` returns oldest-first because Log
@@ -649,19 +708,25 @@ export function todayScreen() {
           // one screen's decision instead of both screens'.
           entries.length
             ? card(
-                [...entries].reverse().map((entry) =>
-                  entryRow(entry, {
-                    onEdit: openEditEntry,
-                    onDelete: deleteEntryWithUndo,
-                    onDuplicate: openDuplicateSheet,
-                  })
-                )
+                [...entries]
+                  .reverse()
+                  .slice(0, LOG_PREVIEW_MAX)
+                  .map((entry) =>
+                    entryRow(entry, {
+                      onEdit: openEditEntry,
+                      onDelete: deleteEntryWithUndo,
+                      onDuplicate: openDuplicateSheet,
+                    })
+                  )
               )
             : // One line, in the same card every list on this screen sits in,
               // so an empty day has the same edges as a full one. "Nothing
               // logged yet" and not "Your log is empty" — the heading directly
               // above it already said the word log, and a sentence that repeats
               // its own heading is saying one thing twice.
+              //
+              // No route into the sheet needed down here: `Full log` sits in the
+              // head above and renders at every count, including this one.
               card(emptyRow('Nothing logged yet'))
         ),
 

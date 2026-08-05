@@ -5,15 +5,15 @@ import { icon } from './lib/icons.js'
 import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
 import { toast } from './lib/toast.js'
 import { closeAnySheet } from './lib/sheet.js'
+import { fadeLayers, FADE_RAMP } from './lib/fade.js'
 import { setThemeIsDark } from './lib/statusBar.js'
 import { route, startRouter, navigate, currentPath } from './router.js'
 import { rollOverIfNeeded, setDate } from './state.js'
 import { todayStr } from './lib/dates.js'
 
 import { todayScreen } from './screens/today.js'
-import { logScreen } from './screens/log.js'
-import { historyScreen } from './screens/history.js'
-import { weightScreen } from './screens/weight.js'
+import { openLogSheet } from './sheets/log.js'
+import { trendsScreen } from './screens/trends.js'
 import { settingsScreen } from './screens/settings.js'
 import { suggestTargetScreen } from './screens/suggestTarget.js'
 import {
@@ -77,44 +77,15 @@ async function show(factory) {
   window.scrollTo(0, 0)
 }
 
+/**
+ * `Trends`, not `Weight`. Every other tab names a job — what you are doing —
+ * and Weight named a data type. It also stopped being true: the tab now holds
+ * nutrition history alongside the weight chart, and neither is the whole of it.
+ */
 const TABS = [
   { path: 'today', label: 'Today', iconName: 'calendarFilled' },
-  { path: 'weight', label: 'Weight', iconName: 'weightFilled' },
+  { path: 'trends', label: 'Trends', iconName: 'chartFilled' },
   { path: 'settings', label: 'Settings', iconName: 'gearFilled' },
-]
-
-/**
- * The blur ramp: [radius, solid to %, transparent by %], bottom-up.
- *
- * Each layer sits on top of the previous one and re-blurs its output, so the
- * radii compound rather than replace — about 6px effective at the bottom edge,
- * tapering to nothing partway up the band.
- *
- * 6px is deliberately mild, because the Figma effect is a progressive blur of
- * 0 → 4 and the depth comes from the gradient fill layered over it, not from
- * the radius. An aggressive blur reads as frosted glass; this reads as content
- * receding.
- *
- * Three layers, not more. Every backdrop-filter costs the compositor its own
- * snapshot-and-blur of the region behind it, every frame, and this band is
- * fixed over a scrolling list — so it pays that continuously.
- *
- * **The percentages stop at 62, not 100, and that is the whole point.** The
- * band is 159px and the bar occupies the bottom 88 of it (20 inset + 68 tall),
- * so the top 71px of the band is open page. The first version ran the mildest
- * layer to 100%, which put a 1.5px blur over seventy pixels of text that is
- * nowhere near the bar and has every reason to be legible — the top log row on
- * Today, most of the time. Blurring readable content is a cost with no matching
- * benefit: nothing is about to slide under the bar up there.
- *
- * 62% is 98px, ten above the top edge of the bar. Enough that the blur has
- * already faded out before it reaches anything worth reading, and enough that
- * it does not end on a line of its own.
- */
-const BLUR_RAMP = [
-  [1.5, 34, 62],
-  [3, 16, 42],
-  [5, 0, 24],
 ]
 
 /**
@@ -125,19 +96,15 @@ const BLUR_RAMP = [
  * Purely decorative, so it is hidden from assistive tech and ignores pointers.
  */
 function tabBarFade() {
-  const layers = BLUR_RAMP.map(([radius, solid, clear]) => {
-    const span = h('span')
-    const mask = `linear-gradient(to top, #000 0%, #000 ${solid}%, transparent ${clear}%)`
-    span.style.backdropFilter = `blur(${radius}px)`
-    span.style.webkitBackdropFilter = `blur(${radius}px)`
-    span.style.maskImage = mask
-    span.style.webkitMaskImage = mask
-    return span
-  })
-
   // One scrim, not two. The black shade that used to sit on top of the veil is
-  // gone — see `.fade-veil` in styles.css for why.
-  return h('div', { class: 'tabbar-fade', 'aria-hidden': 'true' }, layers, h('span', { class: 'fade-veil' }))
+  // gone — see `.fade-veil` in styles.css for why. The ramp itself lives in
+  // lib/fade.js now, shared with the sheet footer.
+  return h(
+    'div',
+    { class: 'tabbar-fade', 'aria-hidden': 'true' },
+    fadeLayers(FADE_RAMP),
+    h('span', { class: 'fade-veil' })
+  )
 }
 
 /**
@@ -245,7 +212,7 @@ let pillPlaced = false
 function syncTabs(path) {
   const root = path.split('/')[0]
   const active =
-    root === 'log' || root === 'history' ? 'today' : root === 'foods' ? 'settings' : root
+    root === 'log' ? 'today' : root === 'foods' ? 'settings' : root
   for (const btn of nav.querySelectorAll('[data-tab]')) {
     btn.setAttribute('aria-current', btn.dataset.tab === active ? 'page' : 'false')
   }
@@ -272,9 +239,39 @@ function syncTabs(path) {
 
 function defineRoutes() {
   route('today', () => show(todayScreen))
-  route('log', () => show(logScreen))
-  route('history', () => show(historyScreen))
-  route('weight', () => show(weightScreen))
+  /**
+   * The Log is a sheet now, not a screen, so `#/log` has nothing to render.
+   *
+   * The route stays as a redirect rather than being deleted, because it is a URL
+   * that exists in the wild: the app is a standalone PWA that restores its last
+   * hash on launch, and the service worker will happily serve someone straight
+   * back onto `#/log` weeks after the screen stopped existing. Deleting it would
+   * fall through to the router's catch-all and land them on Today with no
+   * explanation for where the thing they were looking at went.
+   *
+   * The URL is rewritten with `replaceState` rather than `navigate`, and that is
+   * load-bearing rather than tidiness. `navigate` fires a hashchange, the router
+   * hook below closes any open sheet on every navigation, and the two would race
+   * — the redirect would close the log it had just opened, or not, depending on
+   * whether the IndexedDB read beat the hashchange. Rewriting the URL silently
+   * keeps this to one resolution, and the sheet opens once Today is mounted
+   * under it rather than over an empty view.
+   */
+  route('log', () => {
+    history.replaceState(history.state, '', '#/today')
+    show(todayScreen).then(openLogSheet)
+  })
+  route('trends', () => show(trendsScreen))
+  /**
+   * Both of these are URLs that exist in the wild and no longer resolve to a
+   * screen. The tab was `#/weight` for the app's whole life so far, and
+   * `#/history` was a real destination — a standalone PWA restores its last hash
+   * on launch, so either can arrive weeks after the screen behind it stopped
+   * existing. History's content is on Trends now, so both land in the right
+   * place rather than on the router's catch-all.
+   */
+  route('weight', () => navigate('trends', { replace: true }))
+  route('history', () => navigate('trends', { replace: true }))
   route('settings', () => show(settingsScreen))
   /**
    * The set-once corners of Settings, one tap in.

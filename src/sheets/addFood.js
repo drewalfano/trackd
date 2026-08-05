@@ -1,6 +1,6 @@
 import { h, repaint } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
-import { openSheet } from '../lib/sheet.js'
+import { presentSheet } from '../lib/sheet.js'
 import { toast } from '../lib/toast.js'
 import {
   getSettings,
@@ -251,16 +251,33 @@ function actionButton({ iconName, label, onclick }) {
      * last time it sat under an icon — a caption under a mark reads smaller
      * than a word beside one.
      */
-    icon(iconName, { size: 24 }),
+    /**
+     * 28, not 24.
+     *
+     * The stacked layout moved the constraint from width to height, and then
+     * left the height unspent: an 89px button holding a 24px mark, a 6px gap and
+     * a 14px label uses barely half of it, so the icon read as small for the
+     * card it was sitting in rather than small for the space available. 28 is
+     * the size the tab bar's add button already uses, so this is a step onto a
+     * number the app has rather than a new one, and it still leaves the button
+     * more than a third empty.
+     */
+    icon(iconName, { size: 28 }),
     h('span', { class: 'text-[14px] font-semibold' }, label)
   )
 }
 
-export async function openAddFood({ date = state.date, block } = {}) {
+/**
+ * `host` is the sheet this was launched from, when it was launched from one —
+ * an empty period's Add row inside the log. It pushes a panel there instead of
+ * replacing the log, so closing the add flow returns to the day you were
+ * adding to rather than dropping you back on Today.
+ */
+export async function openAddFood({ date = state.date, block } = {}, host) {
   const settings = await getSettings()
   const targetBlock = block ?? blockForTime(new Date(), settings.blockThresholds)
 
-  return openSheet({
+  return presentSheet({
     // One tap on a favourite logs immediately, so the day has to be legible
     // before the tap rather than discoverable after it. Only says so when the
     // answer is surprising — "Add to today" on the common path is noise.
@@ -856,5 +873,5 @@ export async function openAddFood({ date = state.date, block } = {}) {
         resultsCard
       )
     },
-  })
+  }, host)
 }
