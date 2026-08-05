@@ -15,6 +15,13 @@ import { logScreen } from './screens/log.js'
 import { historyScreen } from './screens/history.js'
 import { weightScreen } from './screens/weight.js'
 import { settingsScreen } from './screens/settings.js'
+import { suggestTargetScreen } from './screens/suggestTarget.js'
+import {
+  preferencesScreen,
+  aiDescribeScreen,
+  dataScreen,
+  aboutScreen,
+} from './screens/settingsPages.js'
 import { foodsScreen, foodDetailScreen } from './screens/foods.js'
 import { createOnboarding } from './screens/onboarding.js'
 import { openAddFood } from './sheets/addFood.js'
@@ -269,6 +276,19 @@ function defineRoutes() {
   route('history', () => show(historyScreen))
   route('weight', () => show(weightScreen))
   route('settings', () => show(settingsScreen))
+  /**
+   * The set-once corners of Settings, one tap in.
+   *
+   * Namespaced under `settings/` rather than given top-level paths, which is
+   * what keeps `syncTabs` correct for free — it reads `path.split('/')[0]`, so
+   * every one of these already resolves to the Settings tab. `foods` needs its
+   * own case below precisely because it is not nested this way.
+   */
+  route('settings/target', () => show(suggestTargetScreen))
+  route('settings/preferences', () => show(preferencesScreen))
+  route('settings/ai', () => show(aiDescribeScreen))
+  route('settings/data', () => show(dataScreen))
+  route('settings/about', () => show(aboutScreen))
   route('foods', () => show(foodsScreen))
   route('foods/:id', (params) => show(() => foodDetailScreen(params.id)))
 }

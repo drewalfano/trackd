@@ -3,18 +3,30 @@ import { icon } from '../lib/icons.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listFoods,
+  listMeals,
   getFood,
+  getSettings,
   deleteFood,
   countEntriesForFood,
   isFavourite,
   toggleFavourite,
 } from '../lib/db.js'
 import { computeMacros, MACRO_ORDER, MACRO_META } from '../lib/compute.js'
-import { card, listRow, emptyRow, segmented, macroLine, emptyState, notice } from '../lib/ui.js'
+import {
+  backRow,
+  card,
+  listRow,
+  emptyRow,
+  segmented,
+  macroLine,
+  emptyState,
+  notice,
+} from '../lib/ui.js'
 import { servingLabel, g, kcal, pluralize } from '../lib/format.js'
 import { toast, confirm } from '../lib/toast.js'
 import { openCustomFood } from '../sheets/custom.js'
 import { openServingSheet } from '../sheets/serving.js'
+import { favouritesSheet, mealsSheet } from '../sheets/library.js'
 import { state } from '../state.js'
 import { navigate } from '../router.js'
 
@@ -24,6 +36,12 @@ import { navigate } from '../router.js'
  * This is the database interface the rest of the app deliberately is not — the
  * place to go when something needs correcting, rather than part of the daily
  * logging path.
+ *
+ * Favourites and Saved meals sit at the top of it rather than at the Settings
+ * root, where they used to. All three are the same job — curating what is
+ * already stored — and grouping them here is what let the root drop from three
+ * food rows to one without the library gaining a tap: `Foods ›` points straight
+ * at this screen.
  */
 
 // Kept at module scope so returning from a detail view lands you back where you
@@ -39,7 +57,7 @@ const SORTS = {
 export function foodsScreen() {
   return createScreen(
     async ({ rerender }) => {
-      const foods = await listFoods()
+      const [foods, meals, settings] = await Promise.all([listFoods(), listMeals(), getSettings()])
 
       /**
        * Query, filter and sort repaint the list in place rather than going
@@ -159,15 +177,7 @@ export function foodsScreen() {
       return h(
         'div',
         { class: 'flex flex-col gap-[20px] pb-[20px]' },
-        h(
-          'button',
-          {
-            class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[12px] font-medium',
-            onclick: () => navigate('settings'),
-          },
-          icon('chevronLeft', { size: 18 }),
-          'Settings'
-        ),
+        backRow({ label: 'Settings', onclick: () => navigate('settings') }),
         h(
           'div',
           { class: 'flex items-start gap-[10px] px-0' },
@@ -211,13 +221,30 @@ export function foodsScreen() {
           )
         ),
 
+        // Above the search box, because they are about the library as a whole
+        // and the search box is the start of looking inside it.
+        card(
+          listRow({
+            title: 'Favourites',
+            subtitle: pluralize(settings.favourites.length, 'pinned item'),
+            chevron: true,
+            onclick: () => favouritesSheet().then(rerender),
+          }),
+          listRow({
+            title: 'Saved meals',
+            subtitle: pluralize(meals.length, 'meal'),
+            chevron: true,
+            onclick: () => mealsSheet().then(rerender),
+          })
+        ),
+
         search,
         filterSlot,
         sortSlot,
         listSlot
       )
     },
-    { watch: ['foods'], watchDate: false }
+    { watch: ['foods', 'meals', 'settings'], watchDate: false }
   )
 }
 
@@ -272,7 +299,7 @@ export function foodDetailScreen(id) {
         return h(
           'div',
           { class: 'flex flex-col gap-[20px]' },
-          backRow(),
+          libraryBackRow(),
           emptyState('Food not found', 'It may have been deleted.')
         )
       }
@@ -285,7 +312,7 @@ export function foodDetailScreen(id) {
       return h(
         'div',
         { class: 'flex flex-col gap-[20px] pb-[20px]' },
-        backRow(),
+        libraryBackRow(),
 
         h(
           'div',
@@ -396,14 +423,5 @@ export function foodDetailScreen(id) {
   )
 }
 
-function backRow() {
-  return h(
-    'button',
-    {
-      class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[12px] font-medium',
-      onclick: () => navigate('foods'),
-    },
-    icon('chevronLeft', { size: 18 }),
-    'Food library'
-  )
-}
+const libraryBackRow = () =>
+  backRow({ label: 'Food library', onclick: () => navigate('foods') })

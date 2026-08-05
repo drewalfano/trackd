@@ -504,6 +504,78 @@ export function listRow({ title, subtitle, right, onclick, chevron = false, lead
   )
 }
 
+/** Ids for label association. Monotonic, since a rebuild makes new elements. */
+let rowSeq = 0
+
+/**
+ * A label on the left and an editable value on the right, on one line.
+ *
+ * This is `listRow` with its `right` slot handed an input instead of a static
+ * span — the same `.row` in the same `card()`, so the hairline between rows,
+ * the outer inset and the corner radius all come from rules that already exist.
+ * The only new idea is that the value on the right is typed into.
+ *
+ * The row IS a `<label>`, which is what makes "tap the row to edit" true with
+ * no JavaScript, no focus handler and nothing that could shift the layout: the
+ * input was always live and always in place, it simply was not wearing a pill.
+ * `for` is redundant beside the wrapping and kept anyway — the association is
+ * the requirement, the mechanism is not.
+ *
+ * Pair it with `numberInput({ bare: true })`, which is the value side of the
+ * same idea.
+ */
+export function valueRow(label, control) {
+  const inputs = [...control.querySelectorAll('input')]
+  const first = control.input ?? inputs[0]
+  if (first && !first.id) first.id = `field-${++rowSeq}`
+
+  /**
+   * Two inputs under one label is the imperial height row, where the wrapping
+   * label names both of them and neither says which one is feet. The suffix
+   * beside each is on screen doing that job and is invisible to anything not
+   * looking at it.
+   */
+  if (inputs.length > 1) {
+    for (const input of inputs) {
+      const unit = input.nextElementSibling?.textContent
+      input.setAttribute('aria-label', unit ? `${label}, ${unit}` : label)
+    }
+  }
+
+  return h(
+    'label',
+    { class: 'row', for: first?.id ?? null },
+    h('span', { class: 'min-w-0 flex-1 truncate text-[16px] font-semibold' }, label),
+    control
+  )
+}
+
+/**
+ * The way back from a pushed screen.
+ *
+ * Small, top-left, naming where it goes rather than saying "Back" — on a stack
+ * exactly one deep, the name of the parent is more use than the direction. It
+ * was written twice inside the food library before Settings grew subpages that
+ * wanted the same thing; this is that, once.
+ *
+ * Deliberately not `navHeader`. That is a three-part header with a centred
+ * title, and these screens carry their own large title beneath this row.
+ *
+ * The caller passes the handler rather than a route, so this file keeps out of
+ * the router — `ui.js` knows how things look and nothing about where they go.
+ */
+export function backRow({ label, onclick }) {
+  return h(
+    'button',
+    {
+      class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[12px] font-medium',
+      onclick,
+    },
+    icon('chevronLeft', { size: 18 }),
+    label
+  )
+}
+
 export function emptyRow(text, { action, onAction } = {}) {
   return h(
     'div',
@@ -764,7 +836,7 @@ export function heightInput({ cm, units, onChange, bare = false, placeholder }) 
     value: inches,
     suffix: 'in',
     step: '1',
-    placeholder: placeholder ?? '11',
+    placeholder,
     bare,
     width: 40,
     onInput: (v) => {
