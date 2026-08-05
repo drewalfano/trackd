@@ -412,6 +412,17 @@
   html {
     background: var(--color-canvas);
     -webkit-text-size-adjust: 100%;
+    /**
+     * On the ROOT, not on `body`.
+     *
+     * `overscroll-behavior` is one of the properties that only applies to the
+     * viewport from the element it propagates from, and that element is `html`.
+     * Declared on `body` it is dropped — which is where this sat, so the app has
+     * never actually had the document bounce it asked for. Both are set now:
+     * the root is the one doing the work, and `body`'s is left as a no-op that
+     * costs nothing rather than a second thing to remember.
+     */
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -423,6 +434,29 @@
     font-variant-numeric: tabular-nums lining-nums;
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
+    /**
+     * A floor under the document, and the whole reason is bottom-anchored chrome.
+     *
+     * `position: fixed; bottom: 0` anchors to the layout viewport, and in the
+     * standalone PWA that viewport follows the document when the document is
+     * SHORTER than the screen. Nothing here was ever taller than a phone on a
+     * day with food in it, so the tab bar sat where it should — and then a swipe
+     * to a day with nothing logged took the page under the screen's height and
+     * the bar, the fade, and the last of the list all rode up with it. That is
+     * the "only on empty days" half of the report, and it is not a bounce: the
+     * page is at rest, one short document away from correct.
+     *
+     * `svh` rather than `lvh`, so a Safari TAB — the desktop dev view and the
+     * pre-install visit — is not given a permanently scrollable page for a floor
+     * it does not need. In standalone the three units are the same number, which
+     * is the case this is for.
+     *
+     * `syncFade` still reads correctly against it: the floor makes the document
+     * EQUAL to the viewport, never greater, so "does anything scroll under the
+     * bar" is still false on a short screen.
+     */
+    min-height: 100vh;
+    min-height: 100svh;
   }
 
   /* One-handed, often rushed: no accidental text selection or tap highlight. */

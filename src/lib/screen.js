@@ -44,8 +44,20 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
         if (disposed) return
         if (queued) continue
         mount(el, content)
-        // Rebuilding changes document height; keep the user where they were.
-        if (scrollY > 0) window.scrollTo(0, Math.min(scrollY, document.body.scrollHeight))
+        /**
+         * Rebuilding changes document height; keep the user where they were.
+         *
+         * Clamped to the LAST SCROLLABLE PIXEL, which is the document's height
+         * less the viewport's — not to the document's height, which was the
+         * ceiling here and is roughly a viewport too generous. Swiping from a
+         * full day to an empty one is the case that ceiling let through: the
+         * rebuild shrinks the page to less than a screen, the old offset is
+         * asked for anyway, and the scroll is set past the end of a document
+         * that has nothing left to scroll. A browser clamps that; iOS clamps it
+         * against a layout it is in the middle of recomputing.
+         */
+        const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+        if (scrollY > 0) window.scrollTo(0, Math.min(scrollY, maxScroll))
       } while (queued)
     } finally {
       pending = false

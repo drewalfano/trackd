@@ -26,6 +26,23 @@ const STATE = 'mt-sheet'
  * and the page loses its scroll offset while the sheet is open — so closing it
  * snaps the list back to the top. Pinning the body at a negative offset holds
  * the position visually, and it is restored on unlock.
+ *
+ * **`bottom` is as load-bearing as `top`, and leaving it off is what made every
+ * sheet in the app stop short of the screen.** `releaseOrphanedLock` below
+ * already describes the damage a pinned body does when the pin is wrong — "the
+ * sheet's own bottom edge stops meeting the screen's" — and treats it as the
+ * cost of a lock that was never released. It is not: the pin does that while it
+ * is working exactly as intended. `position: fixed` with `height: auto` shrinks
+ * the body to its CONTENT, and once the body's box ends above the screen so does
+ * the layout viewport that `bottom: 0` anchors to. The sheet is anchored
+ * correctly to a viewport that is the wrong height.
+ *
+ * Pinning `bottom: 0` as well makes the box `viewportHeight + lockedScrollY`
+ * tall: it starts at `-lockedScrollY`, so the page still shows the row it was
+ * showing, and it ends at the bottom of the screen, so nothing bottom-anchored
+ * has anywhere to ride up to. The `overflow: hidden` clip lands one full
+ * viewport below the fold rather than mid-screen, which is why the page behind
+ * the scrim is not cut off by the extra height.
  */
 let lockedScrollY = 0
 
@@ -35,12 +52,14 @@ function lockScroll(lock) {
     lockedScrollY = window.scrollY
     style.position = 'fixed'
     style.top = `-${lockedScrollY}px`
+    style.bottom = '0'
     style.left = '0'
     style.right = '0'
     style.overflow = 'hidden'
   } else {
     style.position = ''
     style.top = ''
+    style.bottom = ''
     style.left = ''
     style.right = ''
     style.overflow = ''
