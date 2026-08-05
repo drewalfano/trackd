@@ -379,7 +379,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
           h(
             'button',
             {
-              class: 'chip-sm self-start',
+              class: 'chip-sm self-center',
               onclick: async () => {
                 const ok = await confirm({
                   title: 'Clear the plate?',

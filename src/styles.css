@@ -393,6 +393,25 @@
     outline: 2px solid var(--color-ink);
     outline-offset: 2px;
   }
+
+  /**
+   * Text entry is the one place the ring is noise.
+   *
+   * A control that is merely selected has to say so somehow, which is what the
+   * ring is for and why buttons, links and the segmented controls keep it. A
+   * field being typed into already says it twice — there is a caret blinking in
+   * it, and on a phone there is a keyboard occupying half the screen. iOS treats
+   * a tapped field as `:focus-visible` precisely because text entry is expected,
+   * so the ring fired on every tap of every field in the app and boxed in the
+   * one element that was already unmistakable.
+   *
+   * `select` keeps its ring: it has no caret and summons no keyboard, so the
+   * outline is the only thing that would mark it.
+   */
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
 }
 
 @layer base {
