@@ -337,6 +337,83 @@
   }
 }
 
+/**
+ * TEMPORARY — tab bar separation, three variants under evaluation.
+ *
+ * The problem: the bar is fixed and content passes beneath it. At the bar's top
+ * edge `.fade-veil` is only about 73% opaque, so a white card arrives at roughly
+ * #f4f4f4 and meets a #ffffff bar — a 1.09:1 seam, which is not a boundary.
+ *
+ * Three answers, switched by `data-bar` on the root. `.tabbar` and `.tab-pill`
+ * read these tokens and nothing else, so there is one component throughout.
+ *
+ *   a — fills only. Bar recedes BELOW the page, content stays the brightest
+ *       thing on screen, and the boundary is a tone step with no line at all.
+ *   b — the same fills, plus an edge so faint it should read as the meeting of
+ *       two surfaces rather than as a drawn rule.
+ *   c — bar stays at surface. The fill step is the one the app already has, so
+ *       the hairline is what actually separates: the load-bearing case.
+ *
+ * The page stays #f0f0f0. The brief proposed #fafafa, which would put a white
+ * card at 1.04:1 against it — see the ground-flip note on `.card`; the tinted
+ * page is the whole reason cards have no outline.
+ *
+ * Dark keeps the bar above the page in a and b, and drops it to just above the
+ * page in c so the hairline has the same job it has in light.
+ *
+ * The pill is a constant across all three: a fill step AND a 1px ring, in both
+ * modes. It is a 68px shape and fill alone is missable at that size. Its fill
+ * moves whichever way the bar left room.
+ *
+ * DELETE ALL OF THIS once one wins — plus the `.tabbar`/`.tab-pill` token
+ * references and `applyBarVariant` in main.js.
+ */
+:root {
+  --bar-fill: #e8e8e8;
+  --bar-edge: transparent;
+  --pill-fill: #ffffff;
+  --pill-edge: var(--color-ink);
+}
+:root[data-bar='b'] {
+  --bar-edge: rgba(0, 0, 0, 0.06);
+}
+:root[data-bar='c'] {
+  --bar-fill: #ffffff;
+  --bar-edge: rgba(0, 0, 0, 0.1);
+  --pill-fill: #f0f0f0;
+}
+
+:root[data-theme='dark'] {
+  --bar-fill: #262626;
+  --bar-edge: transparent;
+  --pill-fill: #333333;
+}
+:root[data-theme='dark'][data-bar='b'] {
+  --bar-edge: rgba(255, 255, 255, 0.1);
+}
+:root[data-theme='dark'][data-bar='c'] {
+  --bar-fill: #1a1a1a;
+  --bar-edge: rgba(255, 255, 255, 0.14);
+  --pill-fill: #2e2e2e;
+}
+
+@media (prefers-color-scheme: dark) {
+  /* Same values as the explicit dark blocks above; see the note there. */
+  :root[data-theme='system'] {
+    --bar-fill: #262626;
+    --bar-edge: transparent;
+    --pill-fill: #333333;
+  }
+  :root[data-theme='system'][data-bar='b'] {
+    --bar-edge: rgba(255, 255, 255, 0.1);
+  }
+  :root[data-theme='system'][data-bar='c'] {
+    --bar-fill: #1a1a1a;
+    --bar-edge: rgba(255, 255, 255, 0.14);
+    --pill-fill: #2e2e2e;
+  }
+}
+
 @layer base {
   html {
     background: var(--color-canvas);
@@ -1686,8 +1763,9 @@
     align-items: stretch;
     padding: 4px;
     border-radius: 999px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-outline);
+    /* See the tab bar variant block near the top of this file. */
+    background: var(--bar-fill);
+    border: 1px solid var(--bar-edge);
   }
 
   /**
@@ -1710,8 +1788,9 @@
     left: 4px;
     width: calc((100% - 8px) / 3);
     border-radius: 999px;
-    background: var(--color-surface);
-    border: 1px solid var(--color-ink);
+    /* Fill step AND ring, in both modes — see the variant block. */
+    background: var(--pill-fill);
+    border: 1px solid var(--pill-edge);
     pointer-events: none;
     transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
   }

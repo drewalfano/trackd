@@ -46,6 +46,40 @@ export function applyTheme(theme) {
   setThemeIsDark(dark)
 }
 
+/* ------------------------------------------------- tab bar variants (temp) */
+
+/**
+ * Which of the three tab bar treatments is showing. See the variant block in
+ * styles.css for what each one is and why the page stayed #f0f0f0.
+ *
+ * A data attribute rather than a rebuild, so the three can be compared on a
+ * real phone in daylight — which is the only place this decision can be made.
+ * Persisted the same way the theme is, so a variant survives the reload that
+ * installing a PWA update forces.
+ *
+ * DELETE with the CSS block once one wins.
+ */
+const BAR_VARIANTS = ['a', 'b', 'c']
+
+export function applyBarVariant(value) {
+  const variant = BAR_VARIANTS.includes(value) ? value : 'a'
+  document.documentElement.dataset.bar = variant
+  try {
+    localStorage.setItem('mt:bar', variant)
+  } catch {
+    /* storage may be locked down; the attribute still applies for this session */
+  }
+  return variant
+}
+
+function storedBarVariant() {
+  try {
+    return localStorage.getItem('mt:bar')
+  } catch {
+    return null
+  }
+}
+
 /* --------------------------------------------------------------- app shell */
 
 const view = h('main', { class: 'screen', id: 'view' })
@@ -408,6 +442,10 @@ async function boot() {
 
   const settings = await getSettings()
   applyTheme(settings.theme)
+
+  // Temporary. `__bar('a'|'b'|'c')` from the console or a debug URL, no rebuild.
+  applyBarVariant(storedBarVariant())
+  window.__bar = applyBarVariant
   onChange((scope) => {
     if (scope === 'settings' || scope === 'all') getSettings().then((s) => applyTheme(s.theme))
   })
