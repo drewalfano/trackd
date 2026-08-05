@@ -21,6 +21,7 @@ import {
   aiDescribeScreen,
   dataScreen,
   aboutScreen,
+  viewportScreen,
 } from './screens/settingsPages.js'
 import { foodsScreen, foodDetailScreen } from './screens/foods.js'
 import { createOnboarding } from './screens/onboarding.js'
@@ -286,6 +287,7 @@ function defineRoutes() {
   route('settings/ai', () => show(aiDescribeScreen))
   route('settings/data', () => show(dataScreen))
   route('settings/about', () => show(aboutScreen))
+  route('settings/viewport', () => show(viewportScreen))
   route('foods', () => show(foodsScreen))
   route('foods/:id', (params) => show(() => foodDetailScreen(params.id)))
 }

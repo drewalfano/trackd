@@ -27,7 +27,8 @@ import { round } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
 import { getAiKey, setAiKey, clearAiKey } from '../lib/aiKey.js'
-import { VERSION, REPO_URL } from '../config.js'
+import { VERSION, BUILD_ID, REPO_URL } from '../config.js'
+import { readViewport, formatViewport } from '../lib/viewportProbe.js'
 
 /**
  * The four set-once corners of Settings, one tap in from the root.
@@ -562,6 +563,16 @@ export function aboutScreen() {
                 ),
               })
             : null,
+          listRow({
+            title: 'Build',
+            right: h('span', { class: 'text-[12px] text-muted' }, BUILD_ID),
+          }),
+          listRow({
+            title: 'Viewport',
+            subtitle: 'What the screen measures on this device',
+            chevron: true,
+            onclick: () => navigate('settings/viewport'),
+          }),
           h(
             'a',
             { class: 'row', href: REPO_URL, target: '_blank', rel: 'noreferrer noopener' },
@@ -590,6 +601,118 @@ export function aboutScreen() {
             'FoodData Central.'
         )
       )
+    },
+    { watch: [], watchDate: false }
+  )
+}
+
+/* -------------------------------------------------------------- viewport */
+
+/**
+ * The numbers behind the bottom-of-the-screen bug, read on the device that has
+ * it.
+ *
+ * This is a debugging instrument in the shipped app, which wants a reason. The
+ * bug only exists on the installed iOS PWA — a Safari tab does not have it, the
+ * desktop dev view does not have it, and there is no simulator on the machine
+ * this is written on. Two fixes were reasoned out from screenshots and shipped,
+ * and both missed, because a screenshot shows that the tab bar is high and
+ * cannot show which of four viewport heights it is high against. One screen of
+ * measured numbers costs less than a third guess.
+ *
+ * A SCREEN and not a sheet, deliberately. Opening a sheet pins `<body>`, which
+ * is one of the two states being measured — the instrument would change the
+ * thing it is reading.
+ *
+ * `watch: []` so nothing in the database can rebuild this out from under a
+ * reading, and the values are repainted in place rather than by `rerender` for
+ * the same reason.
+ */
+export function viewportScreen() {
+  return createScreen(
+    async () => {
+      const rows = h('div', { class: 'card' })
+      const stamp = h('p', { class: 'px-0 text-[12px] leading-snug text-muted' })
+
+      /**
+       * Repainted in place, because the interesting readings are the ones taken
+       * while something is moving — a rebuild would drop the row that is being
+       * read.
+       *
+       * The two gap rows are the answer this page exists for, so they are marked
+       * rather than left for the eye to find: the tab bar asks for 20px off the
+       * bottom of whatever it is anchored to, and if it gets 20 from
+       * `innerHeight` and something else from `screen.height`, then the bar is
+       * where the CSS put it and the anchor is what is wrong.
+       */
+      const paint = () => {
+        const reading = readViewport()
+        rows.replaceChildren(
+          ...Object.entries(reading).map(([key, value]) =>
+            listRow({
+              title: key,
+              right: h(
+                'span',
+                {
+                  class: `text-[12px] ${
+                    key.startsWith('gapBelowNav') ? 'font-semibold' : 'text-muted'
+                  }`,
+                },
+                String(value)
+              ),
+            })
+          )
+        )
+      }
+
+      paint()
+
+      /**
+       * The states worth catching are the ones that arrive without a tap:
+       * coming back to a backgrounded PWA, the keyboard changing the viewport,
+       * and a scroll ending. Same three events `releaseOrphanedLock` watches, on
+       * the same reasoning — they bracket where the failure gets noticed.
+       */
+      const el = settingsPage(
+        'Viewport',
+        rows,
+        h(
+          'button',
+          {
+            class: 'btn-secondary',
+            onclick: () => {
+              paint()
+              const text = formatViewport(readViewport())
+              navigator.clipboard
+                ?.writeText(text)
+                .then(() => toast('Copied. Paste it into the chat.'))
+                .catch(() => toast('Could not copy — screenshot it instead.'))
+            },
+          },
+          'Copy readings'
+        ),
+        stamp
+      )
+
+      stamp.textContent =
+        'Read again on every resize, scroll and return to the app. Take it while the ' +
+        'bar is sitting wrong — that is the state worth reading.'
+
+      const onEvent = () => paint()
+      window.addEventListener('resize', onEvent)
+      window.addEventListener('scroll', onEvent, { passive: true })
+      window.visualViewport?.addEventListener('resize', onEvent)
+      window.visualViewport?.addEventListener('scroll', onEvent)
+      document.addEventListener('visibilitychange', onEvent)
+
+      /**
+       * Nothing here removes those listeners, and that is a leak with a bound:
+       * `createScreen` builds this once per visit to the page, the handler only
+       * reads and repaints detached nodes after the screen is gone, and the page
+       * comes out with the fix. A `destroy` hook on `createScreen` would be the
+       * right home for it and is not worth adding for an instrument.
+       */
+      return el
     },
     { watch: [], watchDate: false }
   )

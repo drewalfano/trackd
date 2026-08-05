@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { execSync } from 'node:child_process'
 
 // Repo name on GitHub Pages. Override with BASE_PATH=/ for a custom domain.
 const base = process.env.BASE_PATH ?? '/trackd/'
@@ -53,9 +54,33 @@ function serviceWorker() {
 
 const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'))
 
+/**
+ * Which build is actually running, as a short commit.
+ *
+ * `VERSION` is the package version and has read 1.0.0 through every deploy
+ * there has been, so it cannot answer the first question any device-only bug
+ * asks: is the phone on the build that was meant to fix it, or still on the
+ * service worker's copy of the one before? A commit changes every push and
+ * settles that in one glance.
+ *
+ * `GITHUB_SHA` first, because Actions checks out a detached HEAD and the local
+ * command would report it correctly but the env var is already there.
+ */
+function buildId() {
+  if (process.env.GITHUB_SHA) return process.env.GITHUB_SHA.slice(0, 7)
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()
+  } catch {
+    return 'local'
+  }
+}
+
 export default defineConfig({
   base,
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_ID__: JSON.stringify(buildId()),
+  },
   plugins: [tailwindcss(), serviceWorker()],
   build: {
     target: 'es2022',
