@@ -58,9 +58,16 @@ export const macroColor = (macro) => MACRO_VAR[macro]
 export const macroTextColor = (macro) => MACRO_TEXT[macro]
 
 /**
- * The darker shade of the same hue. It means one thing everywhere it appears:
- * the part past the target. The bars carry it on `bar-over`, the rings on the
- * second lap, so excess is one encoding across both marks rather than two.
+ * The darker shade of the same hue. It is the BARS' encoding for the part past
+ * the target — `bar-over` and `chip-over`, where it is a fill behind white
+ * type and is measured for contrast as such.
+ *
+ * It is not the rings'. This used to claim the rings carried it on their second
+ * lap, and they did, once; the lap now draws in one hue on the same track and
+ * says "past target" with a hairline and a bead instead. Two marks, two
+ * languages, deliberately — a dense list reads a chip faster than geometry, a
+ * single glanceable state reads geometry faster than a chip. What they share is
+ * the number, and that comes from `progress().over` for both.
  */
 export const macroEdgeColor = (macro) => MACRO_EDGE[macro]
 
