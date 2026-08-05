@@ -641,6 +641,27 @@
     text-align: left;
   }
 
+  /**
+   * A stacked label-and-control row, whose two sides of a divider are not the
+   * same kind of edge.
+   *
+   * BELOW a divider sits a 13px label in a 19.5px line box: 10px of padding,
+   * then 3.25px of half-leading, then the glyphs. The gap reads as 14.
+   *
+   * ABOVE it sits a filled segmented track, which puts real ink exactly where
+   * its box ends. The same 10px of padding reads as 10.
+   *
+   * So a metrically perfect 10/10 looks like 10 above and 14 below, and the
+   * only way to make them match is to stop matching the numbers. Four pixels
+   * back, and the grid keeps its 10 everywhere the eye can actually check it.
+   *
+   * Loses to the card's own last-child inset by specificity, on purpose — a
+   * `.pref-row` at the bottom of a card still takes the full 20.
+   */
+  .row.pref-row {
+    padding-bottom: 14px;
+  }
+
   /* A row that is genuinely one line: exactly 48px, no vertical padding. */
   .row-single {
     padding-top: 0;
@@ -1533,6 +1554,7 @@
   }
 
   .segmented {
+    position: relative;
     display: flex;
     gap: 4px;
     padding: 4px;
@@ -1541,7 +1563,45 @@
     border: 0;
   }
 
+  /**
+   * The travelling selection — the same idea as `.tab-pill` at a smaller size,
+   * and the argument written up there applies here without change: a pill that
+   * moves says the selection went somewhere, and a background switched on in a
+   * new place says two unrelated things happened.
+   *
+   * Width and offset come from the segment count rather than being hardcoded to
+   * three the way the tab bar's can afford to be, because this control ships
+   * with two, three and four options across the app.
+   */
+  .segment-pill {
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 4px;
+    width: calc((100% - 8px - 4px * (var(--seg-n) - 1)) / var(--seg-n));
+    border-radius: 20px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-ink);
+    pointer-events: none;
+    /* The percentage is of the pill's OWN width — one segment — plus the gap it
+       has to clear to land on the next one. */
+    transform: translateX(calc(var(--seg-i, 0) * (100% + 4px)));
+    transition:
+      transform 300ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 160ms ease-out;
+  }
+
+  /* Nothing chosen yet, which is a real state — sex is unset until it is set.
+     The pill stays in place and fades, so the first choice appears where it
+     belongs instead of sliding in from an edge it was never at. */
+  .segmented[data-selected='none'] .segment-pill {
+    opacity: 0;
+  }
+
   .segment {
+    /* Above the pill, so the label is never covered by it. */
+    position: relative;
+    z-index: 1;
     flex: 1;
     min-height: 40px;
     border-radius: 20px;
@@ -1550,9 +1610,8 @@
     color: var(--color-muted);
     border: 1px solid transparent;
   }
+  /* The fill and the edge belong to the pill now; only the ink is per-segment. */
   .segment[aria-pressed='true'] {
-    background: var(--color-surface);
-    border-color: var(--color-ink);
     color: var(--color-ink);
   }
 

@@ -623,23 +623,112 @@ export function segmented({ options, value, onChange, class: cls = '' }) {
   )
 }
 
-/** Full-width segmented control that splits the row evenly. */
-export function segmentedWide({ options, value, onChange }) {
-  return h(
-    'div',
-    { class: 'segmented' },
-    options.map((opt) =>
-      h(
-        'button',
-        {
-          class: 'segment',
-          'aria-pressed': String(opt.value === value),
-          onclick: () => onChange(opt.value),
+/**
+ * The pill each segmented control is currently using, so its replacement can
+ * pick up exactly where it left off.
+ *
+ * The same problem `progressBar` solves with `lastPct`, and harder. Almost
+ * every caller repaints this control inside its own `onChange` — `paint()`,
+ * `paintUnits()`, `rerender()` — so the element that was clicked is thrown away
+ * mid-slide, and a screen rebuild behind an IndexedDB write can take half a
+ * second to arrive. Remembering the chosen INDEX is not enough: the outgoing
+ * pill is somewhere between two segments by then, and starting the new one at a
+ * whole index snaps it backwards or forwards to a position the eye was not
+ * expecting.
+ *
+ * So what is remembered is the element, and what is read off it is the live
+ * transform — wherever it had actually travelled to at the instant it was
+ * replaced. The new pill starts there and carries on. Two elements, one
+ * continuous movement.
+ *
+ * Keyed by the option values, which identify a control well enough: no screen
+ * carries two segmented controls offering the same choices.
+ */
+const lastSegmentPill = new Map()
+
+/** The px offset an element is currently painted at, mid-transition included. */
+function translateXOf(el) {
+  const matrix = getComputedStyle(el).transform
+  const values = matrix?.match(/matrix\(([^)]+)\)/)
+  return values ? parseFloat(values[1].split(',')[4]) || 0 : 0
+}
+
+/**
+ * Full-width segmented control that splits the row evenly.
+ *
+ * The selection is one pill that slides, not a background switched on and off
+ * per segment — the argument is written out on `.tab-pill` and applies here
+ * unchanged. A pill that travels says the selection MOVED and says which way it
+ * came from; a background appearing somewhere else says two unrelated things
+ * happened.
+ *
+ * Nothing is selected when `value` matches no option, which is a real state —
+ * sex is unset until someone sets it. The pill fades rather than sliding in
+ * from a position it was never at.
+ */
+export function segmentedWide({ options, value, onChange, key }) {
+  const id = key ?? options.map((opt) => opt.value).join('|')
+  const selected = options.findIndex((opt) => opt.value === value)
+
+  const pill = h('span', { class: 'segment-pill', 'aria-hidden': 'true' })
+  const outgoing = lastSegmentPill.get(id)
+  const resumeFrom = outgoing?.isConnected ? translateXOf(outgoing) : null
+  lastSegmentPill.set(id, pill)
+
+  const buttons = options.map((opt, i) =>
+    h(
+      'button',
+      {
+        class: 'segment',
+        'aria-pressed': String(i === selected),
+        onclick: () => {
+          onChange(opt.value)
+          /**
+           * Moved here and now, rather than waiting for the caller's repaint.
+           * That repaint is usually behind a database write, and half a second
+           * of nothing after a tap is what makes a control feel broken. The
+           * replacement inherits this pill's position mid-flight, so starting
+           * the movement early costs the handoff nothing.
+           */
+          requestAnimationFrame(() => {
+            if (!track.isConnected) return
+            place(i)
+            buttons.forEach((b, n) => b.setAttribute('aria-pressed', String(n === i)))
+          })
         },
-        opt.label
-      )
+      },
+      opt.label
     )
   )
+
+  const track = h('div', { class: 'segmented' }, pill, buttons)
+  track.style.setProperty('--seg-n', String(options.length))
+
+  function place(index) {
+    track.dataset.selected = index < 0 ? 'none' : 'one'
+    if (index >= 0) track.style.setProperty('--seg-i', String(index))
+  }
+
+  place(selected)
+
+  /**
+   * Pinned to where the outgoing pill had actually reached, then released on
+   * the next frame so the CSS transition carries it the rest of the way. With
+   * no predecessor there is nothing to resume from and it simply appears in
+   * place — a control arriving on screen has not chosen anything, it is showing
+   * what was chosen.
+   */
+  if (resumeFrom != null) {
+    pill.style.transition = 'none'
+    pill.style.transform = `translateX(${resumeFrom}px)`
+    requestAnimationFrame(() => {
+      void pill.offsetWidth
+      pill.style.transition = ''
+      pill.style.transform = ''
+    })
+  }
+
+  return track
 }
 
 /* Removed in v1.2.1. Its one caller was the day card's Eaten / Remaining

@@ -59,11 +59,18 @@ export function settingsPage(title, ...children) {
   )
 }
 
-/** A labelled row whose control sits under the label. Stacked, not beside. */
+/**
+ * A labelled row whose control sits under the label. Stacked, not beside.
+ *
+ * `pref-row` buys the bottom padding four extra pixels — see the rule in
+ * styles.css. The control below this label ends in ink exactly at its box edge
+ * and the label below the next divider does not, so the two sides of a divider
+ * need different numbers to look like the same gap.
+ */
 export function prefRow(label, control) {
   return h(
     'div',
-    { class: 'row flex-col items-stretch gap-[10px]' },
+    { class: 'row pref-row flex-col items-stretch gap-[10px]' },
     h('span', { class: 'text-[13px] font-medium' }, label),
     control
   )
