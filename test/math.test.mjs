@@ -53,8 +53,21 @@ eq('item foods skip the mass ceiling', C.sanityCheck({ kcal: 7800, protein: 630,
 
 // --- progress / overshoot
 eq('under target', C.progress(2255, 2837).pct.toFixed(1), '79.5')
-eq('over target clamps bar, keeps excess', { pct: C.progress(2911, 2837).pct, over: Math.round(C.progress(2911, 2837).over) }, { pct: 100, over: 74 })
+eq('over target clamps bar, keeps excess', { pct: C.progress(2911, 2837).pct, over: C.progress(2911, 2837).over }, { pct: 100, over: 74 })
 eq('no target is not a divide by zero', C.progress(500, 0), { pct: 0, over: 0, ratio: 0 })
+
+/**
+ * `over` is the number the chip and the ring both print, so it is a whole
+ * number here rather than a float the callers each round their own way.
+ *
+ * The two cases below are the ones that used to disagree. A raw difference of
+ * 0.4 passed the `over > 0` guard and then printed as `+0`, and 0.6 against a
+ * target of 300.4 printed `+1` from a ring that read `1g over` — both marks
+ * arguing about a number neither of them was showing.
+ */
+eq('a fractional overshoot is not an overshoot', C.progress(300.4, 300).over, 0)
+eq('over rounds its operands, not their difference', C.progress(300.6, 300.4).over, 1)
+eq('over is always whole', Number.isInteger(C.progress(2911.37, 2837.42).over), true)
 
 // --- trend
 const mk = (n, fn) => Array.from({ length: n }, (_, i) => ({ date: D.addDays('2026-01-01', i), kg: fn(i) }))

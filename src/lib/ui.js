@@ -313,7 +313,7 @@ export function progressBar({ value, target, macro, animate = true, key = macro 
             ? h(
                 'span',
                 { class: 'bar-over', style: { background: MACRO_EDGE[macro] } },
-                `+${Math.round(over)}`
+                `+${over}`
               )
             : null
         )

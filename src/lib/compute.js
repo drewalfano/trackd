@@ -207,7 +207,32 @@ export function weeklyAverages(days, targets, minDays = AVERAGES_MIN_DAYS) {
   }
 }
 
-/** Progress of a value against a target, clamped for the bar, raw for the chip. */
+/**
+ * Progress of a value against a target. `pct` is clamped for the bar, `ratio`
+ * is raw for anything that needs to know how far past target it went, and
+ * `over` is **the whole number both marks print**.
+ *
+ * `over` rounds its operands and then differences them, rather than
+ * differencing raw floats and rounding after. This is the same rule the ring's
+ * centre already used, and it is here because the two marks disagreed.
+ *
+ * The chip took the raw difference and rounded it for display; the ring rounded
+ * first. At 300.4 against a target of 300 the chip rendered `+0` — its guard
+ * was on the raw 0.4, so a chip appeared to say nothing — while the ring read
+ * `0g left`. One screen, one day, two answers, and neither of them `+0.4`,
+ * which is the number they were actually arguing about.
+ *
+ * Rounding first is the reading that matches what is on screen. Both marks show
+ * whole units, so the question they answer is "is the whole number I am showing
+ * you past the whole number I am showing you it is against" — and that question
+ * cannot be answered from operands the reader never sees. It also means `+0` is
+ * now unreachable rather than guarded against: the value is a whole number, so
+ * `over > 0` and `over` printing as non-zero are the same condition.
+ *
+ * This matters more than a stray chip. The ring's overage lap is drawn from
+ * this figure, so a raw-float `over` would draw a notch on a ring whose own
+ * centre says it is exactly on target.
+ */
 export function progress(value, target) {
   const t = Number(target) || 0
   const v = Number(value) || 0
@@ -215,7 +240,7 @@ export function progress(value, target) {
   const ratio = v / t
   return {
     pct: Math.min(100, ratio * 100),
-    over: Math.max(0, v - t),
+    over: Math.max(0, Math.round(v) - Math.round(t)),
     ratio,
   }
 }

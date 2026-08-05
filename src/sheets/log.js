@@ -147,7 +147,7 @@ function targetRow({ macro, value, target }) {
           ? h(
               'span',
               { class: 'chip-over', style: { background: macroEdgeColor(macro) } },
-              `+${Math.round(over)}`
+              `+${over}`
             )
           : null,
         h(
