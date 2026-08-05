@@ -61,6 +61,8 @@ export function openSheet({ title, render, footer = null }) {
   const panels = []
   let closing = false
   let destroyed = false
+  /** Distinguishes this sheet's history entries from a previous sheet's. */
+  const id = Math.random().toString(36).slice(2)
 
   const titleEl = h('h2', {
     class: 'flex-1 truncate text-title font-semibold',
@@ -190,7 +192,7 @@ export function openSheet({ title, render, footer = null }) {
     entry.node = spec.render(makeCtx(entry))
     panels.push(entry)
 
-    history.pushState({ [STATE]: panels.length }, '')
+    history.pushState({ [STATE]: { id, depth: panels.length } }, '')
     showTop()
     return entry
   }
@@ -238,9 +240,28 @@ export function openSheet({ title, render, footer = null }) {
 
   let pendingValue
 
+  /**
+   * `STATE` alone is not enough to tell one sheet's history entries from
+   * another's, and that was leaving the page scroll-locked.
+   *
+   * Every sheet stamped the same key, so an entry left behind by an EARLIER
+   * sheet still reads as `{'mt-sheet': 1}` — and when a later sheet went back
+   * onto it, `depth >= panels.length` said "not mine" and returned. `teardown`
+   * never ran, `destroy` never ran, and `lockScroll(false)` never ran: the sheet
+   * stayed in the DOM and `<body>` stayed at `position: fixed; overflow: hidden`
+   * for the rest of the session. The page stopped scrolling, and on iOS a
+   * pinned layout viewport is what makes fixed chrome — the tab bar, the sheet's
+   * own bottom edge — drift away from where it should be.
+   *
+   * The id makes each sheet's entries its own, so an entry that is not this
+   * sheet's is now correctly read as "we have left the sheet entirely" rather
+   * than as a depth to compare against.
+   */
   function onPop(event) {
-    const depth = event.state?.[STATE] ?? 0
-    if (depth >= panels.length) return
+    const state = event.state?.[STATE]
+    const mine = state && state.id === id
+    const depth = mine ? state.depth : 0
+    if (mine && depth >= panels.length) return
     if (depth <= 0) {
       teardown(pendingValue)
       return

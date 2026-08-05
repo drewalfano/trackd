@@ -28,7 +28,19 @@ import { getAiKey } from './aiKey.js'
  * key is read here and travels in the header of this one request.
  */
 
-const HOST = 'https://generativelanguage.googleapis.com/v1beta'
+const HOST = 'https://generativelanguage.googleapis.com'
+
+/**
+ * Both, in order.
+ *
+ * A model can be listed by one API version and refuse `generateContent` on it,
+ * which is what a 404 on a model the key can plainly see actually means. `v1`
+ * is not a fallback for a broken request so much as a second place to ask.
+ */
+const API_VERSIONS = ['v1beta', 'v1']
+
+/** How many models to actually try before giving up, across both versions. */
+const MAX_ATTEMPTS = 5
 
 /**
  * Flash rather than Pro. This is a short structured extraction against a
@@ -160,8 +172,8 @@ function authHeaders() {
   return { 'Content-Type': 'application/json', 'x-goog-api-key': key }
 }
 
-async function post(model, body, { signal }) {
-  const res = await fetch(`${HOST}/models/${model}:generateContent`, {
+async function post(version, model, body, { signal }) {
+  const res = await fetch(`${HOST}/${version}/models/${model}:generateContent`, {
     method: 'POST',
     signal,
     headers: authHeaders(),
@@ -197,29 +209,78 @@ async function post(model, body, { signal }) {
  * the API has nothing for it, which is a key or project problem rather than a
  * model-name one, and the message says so instead of naming a model.
  */
-async function discoverModel({ signal }) {
-  const res = await fetch(`${HOST}/models`, { signal, headers: authHeaders() })
-  if (!res.ok) throw new DescribeError(`Gemini is unavailable (${res.status}).`)
+async function listModels(version, { signal }) {
+  const res = await fetch(`${HOST}/${version}/models`, { signal, headers: authHeaders() })
+  if (!res.ok) return []
 
   const data = await res.json().catch(() => null)
   const usable = (data?.models || [])
     .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
     .map((m) => String(m.name || '').replace(/^models\//, ''))
     .filter(Boolean)
+    // Never a preview or a specialised variant — this is a text extraction.
+    .filter((m) => !/preview|tts|audio|live|image|embedding|vision/.test(m))
 
-  if (!usable.length) {
-    throw new DescribeError('That key cannot reach any Gemini models. Check it in Settings.')
+  // Preference order first, then whatever Flash the key has, then the rest.
+  return [
+    ...PREFERRED_MODELS.filter((p) => usable.includes(p)),
+    ...usable.filter((m) => /flash/.test(m) && !PREFERRED_MODELS.includes(m)),
+    ...usable.filter((m) => !/flash/.test(m) && !PREFERRED_MODELS.includes(m)),
+  ]
+}
+
+/**
+ * Try models until one answers, rather than picking one and hoping.
+ *
+ * The first version of this asked `ListModels` and took its best match — which
+ * on a real key returned `gemini-2.5-flash`, the model that had just 404ed, so
+ * it confidently retried the exact failure. Being listed and being callable are
+ * different facts, and only the second one matters here.
+ *
+ * So a 404 now removes that model from consideration and moves on, across both
+ * API versions, bounded so that a key which can call nothing costs a handful of
+ * requests rather than a rate limit.
+ */
+async function callAnyModel(body, { signal }) {
+  const tried = new Set()
+  let attempts = 0
+
+  const attempt = async (version, model) => {
+    if (!model || tried.has(`${version}/${model}`)) return null
+    if (attempts >= MAX_ATTEMPTS) return null
+    tried.add(`${version}/${model}`)
+    attempts++
+    try {
+      const data = await post(version, model, body, { signal })
+      rememberModel(`${version}|${model}`)
+      return data
+    } catch (err) {
+      if (err instanceof ModelNotFoundError) return null
+      throw err
+    }
   }
 
-  const pick =
-    PREFERRED_MODELS.find((p) => usable.includes(p)) ||
-    // Flash before anything else, and never a preview or a specialised variant.
-    usable.find((m) => /flash/.test(m) && !/preview|tts|audio|live|image|embedding/.test(m)) ||
-    usable.find((m) => !/preview|tts|audio|live|image|embedding/.test(m)) ||
-    usable[0]
+  const [cachedVersion, cachedModel] = storedModel().split('|')
+  const cached = await attempt(cachedVersion, cachedModel)
+  if (cached) return cached
 
-  rememberModel(pick)
-  return pick
+  for (const version of API_VERSIONS) {
+    for (const model of PREFERRED_MODELS) {
+      const data = await attempt(version, model)
+      if (data) return data
+    }
+    for (const model of await listModels(version, { signal })) {
+      const data = await attempt(version, model)
+      if (data) return data
+    }
+  }
+
+  throw new DescribeError(
+    tried.size
+      ? 'That key cannot call any Gemini model. It may need the Generative Language API ' +
+        'enabled, or a key made in AI Studio rather than Cloud Console.'
+      : 'That key cannot reach Gemini. Check it in Settings.'
+  )
 }
 
 const number = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
@@ -244,11 +305,8 @@ export async function describeLeftovers({ spans = [], unresolved = [], signal } 
     },
   }
 
-  let model = storedModel() || PREFERRED_MODELS[0]
-  let data
-
   /**
-   * One retry, and only for things a retry can fix.
+   * One retry, and only for the thing a retry can fix.
    *
    * This used to retry on ANY failure, which meant a 404 — an answer that will
    * be identical every time — fired a second request behind a 700ms wait. On a
@@ -257,31 +315,18 @@ export async function describeLeftovers({ spans = [], unresolved = [], signal } 
    * the first real device: a 404 that could never succeed, quietly doubled,
    * until the next error to arrive was a 429 blaming the wrong thing.
    *
-   * So a 4xx is now final except for the one that is genuinely recoverable —
-   * an unreachable model, which is recovered by finding a reachable one rather
-   * than by asking again.
+   * Model availability is handled inside `callAnyModel` rather than here, so
+   * what is left is the genuine transient: a dropped connection.
    */
+  let data
   try {
-    data = await post(model, body, { signal })
+    data = await callAnyModel(body, { signal })
   } catch (err) {
-    if (err.name === 'AbortError') throw err
-
-    if (err instanceof ModelNotFoundError) {
-      model = await discoverModel({ signal })
-      data = await post(model, body, { signal })
-    } else if (err instanceof DescribeError) {
-      // Rejected keys, refused keys and rate limits are all final.
-      throw err
-    } else {
-      // A dropped connection, which is the transient this retry exists for.
-      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
-      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-      data = await post(model, body, { signal })
-    }
+    if (err.name === 'AbortError' || err instanceof DescribeError) throw err
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
+    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
+    data = await callAnyModel(body, { signal })
   }
-
-  // Only remembered once it has actually produced an answer.
-  if (model !== storedModel()) rememberModel(model)
 
   const text = data?.candidates?.[0]?.content?.parts?.[0]?.text
   if (!text) throw new DescribeError('Gemini returned nothing to read.')
