@@ -6,6 +6,7 @@ import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
 import { toast } from './lib/toast.js'
 import { closeAnySheet } from './lib/sheet.js'
 import { fadeLayers, FADE_RAMP } from './lib/fade.js'
+import { captureViewportState } from './lib/viewportProbe.js'
 import { setThemeIsDark } from './lib/statusBar.js'
 import { route, startRouter, navigate, currentPath } from './router.js'
 import { rollOverIfNeeded, setDate } from './state.js'
@@ -224,12 +225,29 @@ function syncFade() {
   fade.dataset.active = String(scrollable)
 }
 
+/**
+ * The viewport probe rides along with the fade, because they need the same
+ * moment: after the box has settled into whatever the new screen made it.
+ *
+ * The bug the probe is chasing only shows on a screen too short to scroll, and
+ * navigating to the readout to take a measurement leaves that screen — so the
+ * app takes the reading itself and stashes it. See `captureViewportState`.
+ *
+ * A frame late on purpose. A ResizeObserver callback runs after layout but the
+ * chrome above reads `.tabbar`'s box, and on a sheet open the panel is still
+ * mid-animation on the frame the body resizes.
+ */
+function syncChrome() {
+  syncFade()
+  requestAnimationFrame(() => captureViewportState())
+}
+
 // Content height changes on every data load, not just on navigation, so this
 // watches the box rather than hooking the router.
 if (typeof ResizeObserver === 'function') {
-  new ResizeObserver(syncFade).observe(document.body)
+  new ResizeObserver(syncChrome).observe(document.body)
 }
-window.addEventListener('resize', syncFade)
+window.addEventListener('resize', syncChrome)
 
 /** Whether the pill has been placed once. The first placement must not slide. */
 let pillPlaced = false

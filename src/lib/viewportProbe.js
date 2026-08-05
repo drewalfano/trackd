@@ -61,6 +61,7 @@ export function readViewport() {
   const vv = window.visualViewport
   const bar = document.querySelector('.tabbar')
   const barBox = bar ? bar.getBoundingClientRect() : null
+  const route = (location.hash || '#/').replace(/^#\/?/, '') || 'today'
   const insets = measure(
     'padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);' +
       'padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)'
@@ -71,6 +72,7 @@ export function readViewport() {
   return {
     build: BUILD_ID,
     version: VERSION,
+    route,
     standalone: `${window.matchMedia('(display-mode: standalone)').matches} / ${
       navigator.standalone ?? '—'
     }`,
@@ -108,6 +110,58 @@ export function readViewport() {
     'panel.bottom': panelBox ? round1(panelBox.bottom) : '—',
     gapBelowPanel: panelBox ? round1(window.innerHeight - panelBox.bottom) : '—',
   }
+}
+
+/**
+ * The states that reproduce the bug, captured where they happen.
+ *
+ * **This is the fix to the instrument, and not having it is why three attempts
+ * went out on guesses.** The Viewport page is a long card of rows, so it always
+ * scrolls — and a scrolling document is precisely the case that behaves. Every
+ * reading taken off that page has been taken in the one state where the bar is
+ * already correct, which is why they all looked fine while the phone did not.
+ *
+ * A reading cannot be taken by hand on a screen that has no readout on it. So the
+ * app takes it for itself: whenever the document is too short to scroll, or a
+ * sheet is open, the reading is stashed and the Viewport page shows it afterwards.
+ *
+ * `localStorage`, so it survives the navigation to go and look at it — which is
+ * the whole difficulty, since navigating to the readout leaves the state being
+ * measured. Two slots, not a log: the last of each is the one worth having, and a
+ * growing list in `localStorage` is a leak with no reader.
+ */
+const SHORT_KEY = 'mt:vp:short'
+const SHEET_KEY = 'mt:vp:sheet'
+
+export function captureViewportState() {
+  // The readout's own screen is not a subject. It scrolls by construction, so it
+  // would never qualify as short — but a sheet opened FROM it would overwrite the
+  // sheet slot with the one panel whose page behind is atypical.
+  if ((location.hash || '').includes('settings/viewport')) return
+
+  const reading = readViewport()
+  try {
+    if (document.querySelector('.sheet-panel')) {
+      localStorage.setItem(SHEET_KEY, JSON.stringify(reading))
+    } else if (!reading.scrollable) {
+      localStorage.setItem(SHORT_KEY, JSON.stringify(reading))
+    }
+  } catch {
+    /* storage may be locked down; the live reading still works */
+  }
+}
+
+/** The two stashed readings, or nulls. */
+export function readCaptures() {
+  const load = (key) => {
+    try {
+      const raw = localStorage.getItem(key)
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }
+  return { short: load(SHORT_KEY), sheet: load(SHEET_KEY) }
 }
 
 /** The same reading as one block of text, for pasting into a message. */

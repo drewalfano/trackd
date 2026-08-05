@@ -2,6 +2,7 @@ import { h, clear, swipeToDismiss } from './dom.js'
 import { icon } from './icons.js'
 import { fadeLayers, FADE_RAMP } from './fade.js'
 import { setScrimmed } from './statusBar.js'
+import { captureViewportState } from './viewportProbe.js'
 
 /**
  * Bottom sheet with a panel stack.
@@ -590,6 +591,19 @@ export function openSheet({ title, render, footer = null, inset = 20 }) {
 
   active = { scrim, destroy, closeAll }
   pushPanel({ title, render, footer })
+
+  /**
+   * A reading of the sheet, once it has finished arriving.
+   *
+   * The body's ResizeObserver in main.js fires when `lockScroll` pins the page,
+   * which is a frame before this panel has slid anywhere — measuring `.sheet-panel`
+   * then reports its opening transform rather than where it comes to rest. The
+   * 260ms `sheet-in` plus a margin is what makes the number mean something.
+   *
+   * See `captureViewportState`: a sheet is one of the two states the readout
+   * cannot be navigated to, because looking at the readout closes it.
+   */
+  setTimeout(captureViewportState, 400)
 
   /**
    * Focus the dialog itself rather than the first control in it.

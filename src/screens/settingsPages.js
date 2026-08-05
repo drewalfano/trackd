@@ -28,7 +28,7 @@ import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
 import { getAiKey, setAiKey, clearAiKey } from '../lib/aiKey.js'
 import { VERSION, BUILD_ID, REPO_URL } from '../config.js'
-import { readViewport, formatViewport } from '../lib/viewportProbe.js'
+import { readViewport, formatViewport, readCaptures } from '../lib/viewportProbe.js'
 
 /**
  * The four set-once corners of Settings, one tap in from the root.
@@ -633,6 +633,54 @@ export function viewportScreen() {
     async () => {
       const rows = h('div', { class: 'card' })
       const stamp = h('p', { class: 'px-0 text-[12px] leading-snug text-muted' })
+      const captured = h('div', { class: 'flex flex-col gap-[20px]' })
+
+      /**
+       * The rows that decide it, for a reading taken on some other screen.
+       *
+       * Eleven of the thirty, because two of them are the answer and the rest are
+       * the working: the bar asks for 20px off the bottom of the screen, so
+       * `gapBelowBarFromScreen` should read 20 and `100dvh` should equal
+       * `screen.height`. Copy still exports every field of all three readings.
+       */
+      const KEYS = [
+        'route',
+        'screen.height',
+        'innerHeight',
+        'documentElement.clientHeight',
+        '100dvh',
+        'scrollable',
+        'body pinned',
+        'tabbar.bottom',
+        'gapBelowBarFromScreen',
+        'panel.bottom',
+        'gapBelowPanel',
+      ]
+
+      const capturedBlock = (title, reading) =>
+        h(
+          'div',
+          { class: 'flex flex-col gap-[10px]' },
+          h('div', { class: 'section-label' }, title),
+          reading
+            ? card(
+                ...KEYS.map((key) =>
+                  listRow({
+                    title: key,
+                    right: h(
+                      'span',
+                      {
+                        class: `text-[12px] ${
+                          key.startsWith('gapBelowBar') ? 'font-semibold' : 'text-muted'
+                        }`,
+                      },
+                      String(reading[key] ?? '—')
+                    ),
+                  })
+                )
+              )
+            : notice('Nothing captured yet. Visit the screen, then come back here.')
+        )
 
       /**
        * Repainted in place, because the interesting readings are the ones taken
@@ -665,7 +713,16 @@ export function viewportScreen() {
         )
       }
 
+      const paintCaptures = () => {
+        const { short, sheet } = readCaptures()
+        captured.replaceChildren(
+          capturedBlock('Last screen too short to scroll', short),
+          capturedBlock('Last sheet open', sheet)
+        )
+      }
+
       paint()
+      paintCaptures()
 
       /**
        * The states worth catching are the ones that arrive without a tap:
@@ -675,6 +732,8 @@ export function viewportScreen() {
        */
       const el = settingsPage(
         'Viewport',
+        captured,
+        h('div', { class: 'section-label' }, 'Now, on this screen'),
         rows,
         h(
           'button',
@@ -682,7 +741,18 @@ export function viewportScreen() {
             class: 'btn-secondary',
             onclick: () => {
               paint()
-              const text = formatViewport(readViewport())
+              paintCaptures()
+              const { short, sheet } = readCaptures()
+              const text = [
+                ['NOW (this screen scrolls, so it always looks fine)', readViewport()],
+                ['SHORT SCREEN', short],
+                ['SHEET OPEN', sheet],
+              ]
+                .map(
+                  ([label, reading]) =>
+                    `== ${label}\n${reading ? formatViewport(reading) : '(nothing captured)'}`
+                )
+                .join('\n\n')
               navigator.clipboard
                 ?.writeText(text)
                 .then(() => toast('Copied. Paste it into the chat.'))
@@ -695,10 +765,13 @@ export function viewportScreen() {
       )
 
       stamp.textContent =
-        'Read again on every resize, scroll and return to the app. Take it while the ' +
-        'bar is sitting wrong — that is the state worth reading.'
+        'This screen always scrolls, so the two rows above it are the ones that matter — ' +
+        'they are recorded on the screens that do not.'
 
-      const onEvent = () => paint()
+      const onEvent = () => {
+        paint()
+        paintCaptures()
+      }
       window.addEventListener('resize', onEvent)
       window.addEventListener('scroll', onEvent, { passive: true })
       window.visualViewport?.addEventListener('resize', onEvent)
