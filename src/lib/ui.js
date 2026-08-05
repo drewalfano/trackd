@@ -523,8 +523,13 @@ let rowSeq = 0
  *
  * Pair it with `numberInput({ bare: true })`, which is the value side of the
  * same idea.
+ *
+ * `color` tints the LABEL only, and takes a `MACRO_TEXT` value rather than a
+ * fill — see the note on that table for why the fills cannot carry type. The
+ * split is the one `macroRow` and `caloriesBlock` already use on Today: the
+ * macro's name carries its colour, the number stays in ink so it is readable.
  */
-export function valueRow(label, control) {
+export function valueRow(label, control, { color } = {}) {
   const inputs = [...control.querySelectorAll('input')]
   const first = control.input ?? inputs[0]
   if (first && !first.id) first.id = `field-${++rowSeq}`
@@ -545,7 +550,14 @@ export function valueRow(label, control) {
   return h(
     'label',
     { class: 'row', for: first?.id ?? null },
-    h('span', { class: 'min-w-0 flex-1 truncate text-[16px] font-semibold' }, label),
+    h(
+      'span',
+      {
+        class: 'min-w-0 flex-1 truncate text-[16px] font-semibold',
+        style: color ? { color } : null,
+      },
+      label
+    ),
     control
   )
 }

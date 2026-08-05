@@ -3,7 +3,7 @@ import { createScreen } from '../lib/screen.js'
 import { getSettings, saveSettings, listFoods, listWeights } from '../lib/db.js'
 import { kcalFromMacros } from '../lib/compute.js'
 import { belowFloor, canCalculate, computeTargets } from '../lib/targets.js'
-import { card, listRow, valueRow, numberInput, notice } from '../lib/ui.js'
+import { card, listRow, valueRow, numberInput, notice, macroTextColor } from '../lib/ui.js'
 import { pluralize } from '../lib/format.js'
 import { navigate } from '../router.js'
 import { getAiKey } from '../lib/aiKey.js'
@@ -130,6 +130,12 @@ export function settingsScreen() {
         }, 400)
       }
 
+      /**
+       * The macro's name carries its colour and the number stays in ink, which
+       * is the split Today already uses on `macroRow` and `caloriesBlock`. These
+       * four rows ARE those four numbers, so they should be findable the same
+       * way — you look for the gold one, not for the word "Fat".
+       */
       const macroTargetRow = (key, label) =>
         valueRow(
           label,
@@ -142,7 +148,8 @@ export function settingsScreen() {
               syncDerived()
               queueSave()
             },
-          })
+          }),
+          { color: macroTextColor(key) }
         )
 
       syncDerived()
@@ -177,7 +184,7 @@ export function settingsScreen() {
               : 'Set by hand. Nothing recalculates these unless you ask it to.'
           ),
           card(
-            valueRow('Calories', kcalField),
+            valueRow('Calories', kcalField, { color: macroTextColor('kcal') }),
             macroTargetRow('protein', 'Protein'),
             macroTargetRow('fat', 'Fat'),
             macroTargetRow('carbs', 'Carbs')

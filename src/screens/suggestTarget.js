@@ -378,7 +378,18 @@ export function suggestTargetScreen() {
                 }).then(rerender),
             })
           ),
-          profile.goal === 'maintain' ? null : prefRow('How fast', rateRow),
+          /**
+           * "How fast" was a question with its subject missing, and the
+           * sentence that supplied it — "How fast do you want to lose weight" —
+           * ran 273px into a 310px row, between siblings reading "Sex" and
+           * "Goal". A noun phrase names the thing outright and never dangles.
+           *
+           * The maintain branch never renders, which is why this can index the
+           * goal directly rather than defending against a third case.
+           */
+          profile.goal === 'maintain'
+            ? null
+            : prefRow(`Weight ${profile.goal === 'lose' ? 'loss' : 'gain'} rate`, rateRow),
           valueRow('Birth year', birthYearField),
           valueRow(
             'Height',
