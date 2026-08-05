@@ -37,6 +37,15 @@ import { settingsPage, prefRow } from './settingsPages.js'
  * sat at the same weight as the targets themselves, two screens away from the
  * only number they feed. Here they are the inputs to the thing directly below
  * them, which is what they always were.
+ *
+ * **On screen this is "About you"; in here it is the target suggester.** The
+ * title names what you find inside, because "Suggest a target" described the
+ * output and left the contents to be guessed at — and the row's subtitle is
+ * already carrying that output. The module keeps the purpose in its name
+ * because that is the thing worth knowing while editing it.
+ *
+ * The route stays `settings/target` for the same reason: `settings/about` is
+ * the actual About page, and two routes a hyphen apart would be a trap.
  */
 
 /**
@@ -300,7 +309,7 @@ export function suggestTargetScreen() {
       paintCalc()
 
       return settingsPage(
-        'Suggest a target',
+        'About you',
         h(
           'p',
           { class: 'px-0 text-[12px] leading-snug text-muted' },

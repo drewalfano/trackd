@@ -188,7 +188,9 @@ export function settingsScreen() {
           {},
           card(
             listRow({
-              title: 'Suggest a target',
+              // Named for what is inside it, not for what it produces — the
+              // subtitle is already carrying the output.
+              title: 'About you',
               subtitle: suggestion,
               chevron: true,
               onclick: () => navigate('settings/target'),
