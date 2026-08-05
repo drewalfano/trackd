@@ -26,7 +26,6 @@ import {
 import { round } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
-import { openOnboardingOverlay } from './onboarding.js'
 import { getAiKey, setAiKey, clearAiKey } from '../lib/aiKey.js'
 import { VERSION, REPO_URL } from '../config.js'
 
@@ -536,7 +535,7 @@ export function dataScreen() {
 
 export function aboutScreen() {
   return createScreen(
-    async ({ rerender }) => {
+    async () => {
       const estimate = await storageEstimate()
 
       return settingsPage(
@@ -562,24 +561,6 @@ export function aboutScreen() {
             h('span', { class: 'flex-1 text-[13px] font-medium' }, 'Source code'),
             icon('chevronRight', { size: 18, class: 'text-muted shrink-0' })
           )
-        ),
-
-        /**
-         * The door onto the first-run flow, which is a thing to review rather
-         * than a thing to use — at the root it read as a product feature.
-         *
-         * Runs as a preview: blank draft, nothing written unless the last step
-         * is taken deliberately, so walking through it cannot cost someone the
-         * profile they already have. Left in the shipped build on purpose: a
-         * flow nobody can reach is a flow nobody can check.
-         */
-        card(
-          listRow({
-            title: 'Preview onboarding',
-            subtitle: 'The first-run flow, full screen, as a new person sees it',
-            chevron: true,
-            onclick: () => openOnboardingOverlay({ preview: true }).then(rerender),
-          })
         ),
 
         /**
