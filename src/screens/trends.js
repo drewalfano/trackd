@@ -594,13 +594,22 @@ export function trendsScreen() {
               h('div', { class: 'min-w-0 flex-1' }, input),
               saveBtn,
             ),
-            todayEntry
-              ? h(
-                  'p',
-                  { class: 'text-[12px] text-muted' },
-                  'Saving again replaces today’s value rather than adding a second one.',
-                )
-              : null,
+            /**
+             * Shown whether or not today already has a value.
+             *
+             * It was gated on `todayEntry`, on the reading that a line about
+             * replacing today's value has nothing to say until there is one. But
+             * the thing it answers is "what happens if I weigh myself twice
+             * today", and that question arrives BEFORE the first save, not after
+             * — by the time the field says `Update` and holds a number, the
+             * button has already answered it. Gated, the hint was only ever
+             * visible in the one state that did not need it.
+             */
+            h(
+              'p',
+              { class: 'text-[12px] text-muted' },
+              'Saving again replaces today’s value rather than adding a second one.',
+            ),
           ),
         ),
       )
