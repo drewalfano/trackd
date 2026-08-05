@@ -48,15 +48,20 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
          * Rebuilding changes document height; keep the user where they were.
          *
          * Clamped to the LAST SCROLLABLE PIXEL, which is the document's height
-         * less the viewport's — not to the document's height, which was the
+         * less the SCROLLING BOX's — not to the document's height, which was the
          * ceiling here and is roughly a viewport too generous. Swiping from a
          * full day to an empty one is the case that ceiling let through: the
          * rebuild shrinks the page to less than a screen, the old offset is
          * asked for anyway, and the scroll is set past the end of a document
          * that has nothing left to scroll. A browser clamps that; iOS clamps it
          * against a layout it is in the middle of recomputing.
+         *
+         * `clientHeight` and not `innerHeight` for the subtrahend: on the
+         * installed PWA those are 812 and 874, and the scrolling box is the
+         * smaller one. See `.screen-floor` in styles.css.
          */
-        const maxScroll = Math.max(0, document.documentElement.scrollHeight - window.innerHeight)
+        const root = document.documentElement
+        const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight)
         if (scrollY > 0) window.scrollTo(0, Math.min(scrollY, maxScroll))
       } while (queued)
     } finally {

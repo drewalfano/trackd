@@ -163,12 +163,28 @@ function tabBar() {
   return h(
     'nav',
     {
-      class: 'pointer-events-none fixed inset-x-0 bottom-0 z-40 px-[20px]',
+      // `.screen-floor`, not `bottom-0` — see the note on that utility for the
+      // measurement that made bottom-anchoring untrustworthy on the installed PWA.
+      class: 'pointer-events-none screen-floor z-40 px-[20px]',
       style: { paddingBottom: 'var(--nav-inset)' },
     },
     h(
       'div',
-      { class: 'pointer-events-auto mx-auto flex max-w-[430px] items-center gap-[10px]' },
+      {
+        /**
+         * `w-full` is not decoration. `.screen-floor` makes the nav a flex
+         * column so the bar can sit at the far end of a `100dvh` box, and this
+         * row became a flex ITEM in it — where `mx-auto` stops being "centre a
+         * block that already fills the line" and becomes an auto margin with
+         * free space to eat. Auto margins outrank `stretch`, so the row
+         * collapsed to the width of its own contents: three labels crushed
+         * together inside a pill a third of the screen wide.
+         *
+         * Stating the width puts it back to what it was under a block parent —
+         * fill the line, clamp at 430, centre the remainder.
+         */
+        class: 'pointer-events-auto mx-auto flex w-full max-w-[430px] items-center gap-[10px]',
+      },
       h('div', { class: 'tabbar' }, tabPill, tabButtons),
       addButton
     )
@@ -195,7 +211,16 @@ const fade = tabBarFade()
  * a fractional viewport height reports as scrollable when it is not.
  */
 function syncFade() {
-  const scrollable = document.documentElement.scrollHeight > window.innerHeight + 1
+  /**
+   * `clientHeight`, not `innerHeight`. They disagree by the top inset on the
+   * installed PWA — 812 against 874, measured; see `.screen-floor` in styles.css
+   * — and the one that decides whether the document scrolls is the scrolling
+   * box, which is `clientHeight`. Against `innerHeight` a page 60px taller than
+   * the viewport reported as not scrolling, so the band switched itself off for
+   * exactly the content most likely to pass under the bar.
+   */
+  const scrollable =
+    document.documentElement.scrollHeight > document.documentElement.clientHeight + 1
   fade.dataset.active = String(scrollable)
 }
 
@@ -343,7 +368,8 @@ function renderStorageBlocked() {
     h(
       'div',
       {
-        class: 'mx-auto flex min-h-svh max-w-md flex-col justify-center gap-3 px-6',
+        // `dvh` for the reason given on `.screen-floor`: `svh` is 62px short.
+        class: 'mx-auto flex min-h-dvh max-w-md flex-col justify-center gap-3 px-6',
         /**
          * The one surface that is not a `.screen`, so it carries its own
          * insets. It is centred and short enough never to reach the status bar

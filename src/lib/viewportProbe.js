@@ -48,17 +48,19 @@ const round1 = (n) => (typeof n === 'number' ? Math.round(n * 10) / 10 : n)
 /**
  * One reading, taken now.
  *
- * The decisive pair is `gapBelowNavFromInner` against `gapBelowNavFromScreen`.
- * The tab bar asks for 20px off the bottom of the viewport it is anchored to. If
- * the first is 20 and the second is not, the bar is exactly where the CSS put it
- * and the LAYOUT VIEWPORT is short — the bug is that the anchor is in the wrong
- * place, and no amount of tuning the inset will move it. If both are 20, the bar
- * is where it belongs and whatever Drew is seeing is somewhere else entirely.
+ * The rows that matter are the last three. `.tabbar` is the visible pill and it
+ * asks for exactly `--nav-inset` — 20px — off the bottom of the screen, so both
+ * gaps should read 20 and the two heights they are measured against should agree.
+ *
+ * The first version of this measured `nav` instead, which is the full-bleed
+ * transparent box the pill sits inside; its own bottom edge is flush with its
+ * anchor by construction, so it reported 0 and 0 on a screen where the bar was
+ * visibly 62px high. Measure the thing you can see.
  */
 export function readViewport() {
   const vv = window.visualViewport
-  const nav = document.querySelector('nav')
-  const navBox = nav ? nav.getBoundingClientRect() : null
+  const bar = document.querySelector('.tabbar')
+  const barBox = bar ? bar.getBoundingClientRect() : null
   const insets = measure(
     'padding-top:env(safe-area-inset-top);padding-right:env(safe-area-inset-right);' +
       'padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left)'
@@ -97,11 +99,11 @@ export function readViewport() {
     scrollable: document.documentElement.scrollHeight > window.innerHeight + 1,
 
     'body pinned': document.body.style.position === 'fixed',
-    'body top/bottom': `${document.body.style.top || '—'} / ${document.body.style.bottom || '—'}`,
+    'body top/height': `${document.body.style.top || '—'} / ${document.body.style.height || '—'}`,
 
-    'nav.bottom': navBox ? round1(navBox.bottom) : '—',
-    gapBelowNavFromInner: navBox ? round1(window.innerHeight - navBox.bottom) : '—',
-    gapBelowNavFromScreen: navBox ? round1(window.screen.height - navBox.bottom) : '—',
+    'tabbar.bottom': barBox ? round1(barBox.bottom) : '—',
+    gapBelowBarFromInner: barBox ? round1(window.innerHeight - barBox.bottom) : '—',
+    gapBelowBarFromScreen: barBox ? round1(window.screen.height - barBox.bottom) : '—',
 
     'panel.bottom': panelBox ? round1(panelBox.bottom) : '—',
     gapBelowPanel: panelBox ? round1(window.innerHeight - panelBox.bottom) : '—',

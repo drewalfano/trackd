@@ -655,7 +655,7 @@ export function viewportScreen() {
                 'span',
                 {
                   class: `text-[12px] ${
-                    key.startsWith('gapBelowNav') ? 'font-semibold' : 'text-muted'
+                    key.startsWith('gapBelowBar') ? 'font-semibold' : 'text-muted'
                   }`,
                 },
                 String(value)

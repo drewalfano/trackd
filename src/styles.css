@@ -435,28 +435,15 @@
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
     /**
-     * A floor under the document, and the whole reason is bottom-anchored chrome.
+     * No `min-height` here, and it is worth saying why not.
      *
-     * `position: fixed; bottom: 0` anchors to the layout viewport, and in the
-     * standalone PWA that viewport follows the document when the document is
-     * SHORTER than the screen. Nothing here was ever taller than a phone on a
-     * day with food in it, so the tab bar sat where it should — and then a swipe
-     * to a day with nothing logged took the page under the screen's height and
-     * the bar, the fade, and the last of the list all rode up with it. That is
-     * the "only on empty days" half of the report, and it is not a bounce: the
-     * page is at rest, one short document away from correct.
-     *
-     * `svh` rather than `lvh`, so a Safari TAB — the desktop dev view and the
-     * pre-install visit — is not given a permanently scrollable page for a floor
-     * it does not need. In standalone the three units are the same number, which
-     * is the case this is for.
-     *
-     * `syncFade` still reads correctly against it: the floor makes the document
-     * EQUAL to the viewport, never greater, so "does anything scroll under the
-     * bar" is still false on a short screen.
+     * A floor shipped for one deploy on the theory that a short document dragged
+     * the bar up with it. The measurement in `.screen-floor` below says the
+     * document's height has nothing to do with it — what changes is which
+     * viewport WebKit anchors fixed chrome to — and a floor tall enough to matter
+     * would leave every short screen with 62px of slack to scroll for no reason.
+     * The anchor is fixed at the anchor.
      */
-    min-height: 100vh;
-    min-height: 100svh;
   }
 
   /* One-handed, often rushed: no accidental text selection or tap highlight. */
@@ -2015,10 +2002,13 @@
    * The bar keeps its own edge without help: it carries `--color-surface` and a
    * 1px outline, and that is what an edge is for.
    */
+  /* Bottom-anchored the long way round — see `.screen-floor`. A band that has to
+     be exactly `--nav-fade` tall does not want a flex column, so it takes the
+     same `100dvh` and offsets its own top instead. */
   .tabbar-fade {
     position: fixed;
     inset-inline: 0;
-    bottom: 0;
+    top: calc(100dvh - var(--nav-fade));
     height: var(--nav-fade);
     z-index: 30;
     pointer-events: none;
@@ -2153,6 +2143,57 @@
 }
 
 @layer utilities {
+  /**
+   * Anchored to the bottom of the SCREEN, which is not the bottom of the layout
+   * viewport. Everything in the app that floats at the bottom uses this.
+   *
+   * Measured on Drew's phone, installed, at Settings › About › Viewport:
+   *
+   *     screen.height  874    innerHeight  874    visualViewport.height  874
+   *     100vh          874    100lvh       874    100dvh                 874
+   *     documentElement.clientHeight  812    100svh  812
+   *     safe-area top   62    safe-area bottom  34
+   *
+   * The layout viewport is **812** — the screen less the 62px top inset, which is
+   * what `black-translucent` costs in exchange for making that inset real (see
+   * the note in index.html). The web view still covers all 874.
+   *
+   * And `position: fixed; bottom: 0` does not pick one of those two heights and
+   * stay with it. Drew's two screenshots of the same build, one screen apart,
+   * are the whole diagnosis: on **About**, which is short enough not to scroll,
+   * the tab bar sits at 812 and there are 62px of dead canvas under it. On
+   * **Viewport**, which scrolls, the same bar sits at 874 where it belongs. A
+   * scrollable document gets the visual viewport; a non-scrollable one gets the
+   * layout viewport. That is the "only on days with nothing logged" report,
+   * exactly — those are the days short enough not to scroll — and it is why the
+   * two earlier fixes missed: both were aimed at the document's height, and the
+   * document's height was never the variable.
+   *
+   * So nothing anchors to the bottom any more. The element spans `100dvh` from
+   * the TOP, where there is only one answer, and lays its content out at the far
+   * end. `dvh` because it is the only unit that measured the truth; `svh` would
+   * reintroduce the same 62px by hand.
+   */
+  .screen-floor {
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+
+  /* The same anchor for something that COVERS the screen rather than sitting at
+     the bottom of it — a scrim, a full-screen host. `inset-0` is the trap: its
+     `bottom: 0` is the same ambiguous edge. */
+  .screen-cover {
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    height: 100dvh;
+  }
+
   .safe-b {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }

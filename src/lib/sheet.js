@@ -27,22 +27,12 @@ const STATE = 'mt-sheet'
  * snaps the list back to the top. Pinning the body at a negative offset holds
  * the position visually, and it is restored on unlock.
  *
- * **`bottom` is as load-bearing as `top`, and leaving it off is what made every
- * sheet in the app stop short of the screen.** `releaseOrphanedLock` below
- * already describes the damage a pinned body does when the pin is wrong — "the
- * sheet's own bottom edge stops meeting the screen's" — and treats it as the
- * cost of a lock that was never released. It is not: the pin does that while it
- * is working exactly as intended. `position: fixed` with `height: auto` shrinks
- * the body to its CONTENT, and once the body's box ends above the screen so does
- * the layout viewport that `bottom: 0` anchors to. The sheet is anchored
- * correctly to a viewport that is the wrong height.
- *
- * Pinning `bottom: 0` as well makes the box `viewportHeight + lockedScrollY`
- * tall: it starts at `-lockedScrollY`, so the page still shows the row it was
- * showing, and it ends at the bottom of the screen, so nothing bottom-anchored
- * has anywhere to ride up to. The `overflow: hidden` clip lands one full
- * viewport below the fold rather than mid-screen, which is why the page behind
- * the scrim is not cut off by the extra height.
+ * The height is given rather than left to `height: auto`, which would shrink the
+ * pinned body to its content, and rather than `bottom: 0`, which is the edge
+ * `.screen-floor` in styles.css exists because WebKit will not commit to. The box
+ * runs from `-lockedScrollY` to the bottom of the screen — so the page still
+ * shows the row it was showing, and the `overflow: hidden` clip lands a full
+ * viewport below the fold rather than mid-screen.
  */
 let lockedScrollY = 0
 
@@ -52,14 +42,14 @@ function lockScroll(lock) {
     lockedScrollY = window.scrollY
     style.position = 'fixed'
     style.top = `-${lockedScrollY}px`
-    style.bottom = '0'
+    style.height = `calc(100dvh + ${lockedScrollY}px)`
     style.left = '0'
     style.right = '0'
     style.overflow = 'hidden'
   } else {
     style.position = ''
     style.top = ''
-    style.bottom = ''
+    style.height = ''
     style.left = ''
     style.right = ''
     style.overflow = ''
@@ -281,9 +271,26 @@ export function openSheet({ title, render, footer = null, inset = 20 }) {
        */
       // `safe-b` moved to the footer, which is the bottom-most element now that
       // it floats. The body carries the same inset in its own padding.
+      //
+      // `bottom-0` is safe HERE, unlike everywhere else in the app: the scrim is
+      // `.screen-cover`, so this is absolute inside a box whose own height is
+      // already the screen's. It is the FIXED bottom edge that was ambiguous.
       class: 'sheet-panel absolute inset-x-0 bottom-0 flex flex-col border-t border-outline',
+      /**
+       * `100%` of the scrim, and not a viewport unit.
+       *
+       * This read `100svh`, which measured 812 on Drew's phone against a real 874
+       * — and then subtracted the 62px top inset from a height that had already
+       * had it taken out. Every sheet in the app was capped 62px short, which is
+       * the "content doesn't go all the way to the bottom" half of the report.
+       *
+       * The scrim is `.screen-cover`, so a percentage here resolves against a box
+       * that is exactly `100dvh` tall. That is one fewer unit to be lied to by:
+       * whatever WebKit decides `svh` means next, this cap and the panel's own
+       * bottom edge are measured from the same box.
+       */
       style: {
-        maxHeight: `calc(100svh - env(safe-area-inset-top, 0px) - ${inset}px)`,
+        maxHeight: `calc(100% - env(safe-area-inset-top, 0px) - ${inset}px)`,
       },
       role: 'dialog',
       'aria-modal': 'true',
@@ -303,7 +310,7 @@ export function openSheet({ title, render, footer = null, inset = 20 }) {
   const scrim = h(
     'div',
     {
-      class: 'sheet-scrim fixed inset-0 z-[60] bg-black/35',
+      class: 'sheet-scrim screen-cover z-[60] bg-black/35',
       onclick: () => closeAll(),
     },
     panel

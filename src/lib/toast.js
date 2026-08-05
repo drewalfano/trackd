@@ -20,7 +20,7 @@ function getHost() {
       // without it the first toast permanently swallows every tap on the tab
       // bar. Individual toasts opt back in.
       class:
-        'pointer-events-none fixed inset-x-0 bottom-0 z-[80] flex flex-col items-center ' +
+        'pointer-events-none screen-floor z-[80] items-center ' +
         'gap-[10px] px-[20px]',
       style: { paddingBottom: 'calc(var(--nav-height) + var(--nav-inset) + 10px)' },
       role: 'status',
@@ -178,7 +178,7 @@ export function confirm(
       'div',
       {
         class:
-          'sheet-scrim fixed inset-0 z-[90] flex items-center justify-center bg-black/40 px-[20px] backdrop-blur-[2px]',
+          'sheet-scrim screen-cover z-[90] flex items-center justify-center bg-black/40 px-[20px] backdrop-blur-[2px]',
         onclick: (e) => {
           if (e.target === scrim) close(false)
         },

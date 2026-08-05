@@ -475,7 +475,10 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
 
   const root = h(
     'div',
-    { class: 'flex h-svh flex-col bg-canvas' },
+    // `dvh`, not `svh` — this container's height is what pins the footer
+    // button, and `svh` measured 62px short of the screen on the installed PWA.
+    // See `.screen-floor` in styles.css.
+    { class: 'flex h-dvh flex-col bg-canvas' },
     header,
     body,
     footer
@@ -709,7 +712,7 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
  */
 export async function openOnboardingOverlay({ preview = false } = {}) {
   return new Promise((resolve) => {
-    const host = h('div', { class: 'fixed inset-0 z-[70] overflow-hidden' })
+    const host = h('div', { class: 'screen-cover z-[70] overflow-hidden' })
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
