@@ -34,7 +34,7 @@ export async function openWeighInSheet({ date = todayStr() } = {}) {
       const amount = numberInput({
         value: '',
         suffix: unit,
-        placeholder: '0.0',
+        placeholder: '—',
         step: '0.1',
         onInput: (v) => {
           draft = v

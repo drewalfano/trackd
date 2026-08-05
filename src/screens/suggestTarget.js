@@ -24,7 +24,7 @@ import {
   notice,
 } from '../lib/ui.js'
 import { round, kgToUnit, unitToKg } from '../lib/format.js'
-import { todayStr } from '../lib/dates.js'
+import { todayStr, dayPhrase } from '../lib/dates.js'
 import { navigate } from '../router.js'
 import { settingsPage, prefRow } from './settingsPages.js'
 
@@ -90,7 +90,22 @@ export function suggestTargetScreen() {
 
       const profile = { ...settings.profile }
       const weightUnit = settings.weightUnit
-      let currentKg = weights.at(-1)?.kg ?? null
+      /**
+       * The seed is the most recent weigh-in of ANY date, not today's.
+       *
+       * That is deliberate and it is the only sensible reading: almost nobody
+       * weighs daily, and the calculator needs a weight or it has nothing to
+       * say. Blanking the field on every day you did not step on the scales
+       * would take the suggestion away from the majority of days.
+       *
+       * What was wrong was saying nothing about it. The field is seeded from
+       * one day and writes to another, under a label that claims to be current,
+       * so the note under the card names the day the number came from until
+       * that day is today.
+       */
+      const latestWeighIn = weights.at(-1) ?? null
+      let currentKg = latestWeighIn?.kg ?? null
+      let weighInDate = latestWeighIn?.date ?? null
       let profileTimer = null
       let weightTimer = null
 
@@ -144,6 +159,26 @@ export function suggestTargetScreen() {
         },
       })
       birthYearField.appendChild(ageHint)
+
+      /**
+       * What the weight field is showing, and where it will go.
+       *
+       * Two facts, and which two depends on the day. Where it goes is constant
+       * and non-obvious enough to say every time — this field writes into the
+       * Weight tab's record rather than keeping a copy. Where it came FROM only
+       * needs saying while those are different days, which is why this repaints
+       * rather than being written once into the tree.
+       */
+      const weighInNote = h('p', { class: 'px-0 text-[12px] leading-snug text-muted' })
+
+      function syncWeighInNote() {
+        const stale = weighInDate && weighInDate !== todayStr()
+        weighInNote.textContent = stale
+          ? `Showing your weigh-in from ${dayPhrase(weighInDate)}. Editing it saves a new one ` +
+            'for today — the Weight tab is the record, not a second copy.'
+          : 'Weight is saved as today’s weigh-in — the Weight tab is the record, not a second copy.'
+      }
+      syncWeighInNote()
 
       /** Repaints only the calculated block, so typing does not lose focus. */
       const calcBlock = h('div', { class: 'flex flex-col gap-[10px]' })
@@ -371,6 +406,10 @@ export function suggestTargetScreen() {
                 const entered = Number(v)
                 if (!(entered > 0)) return
                 currentKg = unitToKg(entered, weightUnit)
+                // The number on screen is now today's, whatever day it arrived
+                // from, so the note stops dating it.
+                weighInDate = todayStr()
+                syncWeighInNote()
                 clearTimeout(weightTimer)
                 weightTimer = setTimeout(() => putWeight(todayStr(), currentKg), 600)
                 paintCalc()
@@ -379,11 +418,7 @@ export function suggestTargetScreen() {
           )
         ),
 
-        h(
-          'p',
-          { class: 'px-0 text-[12px] leading-snug text-muted' },
-          'Weight is saved as today’s weigh-in — the Weight tab is the record, not a second copy.'
-        ),
+        weighInNote,
 
         activityCard,
 

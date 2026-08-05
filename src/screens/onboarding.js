@@ -146,7 +146,7 @@ function bodyStep(draft) {
         label: 'Birth year',
         children: numberInput({
           value: draft.birthYear ?? '',
-          placeholder: '1994',
+          placeholder: '—',
           step: '1',
           onInput: (v) => {
             draft.birthYear = Number(v) || null

@@ -78,7 +78,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
       const kcalField = numberInput({
         value: '',
         suffix: 'cal',
-        placeholder: '0',
+        placeholder: '—',
         onInput: (v) => {
           kcal = v
           kcalOverridden = true
@@ -281,7 +281,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           children: numberInput({
             value: '',
             suffix: 'g',
-            placeholder: '0',
+            placeholder: '—',
             onInput: (v) => {
               macros[key] = v
               sync()

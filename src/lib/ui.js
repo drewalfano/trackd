@@ -740,7 +740,7 @@ export function numberInput({
     inputmode: 'decimal',
     step,
     value: value ?? '',
-    placeholder: placeholder ?? '0',
+    placeholder: placeholder ?? '—',
     oninput: (e) => onInput?.(e.target.value, e),
     ...rest,
   })

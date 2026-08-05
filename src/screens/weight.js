@@ -153,7 +153,7 @@ export function weightScreen() {
       const input = numberInput({
         value: draft,
         suffix: unit,
-        placeholder: '0.0',
+        placeholder: '—',
         step: '0.1',
         onInput: (v) => {
           draft = v
