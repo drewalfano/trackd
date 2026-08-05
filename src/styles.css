@@ -380,6 +380,25 @@
     font-size: max(16px, 1em);
   }
 
+  /**
+   * An empty field and a filled one must not look the same.
+   *
+   * Left alone this is the browser's rule, not ours: current Chrome resolves a
+   * placeholder to `currentColor` at 50%, which lands near `--color-muted` by
+   * luck rather than by design, inherits the field's 600 weight, and differs by
+   * engine. So "nothing here yet" was being carried by tone alone, at the same
+   * size and the same weight as real data — and a placeholder reading `0` under
+   * a label saying Height is then indistinguishable from someone's stored
+   * answer.
+   *
+   * The weight change is the part that does the work. Tone can be argued with
+   * at a glance in either theme; 400 against 600 cannot.
+   */
+  input::placeholder {
+    color: var(--color-muted);
+    font-weight: 400;
+  }
+
   input[type='number'] {
     -moz-appearance: textfield;
   }

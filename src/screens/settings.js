@@ -28,6 +28,7 @@ import {
   ACTIVITY_LEVELS,
   GOALS,
   RATE_PRESETS,
+  activityFactor,
   ageFrom,
   belowFloor,
   canCalculate,
@@ -58,7 +59,117 @@ import { VERSION, REPO_URL } from '../config.js'
  */
 
 
+/* -------------------------------------------------------------- value rows */
+
+/** Ids for label association. Monotonic, since a rebuild makes new elements. */
+let rowSeq = 0
+
+/**
+ * `a`, `a and b`, `a, b and c`. No serial comma, matching the app's own copy —
+ * "Protein, fat and carbs work out to…" is two lines further down the screen.
+ */
+function listOut(items) {
+  if (items.length < 2) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} and ${items.at(-1)}`
+}
+
+/**
+ * A label on the left and an editable number on the right, on one line.
+ *
+ * This is `listRow` with its `right` slot handed an input instead of a static
+ * span — the same `.row` in the same `card()`, so the hairline between rows,
+ * the outer inset and the corner radius all come from rules that already exist.
+ * The only new idea is that the value on the right is typed into.
+ *
+ * The row IS a `<label>`, which is what makes "tap the row to edit" true with
+ * no JavaScript, no focus handler and nothing that could shift the layout: the
+ * input was always live and always in place, it simply was not wearing a pill.
+ * `for` is redundant beside the wrapping and kept anyway — the association is
+ * the requirement, the mechanism is not.
+ */
+function valueRow(label, control) {
+  const inputs = [...control.querySelectorAll('input')]
+  const first = control.input ?? inputs[0]
+  if (first && !first.id) first.id = `set-field-${++rowSeq}`
+
+  /**
+   * Two inputs under one label is the imperial height row, where the wrapping
+   * label names both of them and neither says which one is feet. The suffix
+   * beside each is on screen doing that job and is invisible to anything not
+   * looking at it.
+   */
+  if (inputs.length > 1) {
+    for (const input of inputs) {
+      const unit = input.nextElementSibling?.textContent
+      input.setAttribute('aria-label', unit ? `${label}, ${unit}` : label)
+    }
+  }
+
+  return h(
+    'label',
+    { class: 'row', for: first?.id ?? null },
+    h('span', { class: 'min-w-0 flex-1 truncate text-[16px] font-semibold' }, label),
+    control
+  )
+}
+
+/**
+ * A line of explanation behind a chip, for something true and non-obvious that
+ * does not need saying on the way past.
+ *
+ * The alternative was attaching it to the editing state, and there is no
+ * editing state here to attach it to — every row on this screen is live all the
+ * time, so "while you are editing" means "always" and the paragraph is back in
+ * the scroll where it started.
+ */
+function disclosure(label, text) {
+  const body = h(
+    'p',
+    { class: 'hidden px-0 pt-[10px] text-[12px] leading-snug text-muted', id: `disc-${++rowSeq}` },
+    text
+  )
+  const chip = h(
+    'button',
+    {
+      class: 'chip-sm self-start',
+      'aria-expanded': 'false',
+      'aria-controls': body.id,
+      onclick: () => {
+        const open = chip.getAttribute('aria-expanded') === 'true'
+        chip.setAttribute('aria-expanded', String(!open))
+        body.classList.toggle('hidden', open)
+      },
+    },
+    label
+  )
+  return h('div', { class: 'flex flex-col items-start' }, chip, body)
+}
+
 /* ------------------------------------------------------------------ sheets */
+
+/**
+ * The four activity levels, with the descriptions that are the reason anyone
+ * can answer the question. They are what makes the list four rows tall, and
+ * they are also why it cannot simply be a segmented control — so the list moves
+ * behind a row rather than being compressed into labels nobody can choose from.
+ */
+function activitySheet(current) {
+  return openSheet({
+    title: 'How active are you',
+    render: (ctx) =>
+      card(
+        ACTIVITY_LEVELS.map((level) =>
+          listRow({
+            title: level.label,
+            subtitle: level.description,
+            right: current === level.value ? icon('check', { size: 20 }) : null,
+            dim: current !== level.value,
+            onclick: () => ctx.close(level.value),
+          })
+        )
+      ),
+  })
+}
 
 function editBlocksSheet(settings) {
   return openSheet({
@@ -482,6 +593,7 @@ export function settingsScreen() {
       const kcalField = numberInput({
         value: targets.kcal,
         suffix: 'cal',
+        bare: true,
         onInput: (v) => {
           targets.kcal = Number(v) || 0
           kcalOverridden = true
@@ -497,7 +609,9 @@ export function settingsScreen() {
        * is accepted — this is the user's tool and they may have a reason — but
        * it should not pass without the app having mentioned it.
        */
-      const floorHint = h('div')
+      // `empty:hidden` because it usually is: an empty flex child still spends a
+      // full 10px gap under the card it is not saying anything about.
+      const floorHint = h('div', { class: 'empty:hidden' })
       const syncFloorHint = () => {
         const floor = belowFloor(targets.kcal, settings.profile.sex)
         repaint(
@@ -558,19 +672,20 @@ export function settingsScreen() {
         }, 400)
       }
 
-      const macroField = (key, label) =>
-        labelledField({
+      const macroTargetRow = (key, label) =>
+        valueRow(
           label,
-          children: numberInput({
+          numberInput({
             value: targets[key],
             suffix: 'g',
+            bare: true,
             onInput: (v) => {
               targets[key] = Number(v) || 0
               syncDerived()
               queueSave()
             },
-          }),
-        })
+          })
+        )
 
       syncDerived()
       syncFloorHint()
@@ -589,6 +704,42 @@ export function settingsScreen() {
       }
 
       /**
+       * The one field where a plausible typo is silent: 1949 for 1994 moves the
+       * target by a couple of hundred calories and looks like a year either way.
+       * The age is the read-back, so it follows the keystrokes rather than
+       * waiting for a rebuild that this screen deliberately never does.
+       *
+       * Appended to the field rather than passed as its suffix, the way the API
+       * key field appends its Show button: `numberInput` builds no span for an
+       * empty suffix, and there would then be nothing to write the age into on
+       * the first year typed.
+       */
+      const ageLabel = (year) => {
+        const age = ageFrom(year)
+        return age ? `${age} years old` : ''
+      }
+
+      const ageHint = h(
+        'span',
+        { class: 'shrink-0 text-[14px] text-muted' },
+        ageLabel(profile.birthYear)
+      )
+
+      const birthYearField = numberInput({
+        value: profile.birthYear ?? '',
+        placeholder: '—',
+        step: '1',
+        bare: true,
+        onInput: (v) => {
+          profile.birthYear = Number(v) || null
+          ageHint.textContent = ageLabel(profile.birthYear)
+          queueProfileSave()
+          paintCalc()
+        },
+      })
+      birthYearField.appendChild(ageHint)
+
+      /**
        * For the taps rather than the typing. A choice that changes what else is
        * on screen has to be written before the screen is rebuilt from it, or
        * the rebuild reads the value it just replaced.
@@ -602,28 +753,53 @@ export function settingsScreen() {
       /** Repaints only the calculated block, so typing does not lose focus. */
       const calcBlock = h('div', { class: 'flex flex-col gap-[10px]' })
 
-      const choiceRow = (selected, title, subtitle, onclick) =>
-        listRow({
-          title,
-          subtitle,
-          onclick,
-          right: selected ? icon('check', { size: 20 }) : null,
-          dim: !selected,
-        })
-
+      /**
+       * Four rows and eleven lines of description, for a question asked once.
+       *
+       * Answered, it collapses to the answer: the descriptions are there to help
+       * someone choose, and re-reading all four to confirm you are still "A bit"
+       * is not a thing anybody does. Unanswered, the list stays open — a chevron
+       * row is a good way to change a decision and a poor way to prompt one.
+       */
       const activityCard = h('div')
       function paintActivity() {
+        const chosen = ACTIVITY_LEVELS.find((l) => l.value === profile.activity)
+
+        const choose = (value) => {
+          profile.activity = value
+          queueProfileSave()
+          paintActivity()
+          paintCalc()
+        }
+
         activityCard.replaceChildren(
-          card(
-            ACTIVITY_LEVELS.map((level) =>
-              choiceRow(profile.activity === level.value, level.label, level.description, () => {
-                profile.activity = level.value
-                queueProfileSave()
-                paintActivity()
-                paintCalc()
-              })
-            )
-          )
+          chosen
+            ? card(
+                listRow({
+                  title: 'How active',
+                  right: h('span', { class: 'text-[12px] text-muted' }, chosen.label),
+                  chevron: true,
+                  onclick: () =>
+                    activitySheet(profile.activity).then((v) => v && choose(v)),
+                })
+              )
+            : h(
+                'div',
+                { class: 'flex flex-col gap-[10px]' },
+                h('div', { class: 'section-label' }, 'How active are you'),
+                // Nothing is selected in this branch, by definition, so no row
+                // carries a check and every one of them is equally dimmed.
+                card(
+                  ACTIVITY_LEVELS.map((level) =>
+                    listRow({
+                      title: level.label,
+                      subtitle: level.description,
+                      dim: true,
+                      onclick: () => choose(level.value),
+                    })
+                  )
+                )
+              )
         )
       }
       paintActivity()
@@ -664,15 +840,24 @@ export function settingsScreen() {
        */
       function paintCalc() {
         if (!canCalculate(profile, currentKg)) {
+          /**
+           * Naming what is still missing, rather than restating the whole list
+           * every time. Four lines explaining the requirement is a paragraph
+           * about a form; one line saying "needs your height" is an instruction.
+           */
+          const missing = []
+          if (profile.sex !== 'female' && profile.sex !== 'male') missing.push('sex')
+          if (!ageFrom(profile.birthYear)) missing.push('birth year')
+          if (!(Number(profile.heightCm) > 0)) missing.push('height')
+          if (!(currentKg > 0)) missing.push('a weigh-in')
+          if (!activityFactor(profile.activity)) missing.push('an activity level')
+
           repaint(
             calcBlock,
             notice(
               profile.sex === 'unspecified'
-                ? 'The standard formula needs sex as one of its terms, so there is nothing to ' +
-                    'calculate here. Set the targets above by hand instead — they work exactly ' +
-                    'the same once they are set.'
-                : 'Fill in sex, birth year, height, a weigh-in and an activity level and a ' +
-                    'suggested target appears here. Or skip it and type the targets above.'
+                ? 'The formula needs sex as one of its terms, so set the targets above by hand.'
+                : `Needs ${listOut(missing)}.`
             )
           )
           return
@@ -862,19 +1047,18 @@ export function settingsScreen() {
               ? 'Worked out from your profile below. Editing anything here makes them yours instead.'
               : 'Set by hand. Nothing recalculates these unless you ask it to.'
           ),
-          h(
-            'div',
-            { class: 'flex flex-col gap-[10px]' },
-            labelledField({ label: 'Calories', children: kcalField }),
-            derivedHint,
-            floorHint,
-            macroField('protein', 'Protein'),
-            macroField('fat', 'Fat'),
-            macroField('carbs', 'Carbs')
+          card(
+            valueRow('Calories', kcalField),
+            macroTargetRow('protein', 'Protein'),
+            macroTargetRow('fat', 'Fat'),
+            macroTargetRow('carbs', 'Carbs')
           ),
-          h(
-            'p',
-            { class: 'px-0 pt-[10px] text-[12px] leading-snug text-muted' },
+          // Both of these describe the four numbers above rather than any one of
+          // them, so they sit under the card instead of between the rows.
+          floorHint,
+          derivedHint,
+          disclosure(
+            'What this affects',
             'Changing a target changes today and everything after it. Days you have already ' +
               'logged keep the target they were logged against.'
           )
@@ -917,45 +1101,30 @@ export function settingsScreen() {
                   }).then(rerender),
               })
             ),
-            profile.goal === 'maintain' ? null : prefRow('How fast', rateRow)
-          ),
-
-          h(
-            'div',
-            { class: 'flex flex-col gap-[10px]' },
-            labelledField({
-              label: 'Birth year',
-              hint: ageFrom(profile.birthYear) ? `${ageFrom(profile.birthYear)} years old` : null,
-              children: numberInput({
-                value: profile.birthYear ?? '',
-                placeholder: '1994',
-                step: '1',
-                onInput: (v) => {
-                  profile.birthYear = Number(v) || null
-                  queueProfileSave()
-                  paintCalc()
-                },
-              }),
-            }),
-            labelledField({
-              label: 'Height',
-              children: heightInput({
+            profile.goal === 'maintain' ? null : prefRow('How fast', rateRow),
+            valueRow('Birth year', birthYearField),
+            valueRow(
+              'Height',
+              heightInput({
                 cm: profile.heightCm,
                 units: settings.units,
+                bare: true,
+                placeholder: '—',
                 onChange: (cm) => {
                   profile.heightCm = cm
                   queueProfileSave()
                   paintCalc()
                 },
-              }),
-            }),
-            labelledField({
-              label: 'Current weight',
-              hint: 'Saved as today’s weigh-in — the Weight tab is the record, not a second copy.',
-              children: numberInput({
+              })
+            ),
+            valueRow(
+              'Current weight',
+              numberInput({
                 value: currentKg == null ? '' : round(kgToUnit(currentKg, weightUnit), 1),
                 suffix: weightUnit,
+                placeholder: '—',
                 step: '0.1',
+                bare: true,
                 onInput: (v) => {
                   const entered = Number(v)
                   if (!(entered > 0)) return
@@ -964,16 +1133,17 @@ export function settingsScreen() {
                   weightTimer = setTimeout(() => putWeight(todayStr(), currentKg), 600)
                   paintCalc()
                 },
-              }),
-            })
+              })
+            )
           ),
 
           h(
-            'div',
-            { class: 'flex flex-col gap-[10px]' },
-            h('div', { class: 'section-label' }, 'How active are you'),
-            activityCard
+            'p',
+            { class: 'px-0 text-[12px] leading-snug text-muted' },
+            'Weight is saved as today’s weigh-in — the Weight tab is the record, not a second copy.'
           ),
+
+          activityCard,
 
           h(
             'div',

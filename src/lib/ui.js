@@ -627,20 +627,54 @@ export function switchRow({ label, hint, checked = false, onChange }) {
   )
 }
 
-export function numberInput({ value, onInput, placeholder, suffix, step = 'any', ...rest }) {
+/**
+ * `bare` drops the pill and right-aligns the number.
+ *
+ * For a field that sits in the value slot of a `.row` rather than under a label
+ * of its own. The row's card is already the container, so a `.field` inside one
+ * draws a second box around the first — and a pill at full row width says "type
+ * here" about a number that is mostly there to be read.
+ *
+ * The width has to be stated because a bare `type="number"` sizes itself to
+ * roughly twenty characters and there is no `size` attribute for it. 76 is the
+ * same numeric column the food detail table already uses, and it holds four
+ * digits with room; the imperial height pair passes something narrower, since
+ * `5` in a 76px box sits an inch away from its own `ft`.
+ *
+ * The default placeholder is an em dash rather than `0` because almost every
+ * number this app asks for can genuinely be zero — 0 g of fat, a 0 cal drink,
+ * midnight as the hour a block starts — so a greyed `0` in an empty field is
+ * not a prompt, it is a wrong answer that someone has to notice is not theirs.
+ * A dash cannot be mistaken for data. Callers pass a placeholder only when the
+ * number is a real suggestion (`1` serving, a `100` g basis), where the point
+ * is to show what a plausible answer looks like.
+ */
+export function numberInput({
+  value,
+  onInput,
+  placeholder,
+  suffix,
+  step = 'any',
+  bare = false,
+  width = 76,
+  ...rest
+}) {
   const input = h('input', {
-    class: 'w-full min-w-0 text-[16px] font-semibold',
+    class: bare
+      ? 'shrink-0 text-right text-[16px] font-semibold'
+      : 'w-full min-w-0 text-[16px] font-semibold',
+    style: bare ? { width: `${width}px` } : null,
     type: 'number',
     inputmode: 'decimal',
     step,
     value: value ?? '',
-    placeholder: placeholder ?? '0',
+    placeholder: placeholder ?? '—',
     oninput: (e) => onInput?.(e.target.value, e),
     ...rest,
   })
   const wrapper = h(
     'div',
-    { class: 'field' },
+    { class: bare ? 'flex shrink-0 items-center gap-[10px]' : 'field' },
     input,
     suffix ? h('span', { class: 'shrink-0 text-[14px] text-muted' }, suffix) : null
   )
@@ -677,12 +711,20 @@ export function dateInput({ value, max, min, onChange }) {
  * are accepted while typing and carried on blur — normalising mid-keystroke
  * would move the digits under the finger, and 5 ft 13 in is a legible thing to
  * be halfway through typing.
+ *
+ * Neither imperial field suggests a number any more. `5` and `11` were the most
+ * convincing placeholders in the app — a real height is a small number of feet
+ * and a number of inches under twelve, so the suggestion and the answer were
+ * the same shape, and an untouched pair read as 5 ft 11 in rather than as blank.
+ * Both fall through to the dash `numberInput` uses everywhere else.
  */
-export function heightInput({ cm, units, onChange }) {
+export function heightInput({ cm, units, onChange, bare = false, placeholder }) {
   if (units !== 'imperial') {
     return numberInput({
       value: cm == null ? '' : round(cm, 1),
       suffix: 'cm',
+      bare,
+      placeholder,
       onInput: (v) => onChange(v === '' ? null : Number(v)),
     })
   }
@@ -708,7 +750,9 @@ export function heightInput({ cm, units, onChange }) {
     value: ft,
     suffix: 'ft',
     step: '1',
-    placeholder: '5',
+    placeholder,
+    bare,
+    width: 40,
     onInput: (v) => {
       ft = v
       emit()
@@ -720,7 +764,9 @@ export function heightInput({ cm, units, onChange }) {
     value: inches,
     suffix: 'in',
     step: '1',
-    placeholder: '11',
+    placeholder: placeholder ?? '11',
+    bare,
+    width: 40,
     onInput: (v) => {
       inches = v
       emit()
@@ -728,12 +774,14 @@ export function heightInput({ cm, units, onChange }) {
     onblur: normalise,
   })
 
-  return h(
-    'div',
-    { class: 'flex gap-[10px]' },
-    h('div', { class: 'min-w-0 flex-1' }, ftField),
-    h('div', { class: 'min-w-0 flex-1' }, inField)
-  )
+  return bare
+    ? h('div', { class: 'flex shrink-0 items-center gap-[10px]' }, ftField, inField)
+    : h(
+        'div',
+        { class: 'flex gap-[10px]' },
+        h('div', { class: 'min-w-0 flex-1' }, ftField),
+        h('div', { class: 'min-w-0 flex-1' }, inField)
+      )
 }
 
 export function textInput({ value, onInput, placeholder, ...rest }) {
