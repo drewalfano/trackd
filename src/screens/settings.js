@@ -85,10 +85,15 @@ export function settingsScreen() {
         derivedHint.replaceChildren(
           h(
             'div',
-            { class: 'flex flex-col items-start gap-[10px]' },
+            /* The chip sits beside the sentence rather than under it: it is the
+               answer to that sentence, and stacking spent a whole line saying
+               so. It holds the right edge — the same edge the card above and
+               the rows inside it end on — so the sentence takes the slack and
+               wraps into it rather than the chip drifting with the text. */
+            { class: 'flex items-center gap-[10px]' },
             h(
               'span',
-              {},
+              { class: 'min-w-0 flex-1' },
               `Protein, fat and carbs work out to ${Math.round(derived)} cal.`,
               kcalOverridden ? '' : ' Calories now follow the macros.'
             ),
