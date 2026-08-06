@@ -2469,6 +2469,11 @@
     flex-direction: column;
     gap: 8px;
     margin-inline: -20px;
+    /* On top of the welcome column's own 20px gap, so 40 in total. The column
+       spaces paragraphs, and this is not one — it wants the extra step to read
+       as a change of register rather than as the next block of copy. Flex gap
+       and margin add rather than collapsing, which is what makes this work. */
+    margin-top: 20px;
     overflow: hidden;
     -webkit-mask-image: linear-gradient(
       90deg,

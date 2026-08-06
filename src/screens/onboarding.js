@@ -817,6 +817,18 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
         'Log what you eat, see how the week actually went. Everything stays on this device — ' +
           'no account, no upload, works with the radio off.'
       ),
+      // Both paragraphs before the field, and the field last.
+      //
+      // Below the field was tried, on the theory that a line about what the
+      // next five screens do belongs next to the button that starts them. It
+      // does not pay off, because the footer is pinned to the bottom of the
+      // viewport and the body ends well above it — the paragraph gains no
+      // proximity to the button and loses the one it had to the paragraph it
+      // continues. What it looked like instead was a caption stranded under a
+      // picture.
+      //
+      // So: what the app is, what happens next, then the field as the closer.
+      // Words, picture, act.
       h(
         'p',
         { class: 'text-[14px] leading-snug text-muted' },
