@@ -11,6 +11,7 @@ import { pushMatchItem } from './matchItem.js'
 import {
   blockSelector,
   card,
+  estimateBadge,
   foodRowBody,
   macroLine,
   numberInput,
@@ -148,7 +149,23 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                   icon('pencil', { size: 16 })
                 )
 
-        const body = foodRowBody({ name, sub, totals: macros, missing: state === 'missing' })
+        /**
+         * The sparkle AND the word, which is the one place both are wanted.
+         *
+         * Everywhere else the icon carries it alone, because by then the row is
+         * history and the mark is a note about where the numbers came from. Here
+         * it is the last screen before the numbers are committed, so the
+         * redundancy is the point: the glyph is what the eye finds scanning a
+         * list of rows, and "Estimated" is what says plainly what the glyph means
+         * to someone meeting it for the first time.
+         */
+        const body = foodRowBody({
+          name,
+          sub,
+          totals: macros,
+          badge: state === 'estimated' ? estimateBadge() : null,
+          missing: state === 'missing',
+        })
 
         return h(
           'div',

@@ -18,6 +18,19 @@ import { round } from './format.js'
  * the `computed` snapshot and the recency bump can never drift apart.
  */
 
+/**
+ * What an estimate is filed under, and the only durable record that a row's
+ * numbers came from the model.
+ *
+ * Named rather than written inline because two screens now read it back —
+ * `entryRow` marks these with a sparkle — and a string spelled out at three
+ * call sites is a string that eventually gets spelled differently at one of
+ * them. Only the `estimated` branch below writes it: an item that resolved to a
+ * real food goes through `logFood` and carries no source, because the numbers
+ * came from the food and nothing was guessed.
+ */
+export const DESCRIBE_SOURCE = 'describe'
+
 /** What a food should default to when logged without opening the serving sheet. */
 export function defaultServing(food) {
   if (food.lastQuantity != null && food.lastUnit) {
@@ -86,13 +99,19 @@ export async function logPlate(plate) {
     const kind = classifyItem(item)
 
     /**
-     * An estimate becomes an ordinary entry and nothing marks it.
+     * An estimate becomes an ordinary entry, and `source` is the one thing that
+     * remembers what it was.
      *
-     * This is the same record `quickAdd` writes for a custom entry — no food,
-     * a name, and a `computed` block — which is exactly the spec's intent:
-     * once it has been reviewed and committed it is a normal log entry, not a
-     * flagged one. The log, the day total and History cannot tell it apart
-     * because there is nothing to tell apart.
+     * This is otherwise the same record `quickAdd` writes for a custom entry —
+     * no food, a name, and a `computed` block — and it counts towards the day
+     * and towards History exactly like any other row, which is the point: a
+     * reviewed estimate is a real thing you ate.
+     *
+     * What it is NOT is a measurement, and that distinction outlives the review.
+     * Two months on, "Chicken katsu curry · 780 cal" reads as fact whether the
+     * number came off a packet or out of a model, and the row is the only place
+     * that difference can still be told. So the source is kept and `entryRow`
+     * draws a sparkle from it — no second field, no flag to keep in step.
      */
     if (kind === 'estimated') {
       entries.push(
@@ -100,7 +119,7 @@ export async function logPlate(plate) {
           date: plate.date,
           block: plate.block,
           foodId: null,
-          source: 'describe',
+          source: DESCRIBE_SOURCE,
           foodName: item.name || 'Unnamed',
           quantity: Number(item.quantity) || 1,
           unit: item.unit || 'serving',

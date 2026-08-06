@@ -254,7 +254,7 @@ export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) 
  * parts, so they want to sit as a block rather than as a list. The weight change
  * from a semibold name to muted figures already separates them.
  */
-export function foodRowBody({ name, detail, sub, totals, missing = false }) {
+export function foodRowBody({ name, detail, sub, totals, badge = null, missing = false }) {
   return h(
     'div',
     { class: 'min-w-0 flex-1' },
@@ -265,12 +265,59 @@ export function foodRowBody({ name, detail, sub, totals, missing = false }) {
           'flex items-baseline text-[14px] font-semibold leading-tight' +
           (missing ? ' text-muted line-through' : ''),
       },
+      badge,
       h('span', { class: 'min-w-0 truncate' }, name),
       detail ? h('span', { class: 'shrink-0 whitespace-pre text-muted' }, ' · ') : null,
       detail ? h('span', { class: 'shrink-0 font-normal' }, detail) : null
     ),
     sub ? h('div', { class: 'mt-[2px] truncate text-[12px] text-muted' }, sub) : null,
     totals ? h('div', { class: 'mt-[2px]' }, macroLine(totals, { size: 12 })) : null
+  )
+}
+
+/**
+ * The mark for macros that came from the model rather than from a database.
+ *
+ * It goes BEFORE the name, in the `badge` slot of `foodRowBody`, which is what
+ * puts it on the plate, on Today and in the full log from one definition. Quick
+ * add tiles draw from `foodTile` and so are excluded by construction — a tile is
+ * a repeat of something already reviewed, and the space is not there.
+ *
+ * **Filled, with the stroke off.** `icon()` gives an outline by default and adds
+ * the fill on top when asked, so a filled sparkle at this size arrives as a
+ * 1.75px stroke around a solid shape — at 14px that is most of the glyph, and
+ * the two stars close up into blobs. `stroke: 0` leaves the fill alone.
+ *
+ * Muted grey rather than a colour. Protein, fat, carbs and calories each own a
+ * hue and a fifth accent would be a new term in a system that has four; red in
+ * particular is spoken for twice over, by carbs and by everything destructive.
+ *
+ * `shrink-0`, because the name beside it is `min-w-0 truncate` and a long name
+ * must clip rather than squeeze the mark.
+ *
+ * **14px, and the 2px nudge is measured rather than guessed.** `items-baseline`
+ * puts the svg's bottom EDGE on the baseline, and the sparkle art carries about
+ * 15% empty height beneath the small star — so the box sits right and the ink
+ * floats. Measured at 390pt: the name's cap height is 10.19px and the glyph's
+ * ink is 10.09px, which is the size the brief asked for, sitting 1.87px clear of
+ * the baseline. `relative top-[2px]` drops it back onto it, so the mark occupies
+ * exactly the cap band of the word beside it — same ceiling, same floor.
+ *
+ * The offset is on the svg and is `position: relative`, not a margin: vertical
+ * margins do not apply to inline elements at all, so a `-mb` here would be a
+ * line of CSS that reads as an adjustment and does nothing.
+ */
+export function estimateBadge() {
+  return h(
+    'span',
+    {
+      class: 'mr-[4px] shrink-0 text-muted',
+      role: 'img',
+      // The icon is not the only carrier: the plate keeps its "Estimated" text
+      // beside it, and this is what the log rows say in place of one.
+      'aria-label': 'Estimated by AI',
+    },
+    icon('sparkle', { size: 14, filled: true, stroke: 0, class: 'relative top-[2px]' })
   )
 }
 

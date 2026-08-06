@@ -1,6 +1,7 @@
 import { h, swipeToReveal, longPress } from './dom.js'
 import { icon } from './icons.js'
-import { foodRowBody } from './ui.js'
+import { estimateBadge, foodRowBody } from './ui.js'
+import { DESCRIBE_SOURCE } from './logging.js'
 import { formatTime } from './dates.js'
 
 /**
@@ -42,11 +43,18 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
     },
     // The shape lives in `foodRowBody` now, shared with the add sheet's lists
     // and the plate. What is left here is what is genuinely this row's: the
-    // swipe wrapper, the two revealed controls, and the time in the detail slot.
+    // swipe wrapper, the two revealed controls, the time in the detail slot, and
+    // the sparkle on anything whose numbers a model guessed.
+    //
+    // The badge with no words beside it, unlike the plate, which keeps both. A
+    // logged row has already been through the plate once — the label did its
+    // explaining there — and this list is read by scanning names, where a
+    // repeated word on some rows and not others is noise the glyph is not.
     foodRowBody({
       name: entry.foodName || 'Deleted food',
       detail: formatTime(entry.createdAt),
       totals: entry.computed,
+      badge: entry.source === DESCRIBE_SOURCE ? estimateBadge() : null,
     })
   )
 
