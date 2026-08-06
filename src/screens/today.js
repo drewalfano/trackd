@@ -10,7 +10,7 @@ import {
 } from '../lib/db.js'
 import { sumEntries, progress, computeMacros, MACRO_META } from '../lib/compute.js'
 import { macroRing } from '../lib/ring.js'
-import { tnum, card, emptyRow, macroTextColor, navHeader } from '../lib/ui.js'
+import { tnum, card, emptyRow, macroTextColor, pageHeader } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
 import { kcal, qty, servingLabel, unitLabel } from '../lib/format.js'
 import { formatDayHeader, isToday, addDays, blockForTime } from '../lib/dates.js'
@@ -585,7 +585,7 @@ function quickAddSection({ foods, firstRun, date, block }) {
 
   return h(
     'section',
-    { class: 'mt-[20px] flex flex-col gap-[10px]' },
+    { class: 'flex flex-col gap-[10px]' },
     h('div', { class: 'section-head' }, h('div', { class: 'section-label' }, 'Quick add')),
     foods.length
       ? h('div', { class: 'food-rail' }, foods.map((food) => quickAddTile(food, { date, block })))
@@ -622,21 +622,25 @@ export function todayScreen() {
 
       return h(
         'div',
-        // Gaps are set per element rather than by a uniform flex gap. Even
-        // spacing reads as a list; varied spacing reads as a composition.
-        { class: 'flex flex-col' },
+        /**
+         * The header is a sibling of the column, not a member of it.
+         *
+         * `.page-header` carries the 16px that puts the first card at 80, and a
+         * flex gap would ADD to that margin rather than absorbing it — so a
+         * header inside the column would sit 16 + 20 clear of the deck here and
+         * a different total on every other screen. Outside, the 16 is the whole
+         * distance and it is the same 16 on all three tabs. See `.page-header`.
+         */
+        {},
 
         // Both chevrons are always drawn; forward dims on today rather than
         // vanishing. One chevron on the left of a root screen reads as Back,
         // which is not what it does — it steps the day, and the pair is what
         // says so.
-        navHeader({
-          title: formatDayHeader(state.date),
-          onBack: () => setDate(-1),
-          backLabel: 'Previous day',
-          onForward: () => setDate(1),
-          forwardLabel: 'Next day',
-          forwardDisabled: isToday(state.date),
+        pageHeader(formatDayHeader(state.date), {
+          onPrev: () => setDate(-1),
+          onNext: () => setDate(1),
+          nextDisabled: isToday(state.date),
           /**
            * The date is a control as well as a label.
            *
@@ -650,107 +654,123 @@ export function todayScreen() {
            * either way; picking a day pops it, which at the root of a sheet
            * means closing it.
            */
-          onTitle: () =>
-            openSheet(datePickerPanel({ value: state.date, onPick: setDate })),
-          titleLabel: `${formatDayHeader(state.date)}. Pick a day`,
+          onPick: () => openSheet(datePickerPanel({ value: state.date, onPick: setDate })),
         }),
 
-        // Targets are `settings.targets` for every card in the deck, including
-        // the neighbours. That is what Today already did for the day you step
-        // to with a chevron, so the deck is not inventing a second rule —
-        // per-day targets are History's job, and this is not History.
-        dayDeck({
-          current: { totals, targets: t },
-          prev: { totals: sumEntries(prevEntries), targets: t },
-          next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
-        }),
-
-        /**
-         * Quick add sits ABOVE the log, and the argument is what it is for.
-         *
-         * It was below for as long as the screen has existed, on the reading that
-         * the day so far is the headline and a shortcut is a footnote to it. That
-         * is right about the reading order and wrong about the cost: the rail is
-         * the one-tap route to logging, and below the log its distance from the
-         * thumb grows with every row above it. On the day with the most in it —
-         * eight rows and a card — the shortcut is furthest away, which is the same
-         * shape of mistake `fullLogChip` was moved out of the card's last row to
-         * avoid. A shortcut you scroll to has stopped being one.
-         *
-         * The log loses nothing by moving down. It renders at every count and it
-         * carries its own heading, so it is still named and still positioned; what
-         * it stops being is the thing between you and the fastest way to log.
-         */
-        quickAddSection({
-          foods: railFoods,
-          firstRun: everLogged === null,
-          date: state.date,
-          block: blockForTime(new Date(), settings.blockThresholds),
-        }),
-
-        /**
-         * The log. Its own group, and the route to the full Log screen — which
-         * is in turn the only route to History, so this link keeps both
-         * reachable.
-         *
-         * **It renders at every count, including zero.** It used to drop
-         * entirely on an unlogged day, and dropping it was the larger half of
-         * why a fresh morning read as a screen that had failed to load: with no
-         * section here, the card sat above nothing at all, and there was no way
-         * to tell "the log is empty" from "the log is not on this screen".
-         * Naming the void and giving it a position is what turns nothing here
-         * into nothing here yet.
-         *
-         * `Logged`, not `Log`. The heading is now describing a state rather
-         * than labelling a list, and it has to make sense with one muted line
-         * under it as well as with six rows.
-         *
-         * No bare item count on the right. That side carries `Full log`, which
-         * is not decoration — it is the only way to the Log sheet, and
-         * therefore to the day's targets, its time blocks and the date picker.
-         * The count rides along with it rather than standing alone, where it
-         * would be the weakest fact available: it sits directly above the list
-         * it counts.
-         */
         h(
-          'section',
-          { class: 'mt-[20px] flex flex-col gap-[10px]' },
+          'div',
+          /**
+           * One gap for the whole column, where each section used to carry its
+           * own `mt-[20px]`.
+           *
+           * The old note here said gaps were set per element because "even
+           * spacing reads as a list; varied spacing reads as a composition" —
+           * and every one of those per-element gaps was 20 anyway, so the
+           * variation was theoretical. What it actually bought was three places
+           * for the number to drift, and two other screens that set the same 20
+           * a different way. A null section costs nothing: `appendAll` drops it
+           * before it can become a flex item, so Quick add going away on a day
+           * with no recents does not leave a gap behind it.
+           */
+          { class: 'flex flex-col gap-[20px]' },
+
+          // Targets are `settings.targets` for every card in the deck, including
+          // the neighbours. That is what Today already did for the day you step
+          // to with a chevron, so the deck is not inventing a second rule —
+          // per-day targets are History's job, and this is not History.
+          dayDeck({
+            current: { totals, targets: t },
+            prev: { totals: sumEntries(prevEntries), targets: t },
+            next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
+          }),
+
+          /**
+           * Quick add sits ABOVE the log, and the argument is what it is for.
+           *
+           * It was below for as long as the screen has existed, on the reading that
+           * the day so far is the headline and a shortcut is a footnote to it. That
+           * is right about the reading order and wrong about the cost: the rail is
+           * the one-tap route to logging, and below the log its distance from the
+           * thumb grows with every row above it. On the day with the most in it —
+           * eight rows and a card — the shortcut is furthest away, which is the same
+           * shape of mistake `fullLogChip` was moved out of the card's last row to
+           * avoid. A shortcut you scroll to has stopped being one.
+           *
+           * The log loses nothing by moving down. It renders at every count and it
+           * carries its own heading, so it is still named and still positioned; what
+           * it stops being is the thing between you and the fastest way to log.
+           */
+          quickAddSection({
+            foods: railFoods,
+            firstRun: everLogged === null,
+            date: state.date,
+            block: blockForTime(new Date(), settings.blockThresholds),
+          }),
+
+          /**
+           * The log. Its own group, and the route to the full Log screen — which
+           * is in turn the only route to History, so this link keeps both
+           * reachable.
+           *
+           * **It renders at every count, including zero.** It used to drop
+           * entirely on an unlogged day, and dropping it was the larger half of
+           * why a fresh morning read as a screen that had failed to load: with no
+           * section here, the card sat above nothing at all, and there was no way
+           * to tell "the log is empty" from "the log is not on this screen".
+           * Naming the void and giving it a position is what turns nothing here
+           * into nothing here yet.
+           *
+           * `Logged`, not `Log`. The heading is now describing a state rather
+           * than labelling a list, and it has to make sense with one muted line
+           * under it as well as with six rows.
+           *
+           * No bare item count on the right. That side carries `Full log`, which
+           * is not decoration — it is the only way to the Log sheet, and
+           * therefore to the day's targets, its time blocks and the date picker.
+           * The count rides along with it rather than standing alone, where it
+           * would be the weakest fact available: it sits directly above the list
+           * it counts.
+           */
           h(
-            'div',
-            { class: 'section-head' },
-            h('div', { class: 'section-label' }, 'Logged'),
-            fullLogChip(openLogSheet)
-          ),
-          // Newest first, which is the opposite of the full Log screen and
-          // is meant to be. `listEntries` returns oldest-first because Log
-          // groups by block and a block reads forwards through the meal.
-          // This is a preview of the day so far, and the thing you just ate
-          // is the thing you came to check — putting it fifth down means
-          // the answer moves further from the top every time you log.
-          // Reversed here rather than in `listEntries`, so the sort stays
-          // one screen's decision instead of both screens'.
-          entries.length
-            ? card(
-                [...entries]
-                  .reverse()
-                  .slice(0, LOG_PREVIEW_MAX)
-                  .map((entry) =>
-                    entryRow(entry, {
-                      onEdit: openEditEntry,
-                      onDelete: deleteEntryWithUndo,
-                      onDuplicate: openDuplicateSheet,
-                    })
-                  )
-              )
-            : // One line, in the same card every list on this screen sits in,
-              // so an empty day has the same edges as a full one. "Nothing
-              // logged yet" and not "Your log is empty" — the heading directly
-              // above it already said the word log, and a sentence that repeats
-              // its own heading is saying one thing twice.
-              //
-              // No route into the sheet needed down here: `Full log` sits in the
-              // head above and renders at every count, including this one.
-              card(emptyRow('Nothing logged yet'))
+            'section',
+            { class: 'flex flex-col gap-[10px]' },
+            h(
+              'div',
+              { class: 'section-head' },
+              h('div', { class: 'section-label' }, 'Logged'),
+              fullLogChip(openLogSheet)
+            ),
+            // Newest first, which is the opposite of the full Log screen and
+            // is meant to be. `listEntries` returns oldest-first because Log
+            // groups by block and a block reads forwards through the meal.
+            // This is a preview of the day so far, and the thing you just ate
+            // is the thing you came to check — putting it fifth down means
+            // the answer moves further from the top every time you log.
+            // Reversed here rather than in `listEntries`, so the sort stays
+            // one screen's decision instead of both screens'.
+            entries.length
+              ? card(
+                  [...entries]
+                    .reverse()
+                    .slice(0, LOG_PREVIEW_MAX)
+                    .map((entry) =>
+                      entryRow(entry, {
+                        onEdit: openEditEntry,
+                        onDelete: deleteEntryWithUndo,
+                        onDuplicate: openDuplicateSheet,
+                      })
+                    )
+                )
+              : // One line, in the same card every list on this screen sits in,
+                // so an empty day has the same edges as a full one. "Nothing
+                // logged yet" and not "Your log is empty" — the heading directly
+                // above it already said the word log, and a sentence that repeats
+                // its own heading is saying one thing twice.
+                //
+                // No route into the sheet needed down here: `Full log` sits in the
+                // head above and renders at every count, including this one.
+                card(emptyRow('Nothing logged yet'))
+          )
         )
       )
     },

@@ -26,7 +26,7 @@ import {
   emptyState,
   tnum,
   digits,
-  navHeader,
+  pageHeader,
   macroColor,
   macroTextColor,
 } from '../lib/ui.js'
@@ -617,23 +617,27 @@ export function trendsScreen() {
       if (!weights.length) {
         return h(
           'div',
-          { class: 'flex flex-col gap-[20px] pb-[20px]' },
+          {},
           heading(),
           h(
-            'section',
-            { class: 'flex flex-col gap-[20px]' },
+            'div',
+            { class: 'flex flex-col gap-[20px] pb-[20px]' },
             h(
-              'div',
-              { class: 'flex flex-col gap-[10px]' },
-              h('div', { class: 'section-title' }, 'Weight'),
-              emptyState(
-                'No weigh-ins yet',
-                'Add today’s weight below. The trend line appears after a week of readings.',
+              'section',
+              { class: 'flex flex-col gap-[20px]' },
+              h(
+                'div',
+                { class: 'flex flex-col gap-[10px]' },
+                h('div', { class: 'section-title' }, 'Weight'),
+                emptyState(
+                  'No weigh-ins yet',
+                  'Add today’s weight below. The trend line appears after a week of readings.',
+                ),
               ),
+              entryBlock,
             ),
-            entryBlock,
+            historySection,
           ),
-          historySection,
         )
       }
 
@@ -656,127 +660,132 @@ export function trendsScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[20px] pb-[20px]' },
+        {},
         heading(),
 
-        /**
-         * `Weight` and `History`, each under a heading of its own.
-         *
-         * The chart had none, because for the tab's whole life it was the only
-         * thing on the screen and the page title named it. Once history arrived
-         * with a heading, the group without one read as page furniture rather
-         * than as the first of two.
-         *
-         * The entry controls sit inside this section rather than after it: the
-         * chart and the field are the same subject, and separating them would
-         * make the section a chart with a stray form beneath it.
-         */
         h(
-          'section',
-          { class: 'flex flex-col gap-[20px]' },
+          'div',
+          { class: 'flex flex-col gap-[20px] pb-[20px]' },
 
-          /* Heading and chart are one group at 10; the 20 stays between the
-             groups under it — chart, notice, entry. */
+          /**
+           * `Weight` and `History`, each under a heading of its own.
+           *
+           * The chart had none, because for the tab's whole life it was the only
+           * thing on the screen and the page title named it. Once history arrived
+           * with a heading, the group without one read as page furniture rather
+           * than as the first of two.
+           *
+           * The entry controls sit inside this section rather than after it: the
+           * chart and the field are the same subject, and separating them would
+           * make the section a chart with a stray form beneath it.
+           */
           h(
-            'div',
-            { class: 'flex flex-col gap-[10px]' },
+            'section',
+            { class: 'flex flex-col gap-[20px]' },
 
-            /**
-             * `All weigh-ins` belongs to the section, not to today's field.
-             *
-             * It was the last row of the `Today's weight` card, which put a door
-             * onto the entire record inside the one group scoped to a single day
-             * of it. Up here it is the same shape as `Logged` and `Full log` on
-             * Today: a heading names a group, and the control opposite goes to
-             * all of it.
-             *
-             * Sitting over the chart is the better adjacency anyway — the chart
-             * is the drawing, this is the readings behind it.
-             *
-             * No count on it, for the reason the log chip lost its own: a
-             * destination's label should say where it goes, not how much is
-             * there, or it has to be re-read every time it changes.
-             */
+            /* Heading and chart are one group at 10; the 20 stays between the
+               groups under it — chart, notice, entry. */
             h(
               'div',
-              { class: 'section-head' },
-              h('div', { class: 'section-label' }, 'Weight'),
-              h(
-                'button',
-                { class: 'chip-sm', onclick: () => openWeighInSheet() },
-                'All weigh-ins'
-              )
-            ),
+              { class: 'flex flex-col gap-[10px]' },
 
-            h(
-              'div',
-              { class: 'day-card flex flex-col gap-[20px]' },
+              /**
+               * `All weigh-ins` belongs to the section, not to today's field.
+               *
+               * It was the last row of the `Today's weight` card, which put a door
+               * onto the entire record inside the one group scoped to a single day
+               * of it. Up here it is the same shape as `Logged` and `Full log` on
+               * Today: a heading names a group, and the control opposite goes to
+               * all of it.
+               *
+               * Sitting over the chart is the better adjacency anyway — the chart
+               * is the drawing, this is the readings behind it.
+               *
+               * No count on it, for the reason the log chip lost its own: a
+               * destination's label should say where it goes, not how much is
+               * there, or it has to be re-read every time it changes.
+               */
               h(
                 'div',
-                { class: 'flex items-end justify-between' },
+                { class: 'section-head' },
+                h('div', { class: 'section-label' }, 'Weight'),
                 h(
-                  'div',
-                  { class: 'flex flex-col' },
-                  h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Current'),
-                  h(
-                    'div',
-                    { class: 'flex items-baseline gap-[10px]' },
-                    tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold'),
-                    h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
-                  ),
-                  h('span', { class: 'text-[12px] text-muted' }, formatDayLabel(latest.date)),
-                ),
-                h(
-                  'div',
-                  { class: 'flex flex-col items-end' },
-                  h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Trend'),
-                  h(
-                    'div',
-                    { class: 'flex items-baseline gap-[10px]' },
-                    h(
-                      'span',
-                      { class: 'tnum text-title font-semibold' },
-                      ...digits(latestTrend == null ? '—' : fmtWeight(latestTrend, unit)),
-                    ),
-                    h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
-                  ),
-                  // Nothing at all when there is no rate yet. The notice below the
-                  // card already says what is missing and how far off it is, and
-                  // the trend figure above is already an em-dash — a second dash
-                  // under the first says the same thing twice, in the weaker of the
-                  // two positions.
-                  rate == null
-                    ? null
-                    : h(
-                        'span',
-                        { class: 'text-[12px] text-muted' },
-                        `${signed(kgToUnit(rate, unit))} ${unit} / week`,
-                      ),
-                ),
+                  'button',
+                  { class: 'chip-sm', onclick: () => openWeighInSheet() },
+                  'All weigh-ins'
+                )
               ),
 
-              chartNode ||
+              h(
+                'div',
+                { class: 'day-card flex flex-col gap-[20px]' },
                 h(
                   'div',
-                  { class: 'py-[30px] text-center text-[12px] text-muted' },
-                  'Two readings are needed before there is anything to draw.',
+                  { class: 'flex items-end justify-between' },
+                  h(
+                    'div',
+                    { class: 'flex flex-col' },
+                    h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Current'),
+                    h(
+                      'div',
+                      { class: 'flex items-baseline gap-[10px]' },
+                      tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold'),
+                      h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+                    ),
+                    h('span', { class: 'text-[12px] text-muted' }, formatDayLabel(latest.date)),
+                  ),
+                  h(
+                    'div',
+                    { class: 'flex flex-col items-end' },
+                    h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Trend'),
+                    h(
+                      'div',
+                      { class: 'flex items-baseline gap-[10px]' },
+                      h(
+                        'span',
+                        { class: 'tnum text-title font-semibold' },
+                        ...digits(latestTrend == null ? '—' : fmtWeight(latestTrend, unit)),
+                      ),
+                      h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+                    ),
+                    // Nothing at all when there is no rate yet. The notice below the
+                    // card already says what is missing and how far off it is, and
+                    // the trend figure above is already an em-dash — a second dash
+                    // under the first says the same thing twice, in the weaker of the
+                    // two positions.
+                    rate == null
+                      ? null
+                      : h(
+                          'span',
+                          { class: 'text-[12px] text-muted' },
+                          `${signed(kgToUnit(rate, unit))} ${unit} / week`,
+                        ),
+                  ),
                 ),
 
-              rangeRow,
+                chartNode ||
+                  h(
+                    'div',
+                    { class: 'py-[30px] text-center text-[12px] text-muted' },
+                    'Two readings are needed before there is anything to draw.',
+                  ),
+
+                rangeRow,
+              ),
             ),
+
+            weights.length < MIN_ENTRIES_FOR_TREND
+              ? notice(
+                  `The trend line needs ${MIN_ENTRIES_FOR_TREND} weigh-ins before it means anything. ` +
+                    `You have ${weights.length}.`,
+                )
+              : null,
+
+            entryBlock,
           ),
 
-          weights.length < MIN_ENTRIES_FOR_TREND
-            ? notice(
-                `The trend line needs ${MIN_ENTRIES_FOR_TREND} weigh-ins before it means anything. ` +
-                  `You have ${weights.length}.`,
-              )
-            : null,
-
-          entryBlock,
+          historySection,
         ),
-
-        historySection,
       )
     },
     // `entries` joins the watch list now that history lives here. `watchDate`
@@ -788,8 +797,11 @@ export function trendsScreen() {
   )
 }
 
-/** Root tab, so no chevrons — the spacers keep the title optically centred
-    against Today, which does have them. */
+/**
+ * Root tab, so no chevrons — the plain variant. It holds Today's 44px slot
+ * anyway, which is what puts this title on Today's baseline rather than 5.75px
+ * above it. Settings renders the identical call with a different string.
+ */
 function heading() {
-  return navHeader({ title: 'Trends' })
+  return pageHeader('Trends')
 }

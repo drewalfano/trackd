@@ -692,6 +692,47 @@
   }
 
   /**
+   * The page header's slot, and the reason it is a class rather than a row of
+   * utilities on one element.
+   *
+   * **Every root screen puts its title in a 44px box, and the box is fixed.**
+   * 44 is `.icon-btn` — the day chevrons are what make the slot that tall on
+   * Today, and the two screens with no chevrons hold the same height anyway so
+   * their titles land on Today's baseline instead of riding up to wherever
+   * their own content happened to end.
+   *
+   * The arithmetic, from the safe-area edge, identical on all three:
+   *
+   *     .screen padding-top      20
+   *     slot                   + 44      ← this rule
+   *     margin-bottom          + 16      ← this rule
+   *                            ────
+   *     first content            80
+   *
+   * A 32.5px line box (26 × 1.25) centred in 44 leaves 5.75 of half-leading
+   * either side, which puts every title's baseline at 31.25 into the slot.
+   * Measured, not derived — Inter's metrics predict 31.45.
+   *
+   * `min-height`, not `height`: the title is `truncate` and cannot wrap, so 44
+   * is exact in practice, but a fixed height would clip rather than grow if
+   * anything is ever added beside it. It still cannot collapse, which is the
+   * requirement.
+   *
+   * **The 16 lives here, and that is what stops it being a per-page number.**
+   * Which means the header must sit OUTSIDE the screen's gapped column — flex
+   * gaps add to margins rather than absorbing them, so a header inside a
+   * `gap-[20px]` column would push first content to 100 on one screen and 110
+   * on another, which is the exact drift this rule exists to end.
+   */
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    margin-bottom: 16px;
+  }
+
+  /**
    * Grouped card. Fill only — no outline.
    *
    * The outline existed because v1.1.0 put light cards on a light page, where a
@@ -768,9 +809,10 @@
    * card child (the plate), and wrapped (the log wraps rows for the swipe, the
    * add sheet wraps them to put a `+` alongside).
    *
-   * `.row-single` is excluded on purpose. It is a fixed 48px row that centres
-   * one line of text — settings, the food library, an empty-state line — and it
-   * is not asking for this.
+   * `.row-single` is excluded here because it sets its own height rather than
+   * its own padding, so it needs the rule written differently — see directly
+   * below. It is not excluded from the INSET; it used to be, and that was the
+   * bug.
    */
   .card > :first-child .row:not(.row-single),
   .card > .row:first-child:not(.row-single) {
@@ -779,6 +821,37 @@
 
   .card > :last-child .row:not(.row-single),
   .card > .row:last-child:not(.row-single) {
+    padding-bottom: 20px;
+  }
+
+  /**
+   * A single-line row at the card's EDGE takes the same 20 as everything else.
+   *
+   * The argument is the one directly above, applied to a row that expresses its
+   * spacing as height instead of padding. A 48px row centring a 24px line box
+   * carries 12 above and 12 below, and across a divider those two 12s are the
+   * gap between two rows. At the card's own edge there is nothing to add to, so
+   * that 12 is half an inset — the Settings doors card ran 20 above `About you`
+   * and 12 under `About`, and the bottom read as cropped rather than as inset.
+   *
+   * `height: auto` because 48 is a border-box number: padding added underneath
+   * it comes out of the text's own box and re-centres the line rather than
+   * growing the row. Height has to be free for the padding to mean anything.
+   *
+   * The 12 on the other side is stated rather than left to the old centring, so
+   * the row's relationship to the divider above it does not move. Only the edge
+   * facing the card grows. A card holding a single `.row-single` matches both
+   * rules and comes out 20 all round, which is what a one-row card should be.
+   */
+  .card > .row-single:first-child {
+    height: auto;
+    padding-top: 20px;
+    padding-bottom: 12px;
+  }
+
+  .card > .row-single:last-child {
+    height: auto;
+    padding-top: 12px;
     padding-bottom: 20px;
   }
 
@@ -1433,6 +1506,54 @@
     width: 44px;
     height: 44px;
     transform: translate(-50%, -50%);
+  }
+
+  /**
+   * The way back, as a pill.
+   *
+   * This is `.icon-btn` with the label brought inside it — same 44px height,
+   * same surface fill, same capsule — so the control at the top-left of a pushed
+   * screen is the same OBJECT as the chevron at the top-left of Today, rather
+   * than a different species of thing that happens to point the same way.
+   *
+   * What it replaces had no fill and no edge: an 18px chevron and a 12px word
+   * sitting directly on the page tint. That made the only control on the screen
+   * the quietest mark on it, and gave the one action every pushed screen needs
+   * a target of about 25px against the 44 a thumb actually lands on.
+   *
+   * The label is 16 rather than the 12 it was. It sits directly above a 26px
+   * page title and must stay under it — 16 is the app's body step and reads as
+   * subordinate at a glance, where anything nearer 20 starts arguing with the
+   * title for which line names the screen.
+   *
+   * Padding is 14 in front and 18 behind, not a matched pair. A chevron carries
+   * its own bearing inside the 20px icon box and the last letter of a word does
+   * not, so equal numbers read visibly left-heavy.
+   *
+   * The press is `.btn-primary`'s 0.97, not `.icon-btn`'s 0.92. The dip is a
+   * proportion, and 8% off a 130px pill travels three times as far across the
+   * screen as 8% off a 44px circle.
+   */
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 44px;
+    padding: 0 18px 0 14px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 0;
+    color: var(--color-ink);
+    font-size: 16px;
+    font-weight: 600;
+    flex: none;
+    transition:
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+      opacity 120ms ease-out;
+  }
+  .back-btn:active {
+    transform: scale(0.97);
+    opacity: 0.85;
   }
 
   /* ------------------------------------------------------------- food rail */

@@ -74,41 +74,48 @@ export const macroEdgeColor = (macro) => MACRO_EDGE[macro]
 /* ------------------------------------------------------------------ header */
 
 /**
- * The page header the redesign settled on: a circular button, a centred title,
- * a circular button. Either side may be absent and leaves a spacer, so the
- * title stays optically centred whether it is flanked by two controls, one, or
- * none.
+ * The page header. There are exactly two of these and no third.
  *
- * Both chevrons are the same shape and mean different things by screen — on a
- * day view they step the date, on a pushed screen they go back. That ambiguity
- * is in the design; the `aria-label` is what keeps it unambiguous to anything
- * that is not looking at it.
+ * `pageHeader(title)` is the plain one — Trends and Settings, which are the
+ * same component and differ in the string and nothing else. There is no second
+ * argument for them to differ BY, which is the point of the signature: a page
+ * cannot reach in and set its own title size, its own alignment or its own
+ * distance from the content under it, because none of those are parameters.
  *
- * `forwardDisabled` keeps the forward chevron present but dimmed rather than
- * swapping it for a spacer. A day view that shows one chevron, on the left,
- * with empty space opposite is reading as a Back button on the screen where iOS
- * has trained everyone that a lone top-left chevron means exactly that. Two
- * chevrons flanking a date read as a stepper, and the pair stays put as the
- * date changes instead of the header re-forming under the thumb.
+ * `pageHeader(title, days)` adds the day steppers and belongs to Today alone.
+ *
+ * ---
+ *
+ * **Today is the template and does not move.** The plain variant used to
+ * collapse to its own 32.5px line box while Today's stood 44 tall on the
+ * chevrons inside it, and Settings hand-rolled a third arrangement with a
+ * `pt-[10px]` of its own — so the one element on all three screens sat at three
+ * different heights, and its baseline spread over 10px between tabs. Both
+ * variants now hold the same 44px slot, so the baseline is 51.25 everywhere and
+ * the first section heading starts at 80. The arithmetic is on `.page-header`.
+ *
+ * **The title is centred on both, and centring is what makes the two variants
+ * agree without any spacers.** The steppers are 44 and the gaps are 10, so the
+ * dated variant's title box is inset by the same amount on both sides and its
+ * centre is the page's centre — which is exactly where the plain variant, with
+ * nothing beside it and the full width to sit in, puts its own. The pair of
+ * `w-11` spacers this used to carry existed only to fake that symmetry when one
+ * chevron was missing, and with no chevrons at all they were never needed.
+ *
+ * **`fitText` is the dated variant's alone.** It exists for `Wed, Jan 13, 2027`
+ * at 230px in a 227px gap between two chevrons — a real string, reached by
+ * paging back months. `Trends` and `Settings` are two short words that fit at
+ * 26 with room to spare, and a plain title that could silently render at 25.5
+ * on some future longer word is a title that has stopped being 26.
+ *
+ * Both chevrons are always drawn on the dated variant, the forward one dimmed
+ * rather than swapped for a gap. A day view showing one chevron on the left
+ * with empty space opposite reads as Back, on the screen where iOS has trained
+ * everyone that a lone top-left chevron means exactly that. Two chevrons
+ * flanking a date read as a stepper, and the pair stays put as the date changes
+ * instead of the header re-forming under the thumb.
  */
-export function navHeader({
-  title,
-  onBack,
-  backLabel = 'Back',
-  onForward,
-  forwardLabel = 'Forward',
-  forwardDisabled = false,
-  onTitle = null,
-  titleLabel,
-}) {
-  const spacer = () => h('div', { class: 'w-11 shrink-0' })
-  const btn = (label, handler, name, disabled = false) =>
-    h(
-      'button',
-      { class: 'icon-btn', 'aria-label': label, disabled, onclick: handler },
-      icon(name, { size: 20, stroke: 2 })
-    )
-
+export function pageHeader(title, days = null) {
   /**
    * A tappable title carries no mark, and the button sits INSIDE the heading.
    *
@@ -121,9 +128,7 @@ export function navHeader({
    *
    * `h1 > button` rather than `button > h1` — a heading takes phrasing content
    * and a button is phrasing content, so this nests the way the content model
-   * allows. It also leaves `fitText` measuring the same `h1` it always did, so
-   * the shrink that keeps `Wed, Jan 13, 2027` clear of the chevrons is
-   * untouched.
+   * allows. It also leaves `fitText` measuring the same `h1` it always did.
    *
    * The padding-and-negative-margin pair grows the hit area to about 45px
    * without growing the row: the target gets the vertical space, the layout box
@@ -131,43 +136,40 @@ export function navHeader({
    */
   // `truncate` stays as the backstop for anything `fitText` cannot shrink to
   // fit by the floor — better a clipped title than one at 14px.
-  const heading = fitText(
-    h(
-      'h1',
-      { class: 'min-w-0 flex-1 truncate text-center text-title font-semibold' },
-      onTitle
-        ? h(
-            'button',
-            {
-              class: '-my-[6px] max-w-full truncate py-[6px]',
-              'aria-haspopup': 'dialog',
-              'aria-label': titleLabel ?? `${title}. Pick a day`,
-              onclick: onTitle,
-            },
-            title
-          )
-        : title
-    )
+  const heading = h(
+    'h1',
+    { class: 'min-w-0 flex-1 truncate text-center text-title font-semibold' },
+    days?.onPick
+      ? h(
+          'button',
+          {
+            class: '-my-[6px] max-w-full truncate py-[6px]',
+            'aria-haspopup': 'dialog',
+            'aria-label': `${title}. Pick a day`,
+            onclick: days.onPick,
+          },
+          title
+        )
+      : title
   )
+
+  if (!days) return h('header', { class: 'page-header' }, heading)
+
+  // Named here rather than passed in. This variant only ever steps days, so a
+  // caller supplying the words could only ever supply the same two.
+  const btn = (label, handler, name, disabled = false) =>
+    h(
+      'button',
+      { class: 'icon-btn', 'aria-label': label, disabled, onclick: handler },
+      icon(name, { size: 20, stroke: 2 })
+    )
 
   return h(
     'header',
-    { class: 'mb-[16px] flex items-center gap-[10px]' },
-    onBack ? btn(backLabel, onBack, 'chevronLeft') : spacer(),
-    heading,
-    onForward || forwardDisabled
-      ? btn(forwardLabel, onForward, 'chevronRight', forwardDisabled)
-      : spacer()
-  )
-}
-
-/** Plain screen title for the destinations that do not navigate by day. */
-export function pageTitle(title, subtitle) {
-  return h(
-    'div',
-    {},
-    h('h1', { class: 'text-title font-semibold' }, title),
-    subtitle ? h('p', { class: 'text-[13px] text-muted' }, subtitle) : null
+    { class: 'page-header' },
+    btn('Previous day', days.onPrev, 'chevronLeft'),
+    fitText(heading),
+    btn('Next day', days.onNext, 'chevronRight', days.nextDisabled)
   )
 }
 
@@ -533,13 +535,27 @@ export function valueRow(label, control, { color } = {}) {
 /**
  * The way back from a pushed screen.
  *
- * Small, top-left, naming where it goes rather than saying "Back" — on a stack
- * exactly one deep, the name of the parent is more use than the direction. It
- * was written twice inside the food library before Settings grew subpages that
+ * Top-left, naming where it goes rather than saying "Back" — on a stack exactly
+ * one deep, the name of the parent is more use than the direction. It was
+ * written twice inside the food library before Settings grew subpages that
  * wanted the same thing; this is that, once.
  *
- * Deliberately not `navHeader`. That is a three-part header with a centred
- * title, and these screens carry their own large title beneath this row.
+ * **It is Today's chevron button with the label brought inside it.** The icon
+ * and its size are `pageHeader`'s exactly — `size: 20, stroke: 2` — and the
+ * capsule is `.icon-btn`'s fill and radius stretched to hold the word. Before
+ * this it was a bare 18px chevron beside 12px type on the page tint, which is
+ * the one arrangement in the app that had no fill at all: the only control on
+ * the screen, drawn quieter than the body text under it. See `.back-btn`.
+ *
+ * Deliberately not `pageHeader`. That is a fixed 44px slot with a centred title
+ * in it, and these screens carry their own large title beneath this row — the
+ * pill is a control at the start of the page, not a header the page hangs from.
+ * A pushed screen is the one place the app still has a third title arrangement,
+ * and it is out of scope of the two-variant rule rather than an exception to it.
+ *
+ * No `pt` of its own any more. At 25px tall it needed the nudge to sit where a
+ * header would; at 44 it IS that height, so it starts flush at the screen's own
+ * 20px inset and lands on the same line as Today's chevron.
  *
  * The caller passes the handler rather than a route, so this file keeps out of
  * the router — `ui.js` knows how things look and nothing about where they go.
@@ -547,11 +563,8 @@ export function valueRow(label, control, { color } = {}) {
 export function backRow({ label, onclick }) {
   return h(
     'button',
-    {
-      class: 'flex items-center gap-[10px] self-start px-0 pt-[10px] text-[12px] font-medium',
-      onclick,
-    },
-    icon('chevronLeft', { size: 18 }),
+    { class: 'back-btn self-start', type: 'button', onclick },
+    icon('chevronLeft', { size: 20, stroke: 2 }),
     label
   )
 }

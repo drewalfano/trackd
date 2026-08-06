@@ -3,7 +3,15 @@ import { createScreen } from '../lib/screen.js'
 import { getSettings, saveSettings, listFoods, listWeights } from '../lib/db.js'
 import { kcalFromMacros } from '../lib/compute.js'
 import { belowFloor, canCalculate, computeTargets } from '../lib/targets.js'
-import { card, listRow, valueRow, numberInput, notice, macroTextColor } from '../lib/ui.js'
+import {
+  card,
+  listRow,
+  valueRow,
+  numberInput,
+  notice,
+  macroTextColor,
+  pageHeader,
+} from '../lib/ui.js'
 import { pluralize } from '../lib/format.js'
 import { navigate } from '../router.js'
 import { getAiKey } from '../lib/aiKey.js'
@@ -101,7 +109,22 @@ export function settingsScreen() {
               ? h(
                   'button',
                   {
-                    class: 'chip-sm',
+                    /**
+                     * `self-end`, so the group has ONE bottom edge.
+                     *
+                     * The chip is 30 and the sentence beside it wraps to two
+                     * 18px lines, so centred it floated 3px clear of the text's
+                     * own bottom — which put the 20 under the last line of type
+                     * and 23 under the chip. The section gap was right the whole
+                     * time; what was ragged was this row's lower edge.
+                     *
+                     * It costs nothing when the sentence fits on one line: the
+                     * chip is the taller of the two then, so the row is its
+                     * height and bottom-aligning it changes nothing. The text
+                     * stays centred either way — it is `flex-1` and fills the
+                     * row, so `items-center` above still governs it.
+                     */
+                    class: 'chip-sm self-end',
                     onclick: () => {
                       kcalOverridden = false
                       syncDerived()
@@ -165,103 +188,123 @@ export function settingsScreen() {
 
       return h(
         'div',
-        { class: 'flex flex-col gap-[30px] pb-[20px]' },
+        {},
+        /**
+         * The same call Trends makes, with a different string in it.
+         *
+         * This screen used to hand-roll its own: a bare `h1` in a wrapper with a
+         * `pt-[10px]`, which is how the title ended up 4.25px below Today's
+         * baseline and left-aligned while the other two were centred. There is
+         * no argument for a third arrangement and there never was one written
+         * down — it is just that the shared header component only ever covered
+         * the two tabs that had chevrons, and this one was built without it.
+         */
+        pageHeader('Settings'),
+
         h(
           'div',
-          { class: 'px-0 pt-[10px]' },
-          h('h1', { class: 'text-title font-semibold leading-tight' }, 'Settings')
-        ),
+          /**
+           * 20, not the 30 this column carried.
+           *
+           * Today and Trends both space their sections at 20 and this was the one
+           * screen at 30, which made Settings scroll to a different rhythm than
+           * the two tabs either side of it. `ui.js` states the grid at the top —
+           * 10 inside a group, 20 between groups — and three cards under three
+           * headings is the same shape of thing on all three screens.
+           */
+          { class: 'flex flex-col gap-[20px] pb-[20px]' },
 
-        h(
-          'section',
-          { class: 'flex flex-col gap-[10px]' },
-          h('div', { class: 'section-title' }, 'Targets'),
           h(
-            'p',
-            { class: 'px-0 text-[12px] leading-snug text-muted' },
-            settings.targetsSource === 'calculated'
-              ? 'Worked out from your profile. Editing anything here makes them yours instead.'
-              : 'Set by hand. Nothing recalculates these unless you ask it to.'
+            'section',
+            { class: 'flex flex-col gap-[10px]' },
+            h('div', { class: 'section-title' }, 'Targets'),
+            h(
+              'p',
+              { class: 'px-0 text-[12px] leading-snug text-muted' },
+              settings.targetsSource === 'calculated'
+                ? 'Worked out from your profile. Editing anything here makes them yours instead.'
+                : 'Set by hand. Nothing recalculates these unless you ask.'
+            ),
+            card(
+              valueRow('Calories', kcalField, { color: macroTextColor('kcal') }),
+              macroTargetRow('protein', 'Protein'),
+              macroTargetRow('fat', 'Fat'),
+              macroTargetRow('carbs', 'Carbs')
+            ),
+            // Both of these describe the four numbers above rather than any one of
+            // them, so they sit under the card instead of between the rows.
+            floorHint,
+            derivedHint
           ),
-          card(
-            valueRow('Calories', kcalField, { color: macroTextColor('kcal') }),
-            macroTargetRow('protein', 'Protein'),
-            macroTargetRow('fat', 'Fat'),
-            macroTargetRow('carbs', 'Carbs')
+
+          h(
+            'section',
+            {},
+            card(
+              listRow({
+                // Named for what is inside it, not for what it produces — the
+                // subtitle is already carrying the output.
+                title: 'About you',
+                subtitle: suggestion,
+                chevron: true,
+                onclick: () => navigate('settings/target'),
+              }),
+              listRow({
+                title: 'Foods',
+                subtitle: pluralize(foods.length, 'food'),
+                chevron: true,
+                onclick: () => navigate('foods'),
+              }),
+              listRow({
+                title: 'Preferences',
+                subtitle: `${capitalise(settings.units)} · ${capitalise(settings.theme)}`,
+                chevron: true,
+                onclick: () => navigate('settings/preferences'),
+              }),
+              listRow({
+                title: 'AI Describe',
+                subtitle: getAiKey() ? 'Key saved' : 'No key',
+                chevron: true,
+                onclick: () => navigate('settings/ai'),
+              }),
+              listRow({
+                title: 'Data',
+                chevron: true,
+                onclick: () => navigate('settings/data'),
+              }),
+              listRow({
+                title: 'About',
+                right: h('span', { class: 'text-[12px] text-muted' }, VERSION),
+                chevron: true,
+                onclick: () => navigate('settings/about'),
+              })
+            )
           ),
-          // Both of these describe the four numbers above rather than any one of
-          // them, so they sit under the card instead of between the rows.
-          floorHint,
-          derivedHint
-        ),
 
-        h(
-          'section',
-          {},
-          card(
-            listRow({
-              // Named for what is inside it, not for what it produces — the
-              // subtitle is already carrying the output.
-              title: 'About you',
-              subtitle: suggestion,
-              chevron: true,
-              onclick: () => navigate('settings/target'),
-            }),
-            listRow({
-              title: 'Foods',
-              subtitle: pluralize(foods.length, 'food'),
-              chevron: true,
-              onclick: () => navigate('foods'),
-            }),
-            listRow({
-              title: 'Preferences',
-              subtitle: `${capitalise(settings.units)} · ${capitalise(settings.theme)}`,
-              chevron: true,
-              onclick: () => navigate('settings/preferences'),
-            }),
-            listRow({
-              title: 'AI Describe',
-              subtitle: getAiKey() ? 'Key saved' : 'No key',
-              chevron: true,
-              onclick: () => navigate('settings/ai'),
-            }),
-            listRow({
-              title: 'Data',
-              chevron: true,
-              onclick: () => navigate('settings/data'),
-            }),
-            listRow({
-              title: 'About',
-              right: h('span', { class: 'text-[12px] text-muted' }, VERSION),
-              chevron: true,
-              onclick: () => navigate('settings/about'),
-            })
-          )
-        ),
-
-        /* ---------------------------------------------------------------- *
-         * TEMPORARY: Preview onboarding. Delete this section, the import at
-         * the top of this file, and nothing else.
-         *
-         * Kept at the root and in a card of its own rather than tucked into
-         * About, so that removing it is one contiguous block and cannot take a
-         * neighbour with it. It is scaffolding for reviewing the first-run
-         * flow, not a feature, and it is going.
-         *
-         * Runs as a preview: blank draft, nothing written unless the last step
-         * is taken deliberately, so walking through it cannot cost someone the
-         * profile they already have.
-         * ---------------------------------------------------------------- */
-        h(
-          'section',
-          {},
-          card(
-            listRow({
-              title: 'Preview onboarding',
-              subtitle: 'The first-run flow, full screen, as a new person sees it',
-              chevron: true,
-              onclick: () => openOnboardingOverlay({ preview: true }).then(rerender),
-            })
+          /* ---------------------------------------------------------------- *
+           * TEMPORARY: Preview onboarding. Delete this section, the import at
+           * the top of this file, and nothing else.
+           *
+           * Kept at the root and in a card of its own rather than tucked into
+           * About, so that removing it is one contiguous block and cannot take a
+           * neighbour with it. It is scaffolding for reviewing the first-run
+           * flow, not a feature, and it is going.
+           *
+           * Runs as a preview: blank draft, nothing written unless the last step
+           * is taken deliberately, so walking through it cannot cost someone the
+           * profile they already have.
+           * ---------------------------------------------------------------- */
+          h(
+            'section',
+            {},
+            card(
+              listRow({
+                title: 'Preview onboarding',
+                subtitle: 'The first-run flow, full screen, as a new person sees it',
+                chevron: true,
+                onclick: () => openOnboardingOverlay({ preview: true }).then(rerender),
+              })
+            )
           )
         )
       )
