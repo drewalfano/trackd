@@ -42,8 +42,10 @@
       pairing works better here than under `black-translucent`, which forces white
       glyphs and is wrong over the light theme.
 
-      Keep this as `default`. `--screen-h` in styles.css hardens the app against
-      the short layout viewport either way, but this is the cause.
+      Keep this as `default`. And note what it implies for `--screen-h` in
+      styles.css: under `default` the painted box IS the layout viewport, so `svh`
+      is correct and `lvh` is 62px too tall. Shipping this revert alongside an
+      `lvh` anchor calibrated for the old behaviour cut the tab bar in half.
     -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="mobile-web-app-capable" content="yes" />

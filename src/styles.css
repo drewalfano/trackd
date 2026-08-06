@@ -542,47 +542,42 @@
     --nav-fade: 159px;
 
     /**
-     * The height of the screen, for anchoring anything that floats at its bottom.
-     * One definition, because getting it wrong is not a local mistake — see
-     * `.screen-floor`.
+     * The height of the box the page is actually painted into, for anchoring
+     * anything that floats at its bottom. One definition, because getting it
+     * wrong is not a local mistake — see `.screen-floor`.
      *
-     * `svh` here is for a Safari TAB, where it is the visible area with the
-     * toolbars showing and a bar anchored to it cannot end up underneath them.
-     * The standalone override below is the interesting half.
+     * **`svh`, unconditionally, and the history here is the argument.**
+     *
+     * Measured on Drew's iPhone 17 Pro while the status bar was
+     * `black-translucent`, three states, same build:
+     *
+     *                        scrolling   short   sheet open
+     *     screen.height            874     874          874
+     *     100vh / 100lvh           874     874          874
+     *     100dvh                   874     812          812
+     *     innerHeight              874     812          812
+     *     visualViewport.height    874     812          812
+     *     documentElement.clientHeight  812  812        812
+     *
+     * Two units survived that unscathed. `100svh` and `clientHeight` read 812 in
+     * every state; everything else moved. `dvh` is the DYNAMIC viewport and
+     * collapses on a screen with nothing to scroll, which is why an anchor built
+     * on it broke on exactly the screens that were broken.
+     *
+     * `lvh` was the wrong lesson to draw. It held 874 throughout, so it looked
+     * like the honest one — but 874 was only ever the right answer because
+     * `black-translucent` had stretched the web view under the status bar. With
+     * that reverted to `default` (see index.html), iOS insets the web view below
+     * the status bar again, the painted box is 812, and `lvh` puts the bar's
+     * bottom edge 62px BELOW the screen. Which is what it did: a tab bar sliced
+     * in half by the bottom of the display.
+     *
+     * So the number to anchor to is the one that never moved in either
+     * configuration. `svh` is that number, and under `default` it is also simply
+     * the truth — the small, large and dynamic viewports all agree once there is
+     * no browser UI and no stretched web view to disagree about.
      */
     --screen-h: 100svh;
-  }
-
-  /**
-   * Installed, the screen is `lvh` — and NOT `dvh`, which is the trap this app
-   * fell into for a whole deploy.
-   *
-   * Captured on Drew's iPhone 17 Pro, three states, same build:
-   *
-   *                        scrolling   short   sheet open
-   *     screen.height            874     874          874
-   *     100vh                    874     874          874
-   *     100lvh                   874     874          874
-   *     100dvh                   874     812          812
-   *     innerHeight              874     812          812
-   *     visualViewport.height    874     812          812
-   *     documentElement.clientHeight  812  812        812
-   *
-   * `dvh` is the DYNAMIC viewport, and on a screen with nothing to scroll iOS
-   * collapses it to the small one. So an anchor built on `dvh` asks for the
-   * screen and is handed the short box on exactly the screens that were broken —
-   * which is what happened: the tab bar landed 82px off the bottom instead of 20,
-   * and `82 = 62 + 20` to the pixel.
-   *
-   * `innerHeight` and `visualViewport.height` collapse with it, so measuring the
-   * screen from JS is the same mistake wearing different clothes. `vh` and `lvh`
-   * are the only two that held 874 in all three states, and `lvh` is the one that
-   * says what it means: the LARGE viewport, which is the screen.
-   */
-  @media (display-mode: standalone) {
-    :root {
-      --screen-h: 100lvh;
-    }
   }
 
   /**
@@ -2187,36 +2182,30 @@
 
 @layer utilities {
   /**
-   * Anchored to the bottom of the SCREEN, which is not the bottom of the layout
-   * viewport. Everything in the app that floats at the bottom uses this.
+   * Anchored to the bottom of the painted box, from its TOP. Everything in the
+   * app that floats at the bottom uses this.
    *
-   * Measured on Drew's phone, installed, at Settings › About › Viewport:
+   * The bug this exists for is fixed at its cause in index.html — the status bar
+   * went back to `default` — and under `default` a plain `bottom: 0` would work
+   * again. This stays because it is the same thing said out loud: the height comes
+   * from `--screen-h`, one token, argued in one place, rather than from whichever
+   * edge WebKit happens to resolve `bottom` against.
    *
-   *     screen.height  874    innerHeight  874    visualViewport.height  874
-   *     100vh          874    100lvh       874    100dvh                 874
-   *     documentElement.clientHeight  812    100svh  812
-   *     safe-area top   62    safe-area bottom  34
+   * What it cost to learn, in order, because each step looked reasonable:
    *
-   * The layout viewport is **812** — the screen less the 62px top inset, which is
-   * what `black-translucent` costs in exchange for making that inset real (see
-   * the note in index.html). The web view still covers all 874.
+   * 1. `black-translucent` stretched the web view under the status bar and left
+   *    the layout viewport 62px short. `bottom: 0` then resolved to 874 on a
+   *    scrollable screen and 812 on one with nothing to scroll — a tab bar that
+   *    rode up only on days with nothing logged.
+   * 2. Two fixes aimed at the DOCUMENT's height. It was never the variable.
+   * 3. `100dvh` — which collapses to the short box on exactly the screens that
+   *    were broken.
+   * 4. `100lvh` — which held 874 throughout and so looked like the honest unit,
+   *    but 874 was only right while the web view was stretched. With `default`
+   *    restored it put the bar's bottom 62px below the display and sliced it in
+   *    half.
    *
-   * And `position: fixed; bottom: 0` does not pick one of those two heights and
-   * stay with it. Drew's two screenshots of the same build, one screen apart,
-   * are the whole diagnosis: on **About**, which is short enough not to scroll,
-   * the tab bar sits at 812 and there are 62px of dead canvas under it. On
-   * **Viewport**, which scrolls, the same bar sits at 874 where it belongs. A
-   * scrollable document gets the visual viewport; a non-scrollable one gets the
-   * layout viewport. That is the "only on days with nothing logged" report,
-   * exactly — those are the days short enough not to scroll — and it is why the
-   * two earlier fixes missed: both were aimed at the document's height, and the
-   * document's height was never the variable.
-   *
-   * So nothing anchors to the bottom any more. The element spans the screen from
-   * the TOP, where there is only one answer, and lays its content out at the far
-   * end. The height comes from `--screen-h`, which is where the choice of unit is
-   * made and argued — this was `100dvh` inline for a deploy, and `dvh` is the one
-   * unit that collapses on exactly the screens that were broken.
+   * The moral is on `--screen-h`: anchor to the number that did not move.
    */
   .screen-floor {
     position: fixed;
