@@ -19,35 +19,41 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Macros" />
     <!--
-      `default`, and this is the line that caused the bottom-of-the-screen bug.
+      `black-translucent`, and what this line actually decides is HOW TALL THE WEB
+      VIEW IS. That is the only reason it matters, and establishing it took a detour
+      through both settings.
 
-      It was `black-translucent` for two days, changed in 8b524bb on the reasoning
-      that `default` insets the web view below an opaque status bar, so
-      `env(safe-area-inset-top)` reports 0 and the inset `.screen` asks for never
-      fires. That commit said UNVERIFIED ON DEVICE, and this is what it cost.
+      Measured on Drew's 17 Pro, standalone, both ways:
 
-      `black-translucent` puts the content under the status bar, and WebKit then
-      reports a LAYOUT viewport of the screen less the top inset — 812 against a
-      874 screen on Drew's 17 Pro — while the web view still covers all 874.
-      Everything anchored to the bottom then depends on which of those two heights
-      WebKit feels like using, and it does not use one consistently: on a
-      scrollable screen `bottom: 0` and `100dvh` resolve to 874, on a screen with
-      nothing to scroll they collapse to 812. Hence a tab bar that rode up only on
-      days with nothing logged, and sheets that stopped 62px short.
+        black-translucent   the web view covers the whole 874pt screen. Content
+                            painted at y=854 is visible. `env(safe-area-inset-top)`
+                            reports a real 62.
+        default             the web view is 812 tall. Anything painted below 812 is
+                            CLIPPED — that is what sliced the tab bar in half in
+                            bfe50e4 — and the 62pt strip at the bottom of the
+                            display belongs to iOS, which paints the page's own
+                            background into it. No CSS can put anything there.
 
-      The inset it was reaching for is not needed under `default`: iOS has already
-      moved the web view below the status bar, so `0 + 20px` IS the right top
-      padding and `.screen`'s existing calc produces it. The trade is the status
-      bar's own appearance, which `theme-color` and lib/statusBar.js drive — that
-      pairing works better here than under `black-translucent`, which forces white
-      glyphs and is wrong over the light theme.
+      So `default` gives up the bottom 62pt of the screen. `black-translucent` keeps
+      it, and the status bar is not the price 8b524bb feared: that commit warned the
+      style forces white glyphs and would be wrong over the light theme, and on this
+      iOS it does not — the light-theme screenshots from the two days it was live
+      show dark glyphs, picked against the content underneath.
 
-      Keep this as `default`. And note what it implies for `--screen-h` in
-      styles.css: under `default` the painted box IS the layout viewport, so `svh`
-      is correct and `lvh` is 62px too tall. Shipping this revert alongside an
-      `lvh` anchor calibrated for the old behaviour cut the tab bar in half.
+      What `black-translucent` does cost is agreement about height. The layout
+      viewport stays 812 while the web view covers 874, so `bottom: 0` and `100dvh`
+      resolve to 874 on a scrollable screen and collapse to 812 on one with nothing
+      to scroll. That inconsistency — not this line — is what made the tab bar ride
+      up only on days with nothing logged. styles.css handles it by anchoring
+      everything to `--screen-h`, which is `100lvh` under this style: measured at 874
+      in all three states.
+
+      **The pair is load-bearing.** `black-translucent` without a stable anchor is
+      the original bug. `lvh` without `black-translucent` anchors to 874 inside an
+      812 web view and clips. Each was shipped alone and each failed. Do not change
+      one without the other.
     -->
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
 
     <script>

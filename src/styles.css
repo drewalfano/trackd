@@ -559,25 +559,35 @@
      *     visualViewport.height    874     812          812
      *     documentElement.clientHeight  812  812        812
      *
-     * Two units survived that unscathed. `100svh` and `clientHeight` read 812 in
-     * every state; everything else moved. `dvh` is the DYNAMIC viewport and
-     * collapses on a screen with nothing to scroll, which is why an anchor built
-     * on it broke on exactly the screens that were broken.
+     * `100lvh` is the one that held 874 throughout. `dvh` is the DYNAMIC viewport
+     * and collapses on a screen with nothing to scroll, which is why an anchor
+     * built on it broke on exactly the screens that were broken; `svh` is the
+     * small viewport and is 812 always.
      *
-     * `lvh` was the wrong lesson to draw. It held 874 throughout, so it looked
-     * like the honest one — but 874 was only ever the right answer because
-     * `black-translucent` had stretched the web view under the status bar. With
-     * that reverted to `default` (see index.html), iOS insets the web view below
-     * the status bar again, the painted box is 812, and `lvh` puts the bar's
-     * bottom edge 62px BELOW the screen. Which is what it did: a tab bar sliced
-     * in half by the bottom of the display.
+     * **874 is right because the web view is 874 tall**, which is what
+     * `black-translucent` in index.html buys and the only reason that meta is set.
+     * The two are one decision: `lvh` under `default` anchors to 874 inside an 812
+     * web view and the bar is clipped in half, which shipped once. Read the note
+     * on that meta before touching either.
      *
-     * So the number to anchor to is the one that never moved in either
-     * configuration. `svh` is that number, and under `default` it is also simply
-     * the truth — the small, large and dynamic viewports all agree once there is
-     * no browser UI and no stretched web view to disagree about.
+     * The target is Drew's own: match where the bar sat on a SCROLLING page, which
+     * is the position that always looked right — `tabbar.bottom 854` against an
+     * 874 screen, a 20px gap. Anchoring to `lvh` gives every screen that number
+     * instead of only the ones long enough to scroll.
      */
     --screen-h: 100svh;
+  }
+
+  /**
+   * Installed, the web view is the whole screen, so the anchor is the large
+   * viewport. In a browser TAB it stays `svh` above: there the small viewport is
+   * the visible area with the toolbars showing, and a bar anchored to `lvh` would
+   * sit underneath them.
+   */
+  @media (display-mode: standalone) {
+    :root {
+      --screen-h: 100lvh;
+    }
   }
 
   /**
