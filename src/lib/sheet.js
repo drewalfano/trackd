@@ -47,14 +47,12 @@ function lockScroll(lock) {
     style.height = `calc(var(--screen-h) + ${lockedScrollY}px)`
     style.left = '0'
     style.right = '0'
-    style.overflow = 'hidden'
   } else {
     style.position = ''
     style.top = ''
     style.height = ''
     style.left = ''
     style.right = ''
-    style.overflow = ''
     window.scrollTo(0, lockedScrollY)
   }
 }

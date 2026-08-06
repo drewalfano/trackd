@@ -413,6 +413,40 @@
     background: var(--color-canvas);
     -webkit-text-size-adjust: 100%;
     /**
+     * The document is never shorter than the screen, and this is the fix.
+     *
+     * Measured, installed, on the same build:
+     *
+     *                        scrolling screen   short screen
+     *     innerHeight                     874            812
+     *     visualViewport.height           874            812
+     *     documentElement.clientHeight    812            812
+     *
+     * **iOS resizes the VISIBLE SURFACE according to whether the document
+     * scrolls.** A scrollable document gets the full 874pt web view; one with
+     * nothing to scroll is given 812. The layout viewport is 812 either way.
+     *
+     * That is why no single anchor could ever be right. `lvh` (874) is correct on a
+     * scrolling screen and hangs 42pt off the bottom of a short one — the tab bar
+     * cut in half, measured as `gapBelowBarFromInner -42`. `dvh` tracks the surface
+     * and is never clipped, but on a short screen it puts the bar 20pt above a
+     * bottom that is itself 62pt up the display, leaving a band underneath that no
+     * CSS can reach. Four attempts went round that loop.
+     *
+     * A floor collapses the two cases into one: 874 against a layout viewport of
+     * 812 means every document scrolls, so the surface is always 874, so `lvh` is
+     * simply right. `clientHeight` stays 812 whether or not the page scrolls — that
+     * is in the table above — so this cannot oscillate.
+     *
+     * It is on `html` rather than `body` on purpose: `lockScroll` takes `body` out
+     * of flow while a sheet is open, and a floor on `body` would stop counting at
+     * exactly the moment the sheet needs the surface to stay full height.
+     *
+     * The price is up to 62pt of slack scroll on a screen with nothing to scroll.
+     * That is the price. It was tried the other way four times.
+     */
+    min-height: var(--screen-h);
+    /**
      * On the ROOT, not on `body`.
      *
      * `overscroll-behavior` is one of the properties that only applies to the

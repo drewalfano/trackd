@@ -220,8 +220,15 @@ function syncFade() {
    * the viewport reported as not scrolling, so the band switched itself off for
    * exactly the content most likely to pass under the bar.
    */
-  const scrollable =
-    document.documentElement.scrollHeight > document.documentElement.clientHeight + 1
+  /**
+   * `body.scrollHeight`, because the DOCUMENT now has a floor.
+   *
+   * `html` carries `min-height: var(--screen-h)` so the surface never shrinks — see
+   * the note there — which means the document is nominally scrollable on every
+   * screen and `documentElement.scrollHeight` can no longer answer "is there
+   * content under the bar". The body's own height still can: it is the content.
+   */
+  const scrollable = document.body.scrollHeight > document.documentElement.clientHeight + 1
   fade.dataset.active = String(scrollable)
 }
 
