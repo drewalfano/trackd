@@ -425,6 +425,38 @@
     overscroll-behavior-y: none;
   }
 
+  /**
+   * The canvas colour, painted across the whole web view rather than the document.
+   *
+   * `html`'s background above propagates to the canvas, and on every other browser
+   * that is the end of it. Not here. Installed, with `black-translucent`, the web
+   * view covers all 874pt of the screen while the layout viewport stays 812 — so on
+   * a screen too short to scroll there is a 62pt band at the bottom that the
+   * document's background never reaches. It renders black, which in dark mode is a
+   * black bar under the tab bar and in light mode was the "dead canvas" the earlier
+   * screenshots showed. The chrome that floats down there is anchored correctly and
+   * still has nothing behind it.
+   *
+   * A fixed box the height of the screen fixes that without touching the document.
+   * The alternative was a `min-height` floor to force the band into the document,
+   * which buys 62pt of pointless scroll on every short screen and does nothing for a
+   * sheet, where the body is deliberately pinned and cannot scroll at all.
+   *
+   * `-1` puts it behind body's content and in front of the root's own background,
+   * which is the same colour — so this is invisible everywhere it was already
+   * working, and only shows up in the band nothing else covers.
+   */
+  body::before {
+    content: '';
+    position: fixed;
+    inset-inline: 0;
+    top: 0;
+    height: var(--screen-h);
+    background: var(--color-canvas);
+    z-index: -1;
+    pointer-events: none;
+  }
+
   body {
     margin: 0;
     background: var(--color-canvas);
