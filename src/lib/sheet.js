@@ -123,9 +123,16 @@ export function presentSheet(spec, host) {
 }
 
 /**
- * `inset` is the gap left above the sheet. The default 20 is the notch clearance
- * every sheet has always had; a sheet that is meant to read as temporary asks
- * for more, so the page behind it stays visibly the page behind it.
+ * There was an `inset` option here — the gap left above the sheet, defaulting to
+ * the 20px notch clearance, with the log asking for 60 so it would read as
+ * temporary. Two sheets opened over the same screen therefore came to rest at
+ * two different heights, and neither height was anchored to anything on the page
+ * behind them: 20 clipped the day's title, 60 clipped the dashboard card.
+ *
+ * The cap is now `--content-top` for every sheet, in CSS on `.sheet-panel`, so a
+ * sheet's top edge is the dashboard card's top edge. What the log wanted is what
+ * that gives — a visible band of Today above the sheet — except it is a whole
+ * element rather than an arbitrary distance, and every other sheet gets it too.
  *
  * There was briefly a `header` option here too, letting the root panel swap the
  * default back/title/close row for one of its own. The log was its only caller
@@ -133,7 +140,7 @@ export function presentSheet(spec, host) {
  * control already visible on Today through the scrim. With the stepper gone the
  * log wants a plain title like everything else, so the option went with it.
  */
-export function openSheet({ title, render, footer = null, inset = 20 }) {
+export function openSheet({ title, render, footer = null }) {
   // One sheet at a time. A second open replaces the first.
   if (active) active.destroy()
 
@@ -277,21 +284,14 @@ export function openSheet({ title, render, footer = null, inset = 20 }) {
       // already the screen's. It is the FIXED bottom edge that was ambiguous.
       class: 'sheet-panel absolute inset-x-0 bottom-0 flex flex-col border-t border-outline',
       /**
-       * `100%` of the scrim, and not a viewport unit.
-       *
-       * This read `100svh`, which measured 812 on Drew's phone against a real 874
-       * — and then subtracted the 62px top inset from a height that had already
-       * had it taken out. Every sheet in the app was capped 62px short, which is
-       * the "content doesn't go all the way to the bottom" half of the report.
-       *
-       * The scrim is `.screen-cover`, so a percentage here resolves against a box
-       * that is exactly `100dvh` tall. That is one fewer unit to be lied to by:
-       * whatever WebKit decides `svh` means next, this cap and the panel's own
-       * bottom edge are measured from the same box.
+       * The `max-height` that used to be written here as an inline style now
+       * lives on `.sheet-panel`, since it no longer varies per sheet. Its two
+       * standing arguments moved with it: `100%` of the scrim rather than a
+       * viewport unit — `100svh` measured 812 on Drew's phone against a real
+       * 874, and then had the 62px top inset taken out of a height that had
+       * already lost it, capping every sheet in the app 62px short — and the
+       * scrim being `.screen-cover` is what makes the percentage trustworthy.
        */
-      style: {
-        maxHeight: `calc(100% - env(safe-area-inset-top, 0px) - ${inset}px)`,
-      },
       role: 'dialog',
       'aria-modal': 'true',
       /**

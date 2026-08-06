@@ -633,6 +633,24 @@
 @layer base {
   :root {
     /**
+     * Where the first block of content lands, measured from the safe-area edge:
+     * the 44px header slot plus the 20px under it. The arithmetic is argued on
+     * `.page-header`; it is a token because a second thing reads it now.
+     *
+     * That second thing is the sheet cap. A sheet used to stop 20px short of the
+     * status bar — a number of its own, chosen to clear the notch — and the log
+     * asked for 60 to look less permanent, so two sheets opened over the same
+     * screen came to rest at two different heights for two unrelated reasons.
+     * Stopping at `--content-top` makes that one reason: the sheet's top edge is
+     * the dashboard card's top edge, so every sheet in the app leaves the same
+     * band of the page showing, and the band is a whole element rather than a
+     * sliver of one.
+     */
+    --header-slot: 44px;
+    --header-gap: 20px;
+    --content-top: calc(var(--header-slot) + var(--header-gap));
+
+    /**
      * The floating bar sits 20px off the bottom of the screen, and 20px in from
      * each side — a flat inset, deliberately not `safe-area-inset-bottom`.
      *
@@ -797,8 +815,11 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 44px;
-    margin-bottom: 20px;
+    /* 44 and 20, as tokens, because `--content-top` is their sum and the sheet
+       cap is measured from it. Changing either here moves the sheets with the
+       page rather than leaving them behind at an old number. */
+    min-height: var(--header-slot);
+    margin-bottom: var(--header-gap);
   }
 
   /**
@@ -2793,6 +2814,16 @@
   border-top-left-radius: var(--radius-sheet);
   border-top-right-radius: var(--radius-sheet);
   background: var(--color-sheet);
+  /**
+   * The cap: a tall sheet stops at the top of the dashboard card, not at the
+   * status bar. See `--content-top` for why that is the mark, and lib/sheet.js
+   * for why the percentage is measured against the scrim rather than in `svh`.
+   *
+   * `100%` of `.screen-cover`, which is `--screen-h` tall and starts at the top
+   * of the screen — the same origin the page's own safe-area padding starts
+   * from, which is what makes this land on the card's edge and not near it.
+   */
+  max-height: calc(100% - env(safe-area-inset-top, 0px) - var(--content-top));
   animation: sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 .sheet-panel[data-closing='true'] {

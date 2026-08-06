@@ -298,11 +298,11 @@ export async function openLogSheet() {
      * custom-header machinery this sheet was the only user of is gone with it.
      */
     title: formatDayHeader(state.date),
-    // Deliberately more than the 20 every other sheet leaves. The log is tall
-    // enough to hit its own cap, and a sheet that stops one hairline short of
-    // the status bar has stopped being a sheet — the visible band of Today above
-    // it is what says this is temporary, without a word spent saying so.
-    inset: 60,
+    // The `inset: 60` that used to be here is gone, and what it was buying is
+    // not: every sheet now stops at the top of Today's dashboard card, so the
+    // visible band of the page above this one — the thing that says the log is
+    // temporary without spending a word on it — is the rule rather than this
+    // sheet's exception. See `--content-top`.
     render: (ctx) => {
       const body = h('div', { class: 'flex flex-col gap-[20px]' })
 
