@@ -4,7 +4,7 @@
  */
 
 import { openDB } from 'idb'
-import { todayStr } from './dates.js'
+import { addDays, todayStr } from './dates.js'
 import { weightUnitFor } from './format.js'
 
 export const DB_NAME = 'macro-tracker'
@@ -103,6 +103,9 @@ export function onChange(fn) {
 }
 
 function emit(scope) {
+  // The one derived thing in this file that is expensive enough to hold on to.
+  // Invalidated here so no write path can forget it. See `quickAddFoods`.
+  if (scope === 'entries' || scope === 'foods' || scope === 'all') quickAddCache = null
   for (const fn of listeners) fn(scope)
 }
 
@@ -439,39 +442,140 @@ export const identityKey = (food) =>
   food.barcode || `name:${(food.name || '').toLowerCase().trim().replace(/\s+/g, ' ')}`
 
 /**
- * Recents for a rail, deduped down to one card per real food.
+ * How far back the rail counts. Thirty days is long enough that a weekly food
+ * still registers and short enough that last season's habits do not.
+ */
+const QUICK_ADD_WINDOW = 30
+
+/**
+ * How many logs in that window make a food a habit rather than an occurrence.
  *
- * `recentFoods` is already recency-ordered and already carries the last-used
- * serving, so this is the same read with one pass over it — it does NOT walk
- * the entries store. Recency on the food record is maintained by `touchFood` on
- * every log, which is the same signal a scan of the entries would recover, at
- * one index read instead of a full table.
+ * Two, which is the smallest number that can mean anything at all: one log says
+ * you ate something once, and every meal you have ever eaten clears that bar.
+ * The second log is the first evidence of a pattern. Anything higher would take
+ * a fortnight of the same breakfast to admit that it is your breakfast.
+ */
+const QUICK_ADD_FREQUENT_MIN = 2
+
+/**
+ * The Quick add rail: what you eat OFTEN, then what you ate LAST.
  *
- * The dedupe is the part `recentFoods` cannot do: the same real food can exist
- * as two food records, one adopted from a barcode and one typed by hand, and a
- * rail of eight shortcuts cannot afford to spend two of them on one yoghurt.
- * First occurrence wins, so the surviving card is the most recently used of the
- * pair and carries that record's serving.
+ * This used to be pure recency — the eight foods with the newest `lastUsedAt` —
+ * and the failure was structural rather than occasional. One unusual dinner
+ * evicts a daily staple, because recency has no idea that the thing it dropped
+ * is eaten every morning and the thing it promoted will never be eaten again.
+ * The rail was at its least useful the day after anything out of the ordinary.
  *
- * Reads deeper than `limit` before slicing, because duplicates are removed
- * after the sort — taking eight first would hand back six once a pair collapsed.
+ * So the front of the rail is a count over a window: everything logged at least
+ * twice in the last thirty days, most-logged first. A one-off dinner cannot
+ * enter that tier at all, and a daily breakfast cannot leave it.
  *
- * Foods already logged today are deliberately kept. Re-logging the same thing
- * within a day is ordinary, and dropping it would be a shortcut that vanishes
- * precisely because you used it.
+ * **Ties break on recency, and that is not a detail either.** Once a rail is
+ * mostly foods sitting on two or three logs, the counts stop separating them
+ * and the order would otherwise be whatever the map happened to iterate — an
+ * arbitrary sequence that never moves. Recency inside a tier keeps the rail
+ * feeling alive without letting it be reordered by a single meal.
+ *
+ * **The tail is still recency, and fills to `limit`.** The frequent tier is
+ * empty on a fresh install and small for weeks after, and a rail that shows two
+ * tiles because it is being strict about evidence is a worse rail than the one
+ * it replaced. So whatever the tier does not fill is topped up with the most
+ * recently used foods, newest first, skipping anything already above — and
+ * those may be older than the window, since being outside it is exactly the
+ * condition. Nothing is padded: with fewer than `limit` foods ever logged, the
+ * rail is simply shorter.
+ *
+ * Counted by `identityKey`, not by `foodId`. The same real food can exist as two
+ * records — one adopted from a barcode, one typed by hand — and counting the ids
+ * separately would split a food's history in half and then rank it on half its
+ * evidence, which is the exact mistake this function exists to stop. The
+ * surviving card is the most recently used of the pair, so it carries that
+ * record's serving.
+ *
+ * Foods already logged today are deliberately kept, as before. Re-logging the
+ * same thing within a day is ordinary, and dropping it would be a shortcut that
+ * vanishes precisely because you used it.
  */
 export async function quickAddFoods(limit = 8) {
-  const recents = await recentFoods(limit * 4)
-  const seen = new Set()
-  const out = []
-  for (const food of recents) {
+  const today = todayStr()
+  const cached = readQuickAddCache(today, limit)
+  if (cached) return cached
+
+  const [foods, entries] = await Promise.all([
+    listFoods(),
+    entriesInRange(addDays(today, -(QUICK_ADD_WINDOW - 1)), today),
+  ])
+
+  /**
+   * One food record per identity, and it is the most recently used of them.
+   * Built before the counting so both halves agree on which record represents a
+   * pair — otherwise the tier could rank one yoghurt and the tail could offer
+   * the other, and the rail would show it twice.
+   */
+  const byIdentity = new Map()
+  const byId = new Map()
+  for (const food of foods) {
+    byId.set(food.id, food)
     const key = identityKey(food)
-    if (seen.has(key)) continue
-    seen.add(key)
-    out.push(food)
-    if (out.length === limit) break
+    const held = byIdentity.get(key)
+    if (!held || (food.lastUsedAt || 0) > (held.lastUsedAt || 0)) byIdentity.set(key, food)
   }
+
+  /** Logs per identity inside the window, with the newest of them. */
+  const tally = new Map()
+  for (const entry of entries) {
+    const food = entry.foodId ? byId.get(entry.foodId) : null
+    // A quick add or a described estimate has no food to put on the rail, and a
+    // food deleted since is a tile with nothing behind it.
+    if (!food) continue
+    const key = identityKey(food)
+    const row = tally.get(key) || { count: 0, lastAt: 0 }
+    row.count += 1
+    row.lastAt = Math.max(row.lastAt, entry.createdAt || 0)
+    tally.set(key, row)
+  }
+
+  const frequent = [...tally.entries()]
+    .filter(([, row]) => row.count >= QUICK_ADD_FREQUENT_MIN)
+    .sort(([, a], [, b]) => b.count - a.count || b.lastAt - a.lastAt)
+    .map(([key]) => byIdentity.get(key))
+    .filter(Boolean)
+
+  const out = frequent.slice(0, limit)
+
+  if (out.length < limit) {
+    const taken = new Set(out.map(identityKey))
+    const recent = [...byIdentity.values()]
+      .filter((f) => f.lastUsedAt > 0 && !taken.has(identityKey(f)))
+      .sort((a, b) => b.lastUsedAt - a.lastUsedAt)
+    out.push(...recent.slice(0, limit - out.length))
+  }
+
+  quickAddCache = { day: today, limit, foods: out }
   return out
+}
+
+/**
+ * The rail's last answer, held until something could change it.
+ *
+ * Today rebuilds its whole subtree on `entries`, `foods` and every step of the
+ * date, which is three or four rebuilds around a single log — and this is now
+ * the one thing on that screen that reads a thirty-day range rather than a
+ * single day. Recomputing it because you swiped to yesterday is work done to
+ * produce the answer already in hand.
+ *
+ * Keyed by day so the rollover past midnight misses without anything having to
+ * notice midnight, and cleared in `emit` rather than at the call sites that
+ * write — a cache invalidated by hand is a cache that stays valid until someone
+ * adds a fourth write path and forgets. `touchFood` fires `foods` on every log,
+ * so a log clears this as it should: the counts genuinely changed.
+ */
+let quickAddCache = null
+
+function readQuickAddCache(day, limit) {
+  if (!quickAddCache) return null
+  if (quickAddCache.day !== day || quickAddCache.limit !== limit) return null
+  return quickAddCache.foods
 }
 
 /* --------------------------------------------------------- portion memory */
