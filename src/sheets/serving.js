@@ -11,7 +11,7 @@ import {
   toggleFavourite,
 } from '../lib/db.js'
 import { computeMacros } from '../lib/compute.js'
-import { logFood, defaultServing } from '../lib/logging.js'
+import { logFood, defaultServing, DESCRIBE_SOURCE } from '../lib/logging.js'
 import { blockSelector, macroLine, segmentedWide, numberInput, labelledField } from '../lib/ui.js'
 import { unitLabel, servingLabel, round } from '../lib/format.js'
 import { blockForTime, formatDayLabel, addDays, todayStr } from '../lib/dates.js'
@@ -401,6 +401,13 @@ export async function openServingSheet({ food, date, block }) {
  * with. Same controls, different reason, so it must not be told its food was
  * deleted — nothing was.
  *
+ * **A described estimate is a THIRD reason, and it used to be told the second
+ * one.** It has no `foodId` either, so it fell through to the quick-add copy and
+ * the sheet claimed both that it was a quick add and that you typed the numbers.
+ * Neither is true: it came from a sentence, and the numbers are a model's
+ * estimate that you reviewed on the plate. That copy was also the one place in
+ * the app still contradicting the sparkle sitting on the very same entry.
+ *
  * `host` is the sheet this was opened from, when there is one. From the log it
  * pushes a panel rather than replacing the sheet the row is in; from Today,
  * where there is no sheet to be inside, it opens one as it always did.
@@ -410,7 +417,10 @@ export async function openEditEntry(entry, host) {
     entry.foodId ? getFood(entry.foodId) : null,
     getSettings(),
   ])
-  const isQuickAdd = entry.source === QUICK_ADD_SOURCE || !entry.foodId
+  const isEstimate = entry.source === DESCRIBE_SOURCE
+  // Checked after the estimate, because an estimate satisfies the `!entry.foodId`
+  // half of this too and the more specific reason is the true one.
+  const isQuickAdd = !isEstimate && (entry.source === QUICK_ADD_SOURCE || !entry.foodId)
 
   if (!food) {
     return presentSheet({
@@ -467,19 +477,59 @@ export async function openEditEntry(entry, host) {
           'div',
           { class: 'flex flex-col gap-[20px]' },
           h('div', { class: 'text-[16px] font-semibold' }, entry.foodName || 'Deleted food'),
+          /**
+           * The padding is on the CHILDREN, not on the card. Every other card in
+           * the app is built that way and this one was not, which cost it both of
+           * the spacings it got wrong.
+           *
+           * `.card` rules a divider above every child after the first, inset 20
+           * from the card's own edge. Put 20 of padding on the card as well and
+           * that inset lands on top of it — the rule drew at 40 while the text it
+           * was separating sat at 20, so it read as a short line floating inside
+           * the block rather than as the edge between two halves of it.
+           *
+           * The second fault came from the same place. A gap across a divider is
+           * split between the two things it separates, 10 and 10; with the card
+           * holding the padding there was nothing under the rule to carry the
+           * second 10, and a lone `mt-[10px]` on the macro line put all of it
+           * ABOVE the divider. 10 over, nothing under, and the numbers sat on the
+           * line.
+           */
           h(
             'div',
-            { class: 'card px-[20px] py-[20px]' },
+            { class: 'card' },
             h(
               'div',
-              { class: 'text-[12px] leading-snug text-muted' },
-              isQuickAdd
-                ? 'A quick add has no food behind it, so there is no amount to change. ' +
-                    'These are the numbers you entered.'
-                : 'This food was deleted from your library, so the amount can no longer be ' +
-                    'recalculated. The numbers below are the ones recorded when you logged it.'
+              { class: 'px-[20px] pb-[10px] pt-[20px] text-[12px] leading-snug text-muted' },
+              /**
+               * Three reasons there is no amount here, and each says its own.
+               *
+               * They share a first clause because the consequence really is the
+               * same — nothing to recalculate against — and differ in the second,
+               * which is the only part that tells you anything you did not
+               * already know from the absent controls.
+               *
+               * The estimate's second sentence names where the numbers came from
+               * rather than which model produced them. `Estimated` on the plate
+               * and `Estimated by AI` on the row both say it that way, and an
+               * entry read back in two months should not be the one place in the
+               * app carrying a vendor name that may have changed since.
+               */
+              isEstimate
+                ? 'An estimate has no food behind it, so there is no amount to change. ' +
+                    'These are the numbers estimated from your description and accepted ' +
+                    'on the plate.'
+                : isQuickAdd
+                  ? 'A quick add has no food behind it, so there is no amount to change. ' +
+                      'These are the numbers you entered.'
+                  : 'This food was deleted from your library, so the amount can no longer be ' +
+                      'recalculated. The numbers below are the ones recorded when you logged it.'
             ),
-            h('div', { class: 'mt-[10px]' }, macroLine(entry.computed, { size: 14 }))
+            h(
+              'div',
+              { class: 'px-[20px] pb-[20px] pt-[10px]' },
+              macroLine(entry.computed, { size: 14 })
+            )
           ),
           h('div', { class: 'flex flex-col gap-[10px]' }, h('div', { class: 'section-label' }, 'Block'), blockRow)
         )
