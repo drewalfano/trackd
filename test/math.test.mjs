@@ -305,6 +305,24 @@ for (const m of MACROS) {
 }
 
 /**
+ * Type sitting ON a fill, which the welcome screen's bubbles are the only use
+ * of — and the one place in the app where a fill is a GROUND rather than a mark.
+ *
+ * A mark owes 3:1, so the four fills were free to land anywhere in the middle
+ * of the range, and they used it: white type is 7.90:1 on protein and 3.04:1 on
+ * fat. `--color-X-on` is the pairing that resolves that, two of the four going
+ * near-black, and these rows are why it cannot be quietly flipped back to one
+ * value. 15px SemiBold is not "large text", so the floor is the full AA.
+ *
+ * Both themes, because the fills move between them and the pairing is only
+ * still correct because they do not move FAR — see the token block.
+ */
+for (const m of MACROS) atLeast(`${m}-on over ${m} fill`, token(`${m}-on`), token(m), AA)
+for (const m of MACROS) {
+  atLeast(`${m}-on over ${m} fill, dark`, token(`${m}-on`, darkBlock), token(m, darkBlock), AA)
+}
+
+/**
  * The EDGE is NOT measured against a card, and the reason is worth writing down
  * because getting it wrong shipped a bug.
  *
@@ -371,6 +389,61 @@ eq('sheet aliases canvas', /--color-sheet:\s*var\(--color-canvas\)/.test(css), t
 const SURFACE_PAIR = 1.13
 atLeast('card on sheet', token('surface'), token('sheet'), SURFACE_PAIR)
 atLeast('card on sheet, dark', token('surface', darkBlock), token('canvas', darkBlock), SURFACE_PAIR)
+
+/* ------------------------------------------------ the welcome bubble field */
+
+/**
+ * The welcome screen's pills obey one rule — no two touching pills share a
+ * macro — and this covers the half of it that is checkable off the page.
+ *
+ * HORIZONTAL neighbours are here, because they are a fact about the array.
+ * VERTICAL ones are unreachable and the boundary is worth being explicit about:
+ * the rows counter-move, so which pill sits above which changes every frame.
+ * Nothing below knows about it and nothing could. That half of the rule is
+ * traded away deliberately — see the note on `BUBBLE_ROWS`.
+ *
+ * What IS here is the part that breaks silently. Swapping a pill's colour to
+ * suit a word costs nothing at the call site and leaves no mark on screen until
+ * two of them land side by side — exactly the shape of mistake that wants a
+ * test rather than a comment.
+ *
+ * Read out of the source rather than imported: `onboarding.js` pulls in the DOM
+ * and the database on the way to this constant, and neither exists in node.
+ */
+const onboardingSrc = readFileSync(new URL('../src/screens/onboarding.js', import.meta.url), 'utf8')
+const rowsSrc = onboardingSrc.slice(
+  onboardingSrc.indexOf('const BUBBLE_ROWS = ['),
+  onboardingSrc.indexOf('\n]\n', onboardingSrc.indexOf('const BUBBLE_ROWS = ['))
+)
+const bubbleRows = (rowsSrc.match(/\[\n(?:\s*\['[a-z]+',[^\n]*\n)+\s*\],/g) ?? []).map((block) =>
+  [...block.matchAll(/\['([a-z]+)',/g)].map((m) => m[1])
+)
+
+eq('four bubble rows were parsed', bubbleRows.length, 4)
+eq('every row is the same length', new Set(bubbleRows.map((r) => r.length)).size, 1)
+
+// No row leans on one colour, which is what keeps any window onto the field
+// from coming out mostly green.
+for (const [i, row] of bubbleRows.entries()) {
+  const counts = MACROS.map((m) => row.filter((x) => x === m).length)
+  eq(`row ${i + 1} carries all four macros`, counts.every((n) => n > 0), true)
+  eq(`row ${i + 1} leans on none of them`, Math.max(...counts) - Math.min(...counts) <= 1, true)
+}
+
+// Horizontal neighbours.
+for (const [i, row] of bubbleRows.entries()) {
+  const touching = row.filter((m, j) => j > 0 && m === row[j - 1])
+  eq(`row ${i + 1} has no two neighbours sharing a macro`, touching, [])
+}
+
+// One shift per row, all negative so every row is already cut by the left edge,
+// and all different or the rows line up into a table.
+const shifts = JSON.parse(
+  onboardingSrc.match(/const BUBBLE_SHIFTS = (\[[^\]]*\])/)[1].replace(/\s/g, '')
+)
+eq('one shift per bubble row', shifts.length, bubbleRows.length)
+eq('every row starts off the left edge', shifts.every((x) => x < 0), true)
+eq('no two rows start in the same place', new Set(shifts).size, shifts.length)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

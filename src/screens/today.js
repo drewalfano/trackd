@@ -625,11 +625,11 @@ export function todayScreen() {
         /**
          * The header is a sibling of the column, not a member of it.
          *
-         * `.page-header` carries the 16px that puts the first card at 80, and a
+         * `.page-header` carries the 20px that puts the first card at 64, and a
          * flex gap would ADD to that margin rather than absorbing it — so a
-         * header inside the column would sit 16 + 20 clear of the deck here and
-         * a different total on every other screen. Outside, the 16 is the whole
-         * distance and it is the same 16 on all three tabs. See `.page-header`.
+         * header inside the column would sit 20 + 20 clear of the deck here and
+         * a different total on every other screen. Outside, the 20 is the whole
+         * distance and it is the same 20 on all three tabs. See `.page-header`.
          */
         {},
 

@@ -380,6 +380,133 @@ function targetsStep(draft) {
 
 const STEPS = [unitsStep, bodyStep, activityStep, goalStep, targetsStep]
 
+/* ----------------------------------------------------------------- bubbles */
+
+/**
+ * The welcome screen's drifting pills — what the app looks like once someone
+ * has been using it, shown before they have used it.
+ *
+ * The screen was a title and two paragraphs on an empty ground and it had no
+ * subject. This gives it one, and the choice of subject is the point: every
+ * pill is either a food you would log or a number the app would tell you back,
+ * and its colour is the macro it belongs to. Nobody reads a legend on a welcome
+ * screen, but four colours seen forty times is a legend anyway — by the target
+ * step, green already means calories.
+ *
+ * Written to the app's own voice rather than to a stock food list. `320 left`
+ * and `Over by 140` are the exact words Today's calorie line uses; a bubble
+ * saying something the app never says would be a small lie on the first screen.
+ *
+ * **No two touching pills share a macro** — two of the same colour against each
+ * other read as one wide blob, and four saturated colours at close quarters go
+ * patchy easily.
+ *
+ * That rule is enforceable HORIZONTALLY and only horizontally, which is worth
+ * stating plainly because two earlier builds were designed around pretending
+ * otherwise. Rows counter-move, so which pill sits above which changes every
+ * frame; no ordering written here reaches it. Reordering did not help and a
+ * Latin square over the columns did not help, for the same reason both times —
+ * the property was true of this array and this array is not the picture.
+ * Vertical pairs happen, and they are allowed to: the field moving is worth
+ * more than the field never clumping. What keeps them momentary is the motion,
+ * not this array — adjacent rows run opposite ways at about the same speed, so
+ * they close at roughly 18px/s and a pair that lines up has drifted apart
+ * within a couple of seconds.
+ *
+ * Rows are longer than the screen and each is laid out twice, so the last pill
+ * touches the first at the seam. `npm test` checks that and the neighbours.
+ *
+ * Written to the app's own voice rather than to a stock food list. `320 left`
+ * and `Over by 140` are the exact words Today's calorie line uses; a bubble
+ * saying something the app never says would be a small lie on the first screen.
+ */
+const BUBBLE_ROWS = [
+  [
+    ['carbs', 'Porridge & berries'],
+    ['protein', '+34g protein'],
+    ['kcal', '412 kcal'],
+    ['fat', 'Olive oil'],
+    ['carbs', '+51g carbs'],
+    ['kcal', '320 left'],
+  ],
+  [
+    ['kcal', '1,840 kcal'],
+    ['fat', '+9g fat'],
+    ['protein', 'Chicken thigh'],
+    ['carbs', 'Banana'],
+    ['fat', 'Peanut butter'],
+    ['protein', '148 / 160g'],
+  ],
+  [
+    ['protein', 'Greek yoghurt'],
+    ['carbs', 'Rice & beans'],
+    ['fat', '62 / 70g'],
+    ['kcal', 'Over by 140'],
+    ['protein', '+28g protein'],
+    ['carbs', 'Sourdough'],
+  ],
+  [
+    ['fat', 'Halloumi'],
+    ['kcal', 'Breakfast · 380'],
+    ['carbs', 'Sweet potato'],
+    ['protein', 'Salmon fillet'],
+    ['fat', 'Avocado'],
+    ['kcal', '86 left'],
+  ],
+]
+
+/**
+ * Where each row starts, in px, always negative so every row is already cut by
+ * the left edge. Four different values, or the four rows open in a column and
+ * the field reads as a table on its first frame.
+ */
+const BUBBLE_SHIFTS = [-64, -142, -26, -98]
+
+/**
+ * Seconds for one lap, per row.
+ *
+ * Rows are different lengths, so equal-looking speeds need unequal durations.
+ * Measured against the rendered widths these land between 8.3 and 9.7 px/s —
+ * close enough that no row reads as the odd one out, and slow enough to be
+ * scenery rather than something asking to be watched.
+ *
+ * Constants on purpose. A version of this measured `offsetWidth` in a `ref`
+ * instead, which runs while the node is still detached: it read 0, and a lap of
+ * zero length is what "going way too fast" looked like. Nothing about four rows
+ * of pills needs to touch layout.
+ *
+ * Re-tune if the words change enough to move a row's width much — the widths
+ * are 751 / 727 / 788 / 735 px as written.
+ */
+const BUBBLE_LAPS = [90, 79, 84, 76]
+
+function bubbleField() {
+  return h(
+    'div',
+    { class: 'bubble-field', 'aria-hidden': 'true' },
+    BUBBLE_ROWS.map((row, i) => {
+      const pills = () =>
+        row.map(([macro, label]) => h('span', { class: 'bubble', dataset: { macro } }, label))
+      return h(
+        'div',
+        {
+          class: 'bubble-row',
+          // `setProperty`, not the `style` object — `Object.assign` onto a
+          // CSSStyleDeclaration silently drops custom properties.
+          ref: (el) => {
+            el.style.setProperty('--shift', `${BUBBLE_SHIFTS[i]}px`)
+            el.style.setProperty('--pan', `${BUBBLE_LAPS[i]}s`)
+          },
+        },
+        // Two copies, so translating one copy's width lands the second exactly
+        // where the first began and the loop has no seam.
+        pills(),
+        pills()
+      )
+    })
+  )
+}
+
 /* -------------------------------------------------------------------- view */
 
 export async function createOnboarding({ preview = false, onDone } = {}) {
@@ -441,17 +568,21 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
   const progress = h('div', { class: 'flex items-center gap-[4px]' })
 
   /**
-   * Safe-area padding is composed into one value rather than layered as a
-   * second utility class: a `padding-top` utility and a `pt-[20px]` set the same
-   * property, so one silently wins and the header ends up flush against the
-   * notch. This is the same `calc()` the `.screen` rule does, and the reason
-   * there is a `.safe-b` utility but no `.safe-t` one to reach for.
+   * The inset and nothing more, which is what `.screen` does — this flow owns
+   * its own chrome but it is still a 44px slot with a back chevron in it, so it
+   * starts where a navigation bar starts. See the note on `.screen` for why the
+   * 20 that used to be added here is gone.
+   *
+   * Set as `paddingTop` rather than reached for as a utility class: a padding
+   * utility and a `pt-[20px]` set the same property, so one silently wins and
+   * the header ends up flush against the notch. That is the reason there is a
+   * `.safe-b` utility and no `.safe-t` one.
    */
   const header = h(
     'header',
     {
       class: 'shrink-0 px-[20px]',
-      style: { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 20px)' },
+      style: { paddingTop: 'env(safe-area-inset-top, 0px)' },
     },
     h(
       'div',
@@ -675,7 +806,11 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     return h(
       'div',
       { class: 'mx-auto flex min-h-full max-w-[430px] flex-col justify-center gap-[20px] pb-[20px]' },
-      h('h1', { class: 'text-display font-semibold leading-none' }, 'Trackd'),
+      // 800, where the whole app is 600. This is the only wordmark it has, at
+      // the only size it ever gets, on the one screen with nothing to compete
+      // with — the weight is what makes it read as a name rather than as a
+      // heading that happens to be large.
+      h('h1', { class: 'text-display font-extrabold leading-none' }, 'Trackd'),
       h(
         'p',
         { class: 'text-[16px] leading-snug' },
@@ -688,6 +823,7 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
         'The next few screens work out a calorie and macro target. You can change every ' +
           'number at the end, and change it again whenever you like.'
       ),
+      bubbleField(),
       preview
         ? notice(
             'This is the first-run flow as a new person sees it. Nothing is saved unless you ' +

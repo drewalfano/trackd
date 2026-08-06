@@ -211,6 +211,29 @@
   --color-fat-text: var(--color-fat-edge);
   --color-carbs-text: var(--color-carbs-edge);
 
+  /**
+   * Type sitting ON a fill, which nothing needed until the welcome screen put
+   * words inside the macro colours.
+   *
+   * It cannot be one value. The fills were picked to clear 3:1 as MARKS, and a
+   * mark's floor lets a colour land anywhere in the middle of the range — this
+   * palette used that room, so blue and magenta came out dark and green and
+   * amber came out light. White type is 7.90:1 on protein and 5.46:1 on carbs,
+   * and 3.34:1 and 3.04:1 on kcal and fat. Near-black is the mirror of it. So
+   * the pairing splits two and two, and the only reason the same split also
+   * holds in dark mode is that the fills lift by ΔL 0.108 and 0.024 there,
+   * which is not far enough to cross over. Both halves are measured in
+   * `npm test`; retune a fill and that is where it will be caught.
+   *
+   * The dark half is `#141414` literal rather than `var(--color-ink)`, because
+   * the ground here is the PILL, not the page. Ink flips to near-white in dark
+   * mode and would take the words with it, off a fill that has not moved.
+   */
+  --color-kcal-on: #141414;
+  --color-protein-on: #ffffff;
+  --color-fat-on: #141414;
+  --color-carbs-on: #ffffff;
+
   /* One family. The system stack is the fallback while the woff2 loads. */
   --font-sans:
     'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
@@ -339,6 +362,18 @@
   --color-protein-edge: #173ea7;
   --color-fat-edge: #a95400;
   --color-carbs-edge: #8d0071;
+
+  /**
+   * Restated, not inherited, so the dark fills get measured against the type
+   * that actually lands on them. The split is the same two-and-two as light —
+   * the lift the fills take here is not enough to change which half of the
+   * range they sit in — but white on `#3c6ad6` is 4.97:1 against 7.97:1 in
+   * light, so it is the tighter of the two and the one worth pinning.
+   */
+  --color-kcal-on: #141414;
+  --color-protein-on: #ffffff;
+  --color-fat-on: #141414;
+  --color-carbs-on: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -361,6 +396,10 @@
     --color-protein-edge: #173ea7;
     --color-fat-edge: #a95400;
     --color-carbs-edge: #8d0071;
+    --color-kcal-on: #141414;
+    --color-protein-on: #ffffff;
+    --color-fat-on: #141414;
+    --color-carbs-on: #ffffff;
   }
 }
 
@@ -681,13 +720,28 @@
    * or Dynamic Island — in a standalone PWA that env() resolves to ~59px on the
    * devices that have one, and to 0 in a browser tab where the chrome already
    * does the job.
+   *
+   * **The safe-area inset IS the top padding. Nothing is added to it.**
+   *
+   * There used to be `+ 20px`, and it was the reason this app sat visibly lower
+   * than the system. UIKit puts a 44pt navigation bar flush against the safe
+   * area — zero gap — and `.page-header` is a 44px row, so the two are the same
+   * object and should start in the same place. The 20 pushed every title on
+   * every tab 20pt below where the platform puts it, which is small enough to
+   * look like nothing in isolation and obvious the moment the app is next to
+   * Settings or Mail.
+   *
+   * Everything moves with it. The title is what the column hangs off, so the
+   * page comes up rather than the gap under the header growing to absorb the
+   * difference — first content lands at 64 from the inset now instead of 80.
+   * The arithmetic is on `.page-header`.
    */
   .screen {
     width: 100%;
     max-width: 430px;
     margin-inline: auto;
     padding-inline: 20px;
-    padding-top: calc(env(safe-area-inset-top, 0px) + 20px);
+    padding-top: env(safe-area-inset-top, 0px);
     padding-bottom: calc(var(--nav-height) + var(--nav-inset) + 30px);
   }
 
@@ -703,11 +757,26 @@
    *
    * The arithmetic, from the safe-area edge, identical on all three:
    *
-   *     .screen padding-top      20
+   *     .screen padding-top       0      ← the inset itself, nothing added
    *     slot                   + 44      ← this rule
-   *     margin-bottom          + 16      ← this rule
+   *     margin-bottom          + 20      ← this rule
    *                            ────
-   *     first content            80
+   *     first content            64
+   *
+   * **It was 20 + 44 + 16 = 80.** The 20 came off the top, where iOS puts
+   * nothing — see `.screen` — and the whole page came up with the title rather
+   * than the gap under it growing to absorb the difference. Holding first
+   * content at 80 was tried and is not what this wants: the screen reads as one
+   * column hung off the title, so moving the title and leaving the page behind
+   * is a different layout, not a corrected one.
+   *
+   * **The 16 became 20 because 16 was never a spacing decision.** It was
+   * whatever made `20 + 44 + x` come out at a round 80, and it was the only 16
+   * in the app — every column here is spaced 10 or 20, and the gap between the
+   * header and the first block is the same kind of gap as the one between
+   * blocks. With the top inset gone there is nothing left holding it off the
+   * system value. 64 is the less tidy total and that is the right trade: the
+   * tidy total is what produced the orphan number in the first place.
    *
    * A 32.5px line box (26 × 1.25) centred in 44 leaves 5.75 of half-leading
    * either side, which puts every title's baseline at 31.25 into the slot.
@@ -729,7 +798,7 @@
     align-items: center;
     gap: 10px;
     min-height: 44px;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
   }
 
   /**
@@ -2374,6 +2443,139 @@
   .add-btn[data-pressed='true'] {
     transform: scale(0.92);
     opacity: 0.85;
+  }
+
+  /**
+   * The welcome screen's bubble field.
+   *
+   * The first screen was a title and two paragraphs on an empty ground, and it
+   * looked like a settings page that had lost its rows. This is what fills it:
+   * four rows of pills, each one a thing this app records — a food, a macro
+   * added, a number for the day — coloured by which of the four it belongs to.
+   * It is the palette introducing itself before anyone has to learn it, which
+   * is the one job a welcome screen can do that no later screen can.
+   *
+   * **Full bleed, deliberately.** `-20px` either side takes it out of the body
+   * gutter so the rows run off both edges. A field that stops short reads as a
+   * component; one that leaves the screen reads as a stream you are seeing part
+   * of, which is the whole idea. The mask fades the last 12% at each end so the
+   * pills dissolve rather than being sliced by the bezel.
+   *
+   * `overflow: hidden` is load-bearing, not tidiness — the rows are wider than
+   * the viewport by design, and without it the whole page scrolls sideways.
+   */
+  .bubble-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-inline: -20px;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(
+      90deg,
+      transparent,
+      #000 12%,
+      #000 88%,
+      transparent
+    );
+    mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  }
+
+  /**
+   * Rows alternate direction, at near-enough the same speed.
+   *
+   * Both halves of that matter, and the reason is a rule this field can only
+   * half enforce. No two touching pills should share a colour — but half of
+   * "touching" is vertical, and counter-moving rows have no fixed pill above or
+   * below, so nothing written in `onboarding.js` reaches it. That is a
+   * deliberate trade: a field that moves is worth more here than one that never
+   * clumps. Alternating the directions is what pays for it — adjacent rows
+   * close at roughly 18px/s, so a pair that does line up has drifted apart in a
+   * couple of seconds rather than sitting there.
+   *
+   * Which is also why the speeds must not diverge much. Two rows at similar
+   * speeds in the SAME direction sit at nearly zero relative motion, and a
+   * clump between those is not momentary, it is parked — that was the first
+   * build, and it read as patchy for exactly that reason. Reordering the pills
+   * was tried, and a Latin square over the columns; neither is the fix, because
+   * the source order is not what is on screen once the rows move.
+   *
+   * Rows are different lengths, so `--pan` is per-row — set as constants in
+   * `onboarding.js` rather than measured. See the note there; measuring cost a
+   * round of stuttering. Layout reads belong nowhere near this component, which
+   * is four rows of pills and should cost a keyframe.
+   *
+   * The row translates −50%, which is exact for any width and needs nothing
+   * measured. That is what the 8px between pills being `margin-right` on
+   * `.bubble` buys, rather than `gap` here: a gap is laid BETWEEN items, so a
+   * track of 2n pills gets 2n−1 of them and half the track is not half the
+   * pills — the seam would slip 4px every lap. Carrying the space on the pill
+   * makes each copy exactly the sum of its children.
+   *
+   * `--shift` is the per-row start, always negative: it pulls each row a
+   * different distance off the left edge so the four do not open in a column.
+   * Both ends of the row are the mask's problem.
+   */
+  .bubble-row {
+    display: flex;
+    width: max-content;
+    margin-left: var(--shift, 0px);
+    animation: bubble-pan var(--pan, 90s) linear infinite;
+  }
+  .bubble-row:nth-child(even) {
+    animation-direction: reverse;
+  }
+
+  @keyframes bubble-pan {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+
+  /**
+   * The pill. Solid macro fill, and the type on it comes from `--color-X-on`
+   * rather than being white throughout — see the token block, where the four
+   * fills split two dark and two light and the reason is measured.
+   *
+   * No stroke, no shadow, no press state. Nothing here is a control.
+   */
+  .bubble {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 18px;
+    /* The gap, carried on the pill rather than set on the row — see
+       `.bubble-row` for why the difference is load-bearing. */
+    margin-right: 8px;
+    flex: none;
+    border-radius: 999px;
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    background: var(--color-kcal);
+    color: var(--color-kcal-on);
+  }
+  .bubble[data-macro='protein'] {
+    background: var(--color-protein);
+    color: var(--color-protein-on);
+  }
+  .bubble[data-macro='carbs'] {
+    background: var(--color-carbs);
+    color: var(--color-carbs-on);
+  }
+  .bubble[data-macro='fat'] {
+    background: var(--color-fat);
+    color: var(--color-fat-on);
+  }
+
+  /**
+   * Reduced motion parks the field rather than slowing it. Nothing is being
+   * said by the movement — every pill is legible standing still, and the second
+   * copy simply waits off-screen where the mask already hides it.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    .bubble-row {
+      animation: none;
+    }
   }
 }
 

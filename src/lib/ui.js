@@ -91,8 +91,8 @@ export const macroEdgeColor = (macro) => MACRO_EDGE[macro]
  * chevrons inside it, and Settings hand-rolled a third arrangement with a
  * `pt-[10px]` of its own — so the one element on all three screens sat at three
  * different heights, and its baseline spread over 10px between tabs. Both
- * variants now hold the same 44px slot, so the baseline is 51.25 everywhere and
- * the first section heading starts at 80. The arithmetic is on `.page-header`.
+ * variants now hold the same 44px slot, so the baseline is 31.25 everywhere and
+ * the first section heading starts at 64. The arithmetic is on `.page-header`.
  *
  * **The title is centred on both, and centring is what makes the two variants
  * agree without any spacers.** The steppers are 44 and the gaps are 10, so the
