@@ -666,6 +666,29 @@ export function todayScreen() {
         }),
 
         /**
+         * Quick add sits ABOVE the log, and the argument is what it is for.
+         *
+         * It was below for as long as the screen has existed, on the reading that
+         * the day so far is the headline and a shortcut is a footnote to it. That
+         * is right about the reading order and wrong about the cost: the rail is
+         * the one-tap route to logging, and below the log its distance from the
+         * thumb grows with every row above it. On the day with the most in it —
+         * eight rows and a card — the shortcut is furthest away, which is the same
+         * shape of mistake `fullLogChip` was moved out of the card's last row to
+         * avoid. A shortcut you scroll to has stopped being one.
+         *
+         * The log loses nothing by moving down. It renders at every count and it
+         * carries its own heading, so it is still named and still positioned; what
+         * it stops being is the thing between you and the fastest way to log.
+         */
+        quickAddSection({
+          foods: railFoods,
+          firstRun: everLogged === null,
+          date: state.date,
+          block: blockForTime(new Date(), settings.blockThresholds),
+        }),
+
+        /**
          * The log. Its own group, and the route to the full Log screen — which
          * is in turn the only route to History, so this link keeps both
          * reachable.
@@ -728,14 +751,7 @@ export function todayScreen() {
               // No route into the sheet needed down here: `Full log` sits in the
               // head above and renders at every count, including this one.
               card(emptyRow('Nothing logged yet'))
-        ),
-
-        quickAddSection({
-          foods: railFoods,
-          firstRun: everLogged === null,
-          date: state.date,
-          block: blockForTime(new Date(), settings.blockThresholds),
-        })
+        )
       )
     },
     { watch: ['entries', 'settings', 'foods'] }
