@@ -362,6 +362,41 @@ async function registerServiceWorker() {
       })
     })
 
+    /**
+     * Ask whether there is a new version, every time the app comes to the front.
+     *
+     * Registration on its own checks once, at boot, and boot is not something an
+     * installed PWA does often — iOS keeps the page alive across app switches and
+     * restores it from the page cache, so `register` can go days without running
+     * again. The practical effect is that "force-quit and relaunch to get the
+     * update" does not reliably fetch a new `sw.js` at all, and the old bundle
+     * keeps being served from the precache with nothing on screen to say so.
+     *
+     * That is not a theoretical cost. It sent a whole round of device readings
+     * back stamped with a build two fixes behind, and the time went into
+     * re-diagnosing something that was already fixed.
+     *
+     * `update()` only re-fetches the worker script; if the bytes match, nothing
+     * happens and nothing is prompted. If a worker is already waiting — installed
+     * on a previous visit and never activated — say so now rather than waiting for
+     * an `updatefound` that has already been and gone.
+     */
+    const checkForUpdate = () => {
+      reg
+        .update()
+        .then(() => {
+          if (reg.waiting) promptUpdate(reg.waiting)
+        })
+        .catch(() => {
+          /* offline, which is the normal case for this app and not an error */
+        })
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate()
+    })
+    window.addEventListener('pageshow', checkForUpdate)
+
     let reloading = false
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (reloading) return

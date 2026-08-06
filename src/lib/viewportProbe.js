@@ -144,6 +144,26 @@ export function captureViewportState() {
   if ((location.hash || '').includes('settings/viewport')) return
 
   const reading = readViewport()
+
+  /**
+   * Only readings taken with the page AT REST.
+   *
+   * A capture landed mid-rubber-band and cost a whole round trip: on a screen with
+   * nothing to scroll it reported `visualViewport.offsetTop 205`, `scrollY 205`,
+   * and a tab bar 225px off the bottom. Every one of those numbers was true and
+   * none of them described where anything sits, because the page was in the middle
+   * of a bounce — iOS lets a non-scrollable document be dragged and reports the
+   * displacement while it happens.
+   *
+   * The two tells are exact: the visual viewport is offset from the layout
+   * viewport, or the document is scrolled while having nothing to scroll. Either
+   * one means wait for the next event, and there will be one — the bounce ends.
+   */
+  const vv = window.visualViewport
+  const bouncing =
+    (vv && Math.round(vv.offsetTop) !== 0) || (!reading.scrollable && window.scrollY > 0)
+  if (bouncing) return
+
   try {
     if (document.querySelector('.sheet-panel')) {
       localStorage.setItem(SHEET_KEY, JSON.stringify(reading))
