@@ -80,7 +80,7 @@ export function pushDescribe(ctx, { onItems }) {
             if (!input) return
 
             working = true
-            setBusy('Reading…')
+            setBusy('read')
             repaint(status)
 
             try {
@@ -156,7 +156,7 @@ export function pushDescribe(ctx, { onItems }) {
             if (!input) return
 
             working = true
-            setBusy('Sending…')
+            setBusy('send')
             repaint(status)
 
             controller?.abort()
@@ -179,6 +179,21 @@ export function pushDescribe(ctx, { onItems }) {
               await onItems(items)
             } catch (err) {
               if (err.name === 'AbortError') return
+              /**
+               * The same standing offer the parse path makes, which this half
+               * was missing: a toast says what went wrong and then takes it
+               * away, so a failure here left the screen looking untouched and
+               * the words looking unsent. The notice stays until the next
+               * attempt clears it, beside the text it is about.
+               */
+              repaint(
+                status,
+                notice(
+                  'Gemini could not be reached. Your words are still here — try again, or ' +
+                    'make a plate without it.',
+                  { iconName: 'alert' }
+                )
+              )
               toast(err.message || 'Could not reach Gemini')
             } finally {
               working = false
@@ -189,13 +204,26 @@ export function pushDescribe(ctx, { onItems }) {
         'Send it all to Gemini'
       )
 
-      /** One place that knows what the two buttons say and when they are off. */
-      function setBusy(label) {
+      /**
+       * One place that knows what the two buttons say and when they are off.
+       *
+       * **Only the button you pressed says anything about being busy.** Both go
+       * disabled — one call is in flight and a second would race it — but the
+       * one that is not working keeps its ordinary label and just greys out,
+       * which is what a disabled control already means.
+       *
+       * This used to put a busy label on whichever button was pressed while
+       * leaving the other one greyed beside it, and the pair read as two things
+       * loading at once with no way to tell which was actually doing the work.
+       * The busy label is the thing that claims the work, so exactly one button
+       * may ever carry it.
+       */
+      function setBusy(which) {
         const empty = !text.trim()
         readBtn.disabled = empty || working
         sendAllBtn.disabled = empty || working
-        readBtn.textContent = label === 'Reading…' ? label : 'Make a plate'
-        sendAllBtn.textContent = label === 'Sending…' ? label : 'Send it all to Gemini'
+        readBtn.textContent = which === 'read' ? 'Making your plate…' : 'Make a plate'
+        sendAllBtn.textContent = which === 'send' ? 'Sending…' : 'Send it all to Gemini'
       }
 
       c.setFooter(
