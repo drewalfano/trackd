@@ -12,7 +12,7 @@ import { openAddFood } from './addFood.js'
 import { toast } from '../lib/toast.js'
 import { openSheet, presentSheet } from '../lib/sheet.js'
 import { g, kcal } from '../lib/format.js'
-import { BLOCKS, formatDayHeader } from '../lib/dates.js'
+import { BLOCKS } from '../lib/dates.js'
 import { state, subscribe } from '../state.js'
 
 /**
@@ -281,8 +281,8 @@ function populatedBlock({ name, entries, host }) {
  *
  * The date cannot change while the sheet is open — Today is behind a scrim and
  * cannot be reached — but the subscription stays anyway, because "cannot happen"
- * is a property of today's layout rather than a guarantee, and a sheet showing
- * one day under a title naming another is the worst thing it could do.
+ * is a property of today's layout rather than a guarantee, and a sheet listing
+ * one day's entries after the date has moved is the worst thing it could do.
  *
  * The first read is awaited BEFORE the sheet is built, so it animates in with
  * the day already in it. Every read after that repaints in place, where there is
@@ -294,10 +294,19 @@ export async function openLogSheet() {
 
   return openSheet({
     /**
-     * The plain sheet title, which is now all the header needs to be — so the
-     * custom-header machinery this sheet was the only user of is gone with it.
+     * `Full log`, which is what the control that opens this says.
+     *
+     * It named the day — `Today, Aug 6` — and the date header on the screen
+     * behind it says exactly that, at a larger size, and stays visible because
+     * every sheet now stops below it. So the first thing you read on opening the
+     * sheet was a word-for-word repeat of the line directly above it, and the
+     * sheet spent its one piece of naming on a fact already on screen.
+     *
+     * The day is not lost: it is still up there, still legible, and now the only
+     * place it is stated. What the title says instead is which sheet this is,
+     * matching the chip that opened it so the tap and its result share a name.
      */
-    title: formatDayHeader(state.date),
+    title: 'Full log',
     // The `inset: 60` that used to be here is gone, and what it was buying is
     // not: every sheet now stops at the top of Today's dashboard card, so the
     // visible band of the page above this one — the thing that says the log is
@@ -368,12 +377,11 @@ export async function openLogSheet() {
           if (['entries', 'settings', 'meals', 'all'].includes(scope)) reload()
         })
       )
-      ctx.onDispose(
-        subscribe(() => {
-          ctx.setTitle(formatDayHeader(state.date))
-          reload()
-        })
-      )
+      // The title no longer names the day, so this no longer sets it — but the
+      // reload stays, because the CONTENT is still a single day's entries and a
+      // sheet showing one day's rows after the date moved would be the same
+      // error one level down.
+      ctx.onDispose(subscribe(reload))
 
       return body
     },
