@@ -189,7 +189,7 @@ export function pushDescribe(ctx, { onItems }) {
               repaint(
                 status,
                 notice(
-                  'Gemini could not be reached. Your words are still here — try again, or ' +
+                  'Gemini could not be reached. Your words are still here. Try again, or ' +
                     'make a plate without it.',
                   { iconName: 'alert' }
                 )

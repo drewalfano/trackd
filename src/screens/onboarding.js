@@ -100,8 +100,8 @@ function bodyStep(draft) {
       draft.sex === 'unspecified'
         ? notice(
             'The standard formula needs sex as one of its terms, so there is nothing to ' +
-              'calculate from. You can set your targets by hand at the end — they work exactly ' +
-              'the same once they are set.'
+              'calculate from. You can set your targets by hand at the end, and they work ' +
+              'exactly the same once they are set.'
           )
         : null
     )
@@ -206,7 +206,7 @@ function activityStep(draft) {
 
   return {
     title: 'How active are you',
-    lede: 'Outside of deliberate exercise as well — a job on your feet counts.',
+    lede: 'Outside of deliberate exercise as well. A job on your feet counts.',
     node: list,
   }
 }
@@ -364,7 +364,7 @@ function targetsStep(draft) {
       h(
         'p',
         { class: 'px-0 text-[14px] leading-snug' },
-        'Nothing here is locked in. Change any of it now or from Settings later — past days ' +
+        'Nothing here is locked in. Change any of it now or from Settings later. Past days ' +
           'keep the target they were logged against.'
       ),
 
@@ -795,7 +795,7 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
           ? h(
               'button',
               { class: 'btn-secondary', onclick: () => finish(false) },
-              'Discard — this was a preview'
+              'Discard the preview'
             )
           : null
       )
@@ -814,7 +814,7 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
       h(
         'p',
         { class: 'text-[16px] leading-snug' },
-        'Log what you eat, see how the week actually went. Everything stays on this device — ' +
+        'Log what you eat, see how the week actually went. Everything stays on this device: ' +
           'no account, no upload, works with the radio off.'
       ),
       // Both paragraphs before the field, and the field last.

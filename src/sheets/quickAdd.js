@@ -296,7 +296,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           labelledField({
             label: keep ? 'Name' : 'What was it',
             hint: keep
-              ? 'Required — this is what you will search for.'
+              ? 'Required. This is what you will search for.'
               : 'Optional. Shows in the log so the day still reads back.',
             children: textInput({
               value: label,

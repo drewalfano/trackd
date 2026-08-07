@@ -736,7 +736,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
               { class: 'flex flex-col gap-[20px]' },
               labelledField({
                 label: 'Name',
-                hint: 'Saved meals are reusable. The plate stays as it is — saving does not log it.',
+                hint: 'Saved meals are reusable. The plate stays as it is, and saving does not log it.',
                 children: textInput({
                   value: '',
                   autofocus: true,

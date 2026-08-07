@@ -118,7 +118,7 @@ export function pushMatchItem(ctx, { initial = '', onPick }) {
             list,
             emptyRow(
               offlineCount
-                ? 'Offline — showing what is on this device.'
+                ? 'Offline, showing what is on this device.'
                 : 'Offline, and nothing on this device matches.'
             )
           )

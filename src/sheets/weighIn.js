@@ -120,7 +120,7 @@ function dayPanel({ day: initialDay, unit }) {
           existing
             ? notice(
                 `${formatDayLabel(day)} already has ${kgToUnit(existing.kg, unit).toFixed(1)} ${unit}. ` +
-                  'Saving replaces it — there is only ever one reading a day.'
+                  'Saving replaces it. There is only ever one reading a day.'
               )
             : null
         )

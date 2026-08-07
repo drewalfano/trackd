@@ -307,7 +307,7 @@ export function aiDescribeScreen() {
             label: 'API key',
             hint:
               'Without a key, AI Describe still reads what it can and matches it against ' +
-              'your foods. The key is for the rest — dishes with no entry anywhere, and ' +
+              'your foods. The key is for the rest: dishes with no entry anywhere, and ' +
               'wording the rules will not split.',
             children: keyField,
           }),
@@ -757,7 +757,7 @@ export function viewportScreen() {
               navigator.clipboard
                 ?.writeText(text)
                 .then(() => toast('Copied. Paste it into the chat.'))
-                .catch(() => toast('Could not copy — screenshot it instead.'))
+                .catch(() => toast('Could not copy. Screenshot it instead.'))
             },
           },
           'Copy readings'
@@ -766,8 +766,8 @@ export function viewportScreen() {
       )
 
       stamp.textContent =
-        'This screen always scrolls, so the two rows above it are the ones that matter — ' +
-        'they are recorded on the screens that do not.'
+        'This screen always scrolls, so the two rows above it are the ones that matter. ' +
+        'They are recorded on the screens that do not.'
 
       const onEvent = () => {
         paint()

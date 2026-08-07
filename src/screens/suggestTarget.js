@@ -175,8 +175,8 @@ export function suggestTargetScreen() {
         const stale = weighInDate && weighInDate !== todayStr()
         weighInNote.textContent = stale
           ? `Showing your weigh-in from ${dayPhrase(weighInDate)}. Editing it saves a new one ` +
-            'for today — the Weight tab is the record, not a second copy.'
-          : 'Weight is saved as today’s weigh-in — the Weight tab is the record, not a second copy.'
+            'for today. The Weight tab is the record, not a second copy.'
+          : 'Weight is saved as today’s weigh-in. The Weight tab is the record, not a second copy.'
       }
       syncWeighInNote()
 

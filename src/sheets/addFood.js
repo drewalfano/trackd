@@ -672,7 +672,7 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
             list,
             emptyRow(
               offlineCount
-                ? 'Offline — showing what is on this device.'
+                ? 'Offline, showing what is on this device.'
                 : 'Offline, and nothing on this device matches.'
             )
           )

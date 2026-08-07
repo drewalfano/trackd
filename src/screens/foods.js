@@ -397,7 +397,7 @@ export function foodDetailScreen(id) {
                   title: `Delete "${food.name}"?`,
                   message: entryCount
                     ? `${pluralize(entryCount, 'entry', 'entries')} already logged from this food ` +
-                      'will stay exactly as they are — the numbers were recorded at the time.'
+                      'will stay exactly as they are. The numbers were recorded at the time.'
                     : 'It is removed from your library.',
                 })
                 if (!ok) return
