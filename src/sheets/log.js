@@ -1,9 +1,9 @@
 import { h, repaint } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { listEntries, getSettings, toggleFavourite, onChange } from '../lib/db.js'
-import { sumEntries, progress, MACRO_ORDER, MACRO_META } from '../lib/compute.js'
+import { sumEntries } from '../lib/compute.js'
 import { saveEntriesAsMeal } from '../lib/logging.js'
-import { card, macroColor, macroEdgeColor, macroTextColor, digits } from '../lib/ui.js'
+import { card, macroLine } from '../lib/ui.js'
 import { textInput, labelledField } from '../lib/ui.js'
 import { entryRow } from '../lib/entryRow.js'
 import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
@@ -11,7 +11,6 @@ import { openEditEntry } from './serving.js'
 import { openAddFood } from './addFood.js'
 import { toast } from '../lib/toast.js'
 import { openSheet, presentSheet } from '../lib/sheet.js'
-import { g, kcal } from '../lib/format.js'
 import { BLOCKS } from '../lib/dates.js'
 import { state, subscribe } from '../state.js'
 
@@ -94,97 +93,82 @@ async function promptSaveAsMeal(entries, defaultName, host) {
   )
 }
 
-/* ----------------------------------------------------------------- summary */
+/* ------------------------------------------------------------------ totals */
 
 /**
- * One macro: its name, `consumed / target`, and a thin bar.
+ * The day's four totals, on one pinned line: `1945 cal · 63 P · 94 F · 212 C`.
  *
- * **This card is the reason the sheet is worth opening.** It used to read
- * `3 items` and `295 cal · 5 P · 8 F · 52 C` — four raw totals with nothing to
- * measure them against, on a screen reached from a card that shows the same day
- * as rings against targets. The drill-down was strictly less informative than
- * the thing it drilled into, which is backwards.
+ * **This replaced a summary card and is deliberately less than one.** What was
+ * here was four `consumed / target` rows with thin bars and a `+14` overshoot
+ * chip, in a `.panel` about 214px tall at the top of a height-capped sheet —
+ * which is what pushed the third period below the fold. It was also the third
+ * reading of the same four numbers: they are the largest element on Today, one
+ * layer up and still visible above this sheet, and every row below is a share
+ * of them.
  *
- * The display convention is the one already established in `macroRow` and
- * `caloriesBlock`: the macro's name carries the colour, the consumed figure
- * stays in ink so it is readable, and the target trails it muted. Colour still
- * only ever means macro identity.
+ * So this states them and does not measure them. No bar, no ring, no chip, no
+ * progress of any kind — and no over-target mark either, because Today's rings
+ * already carry that in the interior fill and the word "over", and any mark
+ * here re-imports the language the card was removed for. If a total is over,
+ * the surface that says so is one tap away and larger.
  *
- * Over target is a chip rather than a colour change — see `.chip-over`. Nothing
- * here goes red on excess, and carbs owns the only red in the palette anyway.
+ * **It is `macroLine`, at 15 instead of 12, and nothing else.** This was briefly
+ * a hand-rolled version with its own unit map and its own spelling of the
+ * spacing — `63P` closed up, `cal` spaced — and that is precisely the drift
+ * `foodRowBody`'s own note describes: a component gets copied instead of
+ * called, then the copy and the original disagree about a detail, and nothing
+ * holds them together. There is no argument for this line reading differently
+ * from the four identical lines eight pixels below it, because they are the
+ * same statement about the same four numbers at two scales.
+ *
+ * So the convention comes with the component: the figure stays in ink so the
+ * data is readable, the unit after it carries the hue, and colour means macro
+ * identity here exactly as it does everywhere else.
  */
-function targetRow({ macro, value, target }) {
-  const { pct, over } = progress(value, target)
-  const isKcal = macro === 'kcal'
-  const fmt = (n) => (isKcal ? kcal(n) : `${g(n)} g`)
-
-  const fill = h('div', {
-    class: 'bar-thin-fill',
-    style: { width: '0%', background: macroColor(macro) },
-  })
-  // Painted at zero, then released on the next frame so the bar grows into
-  // place rather than appearing full. The sheet animates in over 260ms and this
-  // runs underneath it.
-  requestAnimationFrame(() => {
-    fill.style.width = `${pct}%`
-  })
-
+function totalsLine(totals) {
   return h(
     'div',
-    { class: 'flex flex-col gap-[6px]' },
-    h(
-      'div',
-      { class: 'flex items-baseline justify-between gap-[10px]' },
-      h(
-        'span',
-        { class: 'shrink-0 text-[14px] font-semibold', style: { color: macroTextColor(macro) } },
-        MACRO_META[macro].label
-      ),
-      h(
-        'div',
-        { class: 'flex min-w-0 items-baseline gap-[6px]' },
-        over > 0
-          ? h(
-              'span',
-              { class: 'chip-over', style: { background: macroEdgeColor(macro) } },
-              `+${over}`
-            )
-          : null,
-        h(
-          'span',
-          { class: 'tnum shrink-0 text-[14px]' },
-          h('span', { class: 'font-semibold' }, ...digits(fmt(value))),
-          h('span', { class: 'text-muted' }, ...digits(` / ${fmt(target)}`))
-        )
-      )
-    ),
-    h(
-      'div',
-      {
-        class: 'bar-thin',
-        role: 'progressbar',
-        'aria-label': MACRO_META[macro].label,
-        'aria-valuenow': Math.round(value),
-        'aria-valuemin': '0',
-        'aria-valuemax': Math.round(target) || 0,
-      },
-      fill
-    )
-  )
-}
-
-/**
- * `.panel`, not `.card`. A card rules a hairline between its children because
- * its children are a list of rows; these four are one layout, and the dividers
- * cut the summary into four unrelated statements instead of one reading.
- */
-function summaryCard(totals, targets) {
-  return h(
-    'div',
-    { class: 'panel flex flex-col gap-[14px] px-[20px] py-[20px]' },
-    ...MACRO_ORDER.map((macro) =>
-      targetRow({ macro, value: totals[macro], target: targets[macro] })
-    )
+    {
+      /**
+       * Pinned by `sticky`, not by a slot in the sheet chrome.
+       *
+       * `sheet.js` carried a per-sheet `header` option once and lost it for
+       * having exactly one caller — this one — so a `subhead` option would be
+       * the same mistake with a different name. Sticky gets the same result and
+       * leaves the chrome saying what every other sheet's says.
+       *
+       * The construction is `labelPhoto`'s, which already does this inside a
+       * sheet body: bled to the sheet's edges with `-mx`/`px` so the periods
+       * scroll UNDER the line rather than beside it, and `pb-20 -mb-20` to
+       * paint the body's transparent 20px flex gap — without it the first card
+       * reappears in that gap, clipped halfway, once it starts moving.
+       *
+       * **No rule under it**, which is the one place this departs from
+       * `labelPhoto`. That component argues the hairline is what makes the clip
+       * legible, and it is right about a photo strip with form fields sliding
+       * under it — but here what slides under is a `.section-head`, and a rule
+       * hard against a 20px heading reads as that heading's divider rather than
+       * as this line's edge. The clip is legible without one anyway: a card is
+       * `--color-surface` on canvas, so its own top edge is the mark going.
+       *
+       * `bg-canvas` is the sheet's own fill: `--color-sheet` resolves to it.
+       *
+       * 10 + a 20px line box + 10 is the 40 this is meant to cost, and the
+       * painted gap below it is the 20 that was already between the old card
+       * and Morning.
+       */
+      class:
+        'sticky top-0 z-10 -mx-[20px] -mb-[20px] bg-canvas px-[20px] pb-[20px] pt-[10px]',
+    },
+    /**
+     * The wrapper is what sets the line box, not `macroLine`, which takes a
+     * size and leaves leading alone. 20 rather than the 22.5 a 15px line would
+     * default to, so the pinned slot is 10 + 20 + 10 = the 40 it is meant to
+     * cost — and `tnum` here rather than on the row below it, because this
+     * number is re-rendered under the eye every time an entry lands and a
+     * proportional `1` would shuffle the whole line sideways.
+     */
+    h('div', { class: 'tnum pb-[10px] leading-[20px]' }, macroLine(totals, { size: 15 }))
   )
 }
 
@@ -329,7 +313,10 @@ export async function openLogSheet() {
 
         repaint(
           body,
-          summaryCard(totals, settings.targets),
+          // Not drawn on an empty day. `0 · 0P · 0F · 0C` pinned above
+          // `Nothing logged yet` is the same fact twice, and the second telling
+          // is the one made of zeros.
+          entries.length ? totalsLine(totals) : null,
           /**
            * A day with nothing on it gets one line, not three empty periods.
            *
