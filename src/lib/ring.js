@@ -45,11 +45,20 @@ import { digits, macroColor, macroTextColor } from './ui.js'
  * stating plainly rather than discovering later: the overage lap completely
  * covers the ring beneath it, so the gap cannot sit *between* the strands. It
  * can only run along their flanks. What renders is the overage lap **outlined**
- * against the ring — a hairline tracing however far past target you went,
- * ending in a bead — not a strand visibly lying on top of another. That read is
- * quiet by construction and it is the intended one. It is the most that one hue
- * on one track permits, and the gap is not to be widened chasing anything
- * prouder.
+ * against the ring — a cut tracing however far past target you went, ending in
+ * a rounded head — not a strand visibly lying on top of another.
+ *
+ * This passage used to end by arguing that the resulting read is quiet by
+ * construction, that quiet is correct, and that the gap is not to be widened
+ * chasing anything prouder. That was written from the desktop preview. On a
+ * phone at 84px the cut was one device pixel on each flank, which is not quiet —
+ * it is invisible, and a mark nobody can see is not making a subtle point. The
+ * gap has been widened once, deliberately, and `GAP_RATIO` records where it
+ * landed and why.
+ *
+ * What has NOT changed is everything the original argument was actually
+ * protecting: one hue, one track, one cap. Those are still the constraints, and
+ * a wider cut does not weaken any of them.
  *
  * The Log sheet keeps saying the same thing a different way, as a `+4` chip on
  * the macro bars. Two visual languages for one concept, which is allowed
@@ -71,12 +80,21 @@ const C = 2 * Math.PI * R
  * token that holds if the ring is ever redrawn at another size, not a magic
  * number tuned to 10px and quietly wrong at 12.
  *
- * 0.2 puts the knockout at 1.2x the ring's stroke, so it stands 1px proud on
- * each flank. That is the target and not the thin end of a range: too thin and
- * it vanishes, too thick and it stops reading as a seam and starts reading as a
- * separate concentric ring, which is the thing being avoided.
+ * **0.5, which puts the knockout at 1.5x the ring's stroke and 2.5px proud on
+ * each flank.** It was 0.2 — 1.2x, one pixel a side — chosen on a desktop
+ * preview where one pixel is a visible hairline. On the phone this actually runs
+ * on it is not: at 84px in a hand the cut disappeared into the ring and the
+ * over-target state read as a plain closed circle, which is the exact failure
+ * the second lap exists to fix.
+ *
+ * 1.2x, 1.5x, 1.75x and 2x were rendered side by side at true size and at 2.4x
+ * before this was picked. 1.5 is the first step where the cut survives the trip
+ * to a real screen; 2x reads as a chunk taken out of the ring and starts
+ * suggesting a second concentric track, which is still the thing being avoided.
+ * The bound at the top of the range is real, so this is a considered value and
+ * not a floor to keep raising.
  */
-const GAP_RATIO = 0.2
+const GAP_RATIO = 0.5
 const GAP = STROKE * GAP_RATIO
 const GAP_STROKE = STROKE + GAP
 
@@ -109,6 +127,31 @@ const BOX = SIZE + GAP
 const TRACK_MIX = 20
 
 /**
+ * The interior fill past target, and it is well under the track's strength — 8,
+ * not the 20 the track uses.
+ *
+ * It started at 20 so the mark would be one hue at exactly two strengths, which
+ * is a tidy argument and did not survive measurement. The centre reading sits on
+ * this fill, and at 20% it fell through the floor: on a white card the `94`
+ * measured 4.16:1 against the fill and `/ 80g` 4.29:1, both down from 5.16 and
+ * 5.33 on the bare card and both under the 4.5 this app holds itself to. Fat is
+ * the binding case for the figure and protein and carbs for the qualifier, so
+ * there is no single macro to special-case around.
+ *
+ * **The two themes cap it differently, and dark is the tighter of the two.**
+ * Light tolerates 10 — its worst case is fat's qualifier at 4.54:1. Dark does
+ * not: the same pair measures 4.36:1 there, because `--color-muted` lifts to
+ * #949494 while the fill darkens toward the card. 8 is the strongest value that
+ * clears 4.5 on both lines, in both themes, on all three macros; the tightest
+ * reading anywhere is fat's qualifier in dark at 4.51:1.
+ *
+ * So the ring is one hue at three strengths rather than two. That is a real
+ * cost and it is the smaller one: a legible number on a slightly paler ground
+ * beats a tidy palette rule and a figure nobody can read.
+ */
+const FILL_MIX = 8
+
+/**
  * The shortest arc that still reads as an arc.
  *
  * With a round cap the stroke extends STROKE/2 past each end, so a dash of
@@ -134,6 +177,13 @@ const MIN_ARC = STROKE
  * entrance animation. Same reasoning, and same shape, as `lastPct` for the bars.
  */
 const lastLen = new Map()
+
+/**
+ * Clip paths are referenced by id, and there are three rings per card and three
+ * cards in the deck — so the id has to be unique per instance or nine elements
+ * point at whichever definition happened to render last.
+ */
+let clipSeq = 0
 
 /** Arc length for a percentage, with the zero state and the floor applied. */
 function arcLength(pct) {
@@ -328,14 +378,92 @@ function ringSvg({ ratio, over, goal, macro, key, animate, surface }) {
    * cap on a strand whose stroke is square at both ends.
    */
   const deg = overAngle(over, goal)
+
+  /**
+   * The fill tint, mixed against the SURFACE rather than against transparent.
+   *
+   * Opaque, and that is the whole point. The gap is painted rather than cut, so
+   * a semi-transparent value there would wash over the opaque lap beneath it and
+   * come out as a lightened orange rather than as the tint. Mixing with the
+   * surface produces the composite directly, and it is the same value the fill
+   * uses — which is what makes the cut read as the fill showing through the rim
+   * rather than as a second colour laid over it.
+   */
+  const wash = `color-mix(in srgb, ${macroColor(macro)} ${FILL_MIX}%, ${surface})`
+
+  /**
+   * The gap knocks through to the FILL now, not to the card — and it is clipped
+   * to the ring's outer edge, which it was not before and now must be.
+   *
+   * It used to paint the card's own colour, because the only thing behind the
+   * ring was the card. Past target there is now a filled disc under the whole
+   * band, so painting the card colour here would cut a white slot through a
+   * filled vessel — the seam would read as damage rather than as depth.
+   *
+   * **The clip is the direct cost of that.** The cut is deliberately wider than
+   * the stroke, so it has always stood GAP/2 proud of the ring on both flanks.
+   * While it painted the card colour that overhang was invisible by definition —
+   * card colour on a card. Painted in the tint it is not: it renders as a pale
+   * halo bulging outside the ring, which is the fill escaping the vessel it is
+   * supposed to be inside. Clipping to `R + STROKE/2` is what keeps the tint on
+   * the inside of the rim, where it belongs.
+   */
+  const clipId = `ring-clip-${++clipSeq}`
+  const clip = s(
+    'clipPath',
+    { id: clipId },
+    s('circle', { cx: SIZE / 2, cy: SIZE / 2, r: R + STROKE / 2 })
+  )
   const lapOver = deg > 0
     ? [
-        span(deg, surface, GAP_STROKE),
-        gapHead(deg, surface),
+        s('defs', {}, clip),
+        s(
+          'g',
+          { 'clip-path': `url(#${clipId})` },
+          span(deg, wash, GAP_STROKE),
+          gapHead(deg, wash)
+        ),
         span(deg, macroColor(macro), STROKE),
         headAt(deg, macroColor(macro), STROKE),
       ]
     : []
+
+  /**
+   * Past target, the hole fills with the track's own tint.
+   *
+   * The second lap says "over" in geometry, and geometry is read by looking at
+   * one specific arc — you have to find the cut and follow it. This says the
+   * same thing with area, which is read without looking at anything: the ring
+   * that has gone past its target is the one that is filled in.
+   *
+   * **It is the track's exact mix, and that is the whole reason it is allowed.**
+   * `TRACK_MIX` at 20% is already the ring's second strength — the shade an
+   * unfilled ring shows. Reusing it adds no new value to the palette, so the
+   * mark is still one hue at two strengths. It also inverts cleanly: below
+   * target the tint sits in the RING and the hole is empty, above target the
+   * ring is solid and the tint sits in the HOLE. The pale shade migrates inward
+   * as you cross over, which is one idea rather than two.
+   *
+   * **It runs to the OUTER edge of the stroke, not the inner one, and sits
+   * beneath it.** Stopping at the inner edge is the obvious construction and it
+   * is wrong: the fill and the ring then meet along a shared boundary, two
+   * antialiased edges on one coordinate, and what renders is a hairline seam
+   * that makes them read as a disc sitting inside a separate annulus. Run out to
+   * `R + STROKE/2` and the stroke is drawn ON a filled ground rather than beside
+   * it — one vessel with a rim, which is the thing being drawn.
+   *
+   * It also makes the gap honest. With the fill under the whole band, the cut
+   * reveals what is beneath the ring instead of punching through to the card,
+   * so the seam reads as depth rather than as a hole. See `wash` below.
+   */
+  const centreFill = deg > 0
+    ? s('circle', {
+        cx: SIZE / 2,
+        cy: SIZE / 2,
+        r: R + STROKE / 2,
+        fill: wash,
+      })
+    : null
 
   return s(
     'svg',
@@ -346,6 +474,7 @@ function ringSvg({ ratio, over, goal, macro, key, animate, surface }) {
       'aria-hidden': 'true',
       class: 'block',
     },
+    centreFill,
     track,
     arc,
     ...lapOver
@@ -480,13 +609,55 @@ export function macroRing({
     },
     h(
       'div',
-      // BOX, not SIZE — the svg carries the gap's headroom and the centre
-      // reading is positioned against this box, so the two have to agree or the
-      // number sits a pixel off the ring it is inside.
-      { class: 'relative', style: { width: `${BOX}px`, height: `${BOX}px` } },
-      ringSvg({ ratio, over, goal, macro, key, animate, surface }),
+      /**
+       * SIZE, not BOX — the box is bigger than the ring and must not be what
+       * the row is laid out on.
+       *
+       * The svg carries the gap's headroom, so it grew when the gap did. Laying
+       * the row out on that box put PAD of empty space outside every ring, and
+       * the outer two are aligned to the outer edges of their columns precisely
+       * so protein's left edge and carbs' right edge land on the ends of the
+       * calorie bar above them. Widening the gap would have walked both of them
+       * inward off that alignment — a change to the ring's internals silently
+       * moving a mark on the other side of the card.
+       *
+       * So the footprint is the RING, and the headroom overflows it: the svg is
+       * pulled back by PAD on both axes, which puts its centre back on the
+       * wrapper's centre. The centre reading is `inset-0` on this same SIZE box,
+       * so the two still agree and the number stays concentric.
+       */
+      { class: 'relative', style: { width: `${SIZE}px`, height: `${SIZE}px` } },
+      h(
+        'div',
+        { class: 'absolute', style: { left: `${-PAD}px`, top: `${-PAD}px` } },
+        ringSvg({ ratio, over, goal, macro, key, animate, surface })
+      ),
       centre
     ),
+    /**
+     * The name, and nothing beside it.
+     *
+     * The Log sheet's `+14` chip was tried here, both under the name and beside
+     * it, and neither survived the worst case. Under, it added a fourth row to a
+     * three-row grid and left the other two columns standing over an empty strip
+     * — permanent dead space on two thirds of the card to annotate one third of
+     * it. Beside, it fit, but only just: with all three macros over and
+     * three-digit overages, the three name-and-chip pairs measured 103.5, 72.4
+     * and 94.8 in 98.3px columns at 375pt, leaving 11.6px and 12.6px between
+     * them. Nothing clipped and nothing overlapped, and it still read as one
+     * dense band of text rather than three labelled rings.
+     *
+     * The ring already says it. Past target it runs a second lap with a cut
+     * along it, the centre reads `194 / 80g`, and the group's `aria-label` ends
+     * "114 over". A chip here would be the fourth statement of one fact on the
+     * one card in the app that is meant to be read in a glance.
+     *
+     * It stays on the Log sheet, where the argument runs the other way: a dense
+     * list of bars reads a chip faster than it reads geometry, and there is a
+     * whole row's width to put one in. Two visual languages for one concept is
+     * allowed because the contexts differ — what is not allowed is the two
+     * disagreeing about the number, and both still come from `progress().over`.
+     */
     h(
       'div',
       { class: 'text-[16px] font-semibold leading-tight', style: { color: colour } },
