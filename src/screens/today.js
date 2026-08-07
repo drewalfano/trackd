@@ -186,7 +186,7 @@ function seedMode(settings) {
 let lastKcal = 0
 
 function calorieBlock({ value, target, mode, live = true, control = null, swapping = false }) {
-  const { pct } = progress(value, target)
+  const { pct, over } = progress(value, target)
   // Round the operands, then difference — same rule the rings use.
   const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
   const remainingMode = mode === 'remaining'
@@ -216,7 +216,23 @@ function calorieBlock({ value, target, mode, live = true, control = null, swappi
   if (live) lastKcal = shown
   countTo(number, shown, { format: (n) => kcal(n) })
 
-  const fill = h('div', { class: 'kbar-fill', style: { width: '0%' } })
+  /**
+   * The overage rides inside the fill, at its right end.
+   *
+   * The three rings say "over" with geometry and the Log sheet says it with a
+   * chip; this bar said it with nothing at all — past target it simply ran full
+   * and stayed full, which is the saturation problem the rings' second lap was
+   * built to fix, still unfixed on the one mark above them.
+   *
+   * `progress().over` again, which is now the single source all four surfaces
+   * read. The darker shade is `--color-kcal-edge`, the same pairing `.bar-over`
+   * uses in the Log sheet, so past-target reads as one idea wherever it is drawn.
+   */
+  const fill = h(
+    'div',
+    { class: 'kbar-fill', style: { width: '0%' } },
+    over > 0 ? h('span', { class: 'kbar-over' }, `+${over}`) : null
+  )
   requestAnimationFrame(() => {
     fill.style.width = `${pct}%`
   })

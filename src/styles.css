@@ -1218,7 +1218,12 @@
    * channel. Same treatment as the ring tracks, so the card reads as one system.
    */
   .kbar {
-    height: 14px;
+    /* 18px, which is `.chip-over`'s height and not a number of its own. The bar
+       now carries an overage segment, and that mark is the same mark the Log
+       sheet puts beside its rows — so the bar is as tall as the thing it has to
+       hold, and `+283` is the same size in both places. At 14 the segment had to
+       shrink its type to fit, which made one idea two sizes. */
+    height: 18px;
     width: 100%;
     border-radius: 999px;
     background: color-mix(in srgb, var(--color-kcal) 20%, transparent);
@@ -1230,6 +1235,45 @@
     border-radius: 999px;
     background: var(--color-kcal);
     transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    /* Holds the overage segment at its right end. Empty on every other day, so
+       this costs the common case nothing. */
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  /**
+   * The calorie overage, butted against the right end of its own fill.
+   *
+   * `.bar-over` already does exactly this inside the Log sheet's fat bars, and
+   * this is that mark at this bar's size: same darker shade, same white type,
+   * same position. Past target the fill is the whole track, so the segment lands
+   * on the right end of the bar and the track's rounded cap clips it — which is
+   * why it needs no radius of its own.
+   *
+   * The type and padding are `.chip-over`'s exactly — 11px semibold, 7px each
+   * side — because it is the same statement about the same number, and the bar
+   * was made 18px tall precisely so it could hold it at that size.
+   *
+   * **Rounded on the leading edge only.** The trailing edge needs no radius —
+   * the track's own cap and `overflow: hidden` shape it — but the leading edge
+   * is an interior boundary between two greens and a square one read as a block
+   * dropped onto the bar. Rounded, it reads as a segment of the bar rather than
+   * a sticker on top of it, and it matches the cap on the far end so both ends
+   * of the mark are the same shape.
+   */
+  .kbar-over {
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    flex: none;
+    padding: 0 7px;
+    border-radius: 999px 0 0 999px;
+    background: var(--color-kcal-edge);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
   }
 
   /**
