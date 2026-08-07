@@ -12,6 +12,93 @@ import { addDays, daysBetween } from './dates.js'
 export const MIN_ENTRIES_FOR_TREND = 7
 
 /**
+ * The narrowest y-axis the weight chart may draw, in the unit it is drawing in.
+ *
+ * **A chart that fits its axis to its data reports every dataset as the same
+ * amount of movement.** The chart auto-fitted with a floor on the PADDING —
+ * `max((max - min) * 0.15, 0.4)` — which made the narrowest axis it could ever
+ * produce 0.8 wide. Two weigh-ins 0.8 lb apart therefore filled it corner to
+ * corner, and seven readings of overnight water noise drew a line with peaks
+ * and valleys in it above a readout saying `+0.1 lb / week`. The line was
+ * drawing the noise at the same amplitude a real cut would get.
+ *
+ * 4 lb rather than 5. Day-to-day scale weight swings about a pound or two on
+ * water alone, so at 4 the raw dots still scatter visibly — that IS what a
+ * bathroom scale does, and flattening it away would be its own kind of lie —
+ * while the smoothed line through them goes nearly flat, which is the true
+ * statement. A sustainable half to one pound a week fills most of the height
+ * over a 30-day window; at a 5 lb floor a genuinely good month would read as
+ * less than it was.
+ *
+ * Per unit rather than one canonical figure converted, because the axis labels
+ * are drawn in the display unit and a single 1.8 kg floor lands on a 3.97 lb
+ * axis. The old 0.4 was worse than imprecise here: it was unit-blind, so the
+ * same fortnight looked 2.2× flatter to someone reading kilograms.
+ */
+export const MIN_AXIS_SPAN = { lb: 4, kg: 2 }
+
+/** How much of the axis sits above the data, when the data is what sets it. */
+const AXIS_PAD = 0.15
+
+/**
+ * The y-axis for a set of values, already in display units.
+ *
+ * Pure, exported and unit-aware so it can be tested — it was inline in the
+ * chart, where the only way to check the span was to draw one and look.
+ */
+export function axisBounds(values, unit = 'kg') {
+  if (!values.length) return { min: 0, max: 1 }
+
+  const dataMin = Math.min(...values)
+  const dataMax = Math.max(...values)
+  const pad = (dataMax - dataMin) * AXIS_PAD
+  let min = dataMin - pad
+  let max = dataMax + pad
+
+  // The floor is on the SPAN, not on the padding, which is the whole
+  // correction: padding scales with the data and so can never rescue a dataset
+  // that has nearly none.
+  const floor = MIN_AXIS_SPAN[unit] ?? MIN_AXIS_SPAN.kg
+  if (max - min < floor) {
+    const mid = (dataMin + dataMax) / 2
+    min = mid - floor / 2
+    max = mid + floor / 2
+  }
+
+  return { min, max }
+}
+
+/**
+ * Where the three gridlines sit, as fractions of the axis from the bottom.
+ *
+ * These used to be `[max - pad, mid, min + pad]` — the data's own extremes,
+ * which is why they read as meaningful. Once the axis can be floored, `pad`
+ * stops describing the data at all, and on a nearly flat window all three
+ * labels round to the same number: three rules and one value, three times.
+ *
+ * 0.115 and 0.885 are not new positions. On a data-fitted axis the padding is
+ * 15% of the span each side, so the data's own maximum sits at 1.15/1.30 of the
+ * axis and its minimum at 0.15/1.30 — these fractions to three decimals. Real
+ * histories keep the gridlines exactly where they have always been; a floored
+ * axis gets three distinct, evenly spaced labels instead of one repeated.
+ */
+export const GRID_FRACTIONS = [0.885, 0.5, 0.115]
+
+/**
+ * The shortest history that can carry a per-week figure.
+ *
+ * `ratePerWeek` is a least-squares slope, and least squares will happily fit a
+ * line to eight days of water weight and report it to a tenth of a pound. The
+ * count gate on the trend line does not catch this: seven readings inside eight
+ * days clears it, and the rate that comes out the other side — `+0.1 lb / week`
+ * — is an extrapolation from noise wearing the same type as a measurement.
+ *
+ * Two weeks is the shortest window in which a weekly rate is a rate rather than
+ * a restatement of a couple of days.
+ */
+export const MIN_RATE_DAYS = 14
+
+/**
  * Fill the calendar between the first and last weigh-in, leaving gaps as null.
  * @returns {{date: string, kg: number|null}[]} ascending
  */
@@ -60,6 +147,8 @@ export function computeTrend(weights, window = 7) {
 export function ratePerWeek(points) {
   const data = points.filter((p) => p.trend != null)
   if (data.length < 2) return null
+  // See MIN_RATE_DAYS. A slope is only a weekly rate once there are weeks.
+  if (daysBetween(data[0].date, data[data.length - 1].date) < MIN_RATE_DAYS) return null
 
   const first = data[0].date
   const xs = data.map((p) => daysBetween(first, p.date))

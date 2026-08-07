@@ -63,6 +63,35 @@ export function formatDayLabel(str) {
 }
 
 /**
+ * Past this, a date stops answering the question and an age starts.
+ *
+ * A week is the mark because it is the span over which "Tue, Aug 4" is still
+ * locatable without arithmetic — inside seven days it is this week or last, and
+ * the weekday does the work. Beyond it the reader has to count, and what they
+ * are counting for is not the date at all but how stale the number above it is.
+ */
+export const STALE_AFTER_DAYS = 7
+
+/**
+ * The day, or how long ago it was once the day stops being the useful fact.
+ *
+ * `Latest 164.6 lb / Tue, Aug 4` reads as a current weight with a date beside
+ * it, and at nine days old it is not one. The figure is stated at display size
+ * with nothing qualifying it, so the line underneath is the only thing that can
+ * say how much to trust it, and a bare date makes the reader work that out.
+ *
+ * One format past the threshold, deliberately — no second step into weeks or
+ * months. `41 days ago` is blunter than "6 weeks ago" and that is the point:
+ * this line exists to report staleness, and rounding it into friendlier units
+ * softens exactly the fact it is there to carry.
+ */
+export function formatDayAge(str) {
+  const age = daysBetween(str, todayStr())
+  if (age <= STALE_AFTER_DAYS) return formatDayLabel(str)
+  return `${age} days ago`
+}
+
+/**
  * A day label that can sit mid-sentence: "remove today's weight", "saved
  * Tue, 28 Jul".
  *

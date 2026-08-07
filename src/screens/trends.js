@@ -9,7 +9,14 @@ import {
   entriesInRange,
   firstLoggedDate,
 } from '../lib/db.js'
-import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
+import {
+  computeTrend,
+  ratePerWeek,
+  windowPoints,
+  axisBounds,
+  GRID_FRACTIONS,
+  MIN_ENTRIES_FOR_TREND,
+} from '../lib/trend.js'
 import {
   sumEntries,
   progress,
@@ -31,7 +38,7 @@ import {
   macroTextColor,
 } from '../lib/ui.js'
 import { kgToUnit, unitToKg, weight as fmtWeight, signed, kcal, g } from '../lib/format.js'
-import { formatDayLabel, todayStr, addDays, daysBetween } from '../lib/dates.js'
+import { formatDayLabel, formatDayAge, todayStr, addDays, daysBetween } from '../lib/dates.js'
 import { toast } from '../lib/toast.js'
 import { openWeighInSheet } from '../sheets/weighIn.js'
 import { openLogSheet } from '../sheets/log.js'
@@ -63,6 +70,25 @@ const CHART_W = 340
 const CHART_H = 150
 const PAD = { top: 10, right: 6, bottom: 8, left: 6 }
 
+/**
+ * The chart draws what the data supports and no more.
+ *
+ * Two rules do that, and both are about the difference between what is on the
+ * screen and what is in the record:
+ *
+ * **The y-axis has a floor.** See `MIN_AXIS_SPAN`. Fitted to its data, this
+ * chart drew every history at the same amplitude — a fortnight of water noise
+ * and a real three-pound cut both filled the frame — so the shape of the line
+ * carried no information at all. Below the floor the line compresses toward
+ * flat, which is what a flat fortnight actually is.
+ *
+ * **The trend line is gated on the weigh-ins IN THIS WINDOW.** `computeTrend`
+ * already refuses to smooth under `MIN_ENTRIES_FOR_TREND` readings, but it runs
+ * over the whole record before `windowPoints` clips it — so forty readings from
+ * six months ago and none since still drew a confident line across the 30-day
+ * view, carried forward flat from the last one. The gate has to be applied
+ * where the drawing happens, against the points being drawn.
+ */
 function chart(points, unit) {
   const drawn = points.filter((p) => p.kg != null || p.trend != null)
   if (drawn.length < 2) return null
@@ -72,12 +98,7 @@ function chart(points, unit) {
     if (p.kg != null) values.push(kgToUnit(p.kg, unit))
     if (p.trend != null) values.push(kgToUnit(p.trend, unit))
   }
-  let min = Math.min(...values)
-  let max = Math.max(...values)
-  // Never let a flat fortnight render as a jagged line across the full height.
-  const pad = Math.max((max - min) * 0.15, 0.4)
-  min -= pad
-  max += pad
+  const { min, max } = axisBounds(values, unit)
 
   const innerW = CHART_W - PAD.left - PAD.right
   const innerH = CHART_H - PAD.top - PAD.bottom
@@ -85,14 +106,16 @@ function chart(points, unit) {
   const y = (v) => PAD.top + innerH - ((v - min) / (max - min || 1)) * innerH
 
   const trendPath = []
-  points.forEach((p, i) => {
-    if (p.trend == null) return
-    const px = x(i)
-    const py = y(kgToUnit(p.trend, unit))
-    trendPath.push(`${trendPath.length ? 'L' : 'M'}${px.toFixed(1)} ${py.toFixed(1)}`)
-  })
+  if (points.filter((p) => p.kg != null).length >= MIN_ENTRIES_FOR_TREND) {
+    points.forEach((p, i) => {
+      if (p.trend == null) return
+      const px = x(i)
+      const py = y(kgToUnit(p.trend, unit))
+      trendPath.push(`${trendPath.length ? 'L' : 'M'}${px.toFixed(1)} ${py.toFixed(1)}`)
+    })
+  }
 
-  const gridlines = [max - pad, (max + min) / 2, min + pad].map((v) =>
+  const gridlines = GRID_FRACTIONS.map((f) => min + f * (max - min)).map((v) =>
     s('g', {}, [
       s('line', {
         x1: PAD.left,
@@ -303,7 +326,7 @@ function averagesStrip(week, targets) {
       h(
         'p',
         { class: 'text-[12px] leading-snug text-muted' },
-        `Averages start at ${AVERAGES_MIN_DAYS} full days — ${remaining} more to go. ` +
+        `Averages start at ${AVERAGES_MIN_DAYS} full days, with ${remaining} more to go. ` +
           'An average of one day is just that day.',
       ),
     )
@@ -725,14 +748,26 @@ export function trendsScreen() {
                   h(
                     'div',
                     { class: 'flex flex-col' },
-                    h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Current'),
+                    /**
+                     * `Latest`, not `Current`.
+                     *
+                     * The figure is the most recent reading in the record, which
+                     * is a different claim from the weight you are now — it was
+                     * `Current` over a value from two days ago, and over one from
+                     * nine days ago it would still have said so. `Latest` is the
+                     * fact the app actually has; whether that is current is what
+                     * the date under it is for.
+                     */
+                    h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Latest'),
                     h(
                       'div',
                       { class: 'flex items-baseline gap-[10px]' },
                       tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold'),
                       h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
                     ),
-                    h('span', { class: 'text-[12px] text-muted' }, formatDayLabel(latest.date)),
+                    // Turns into `12 days ago` once the date stops being the
+                    // useful fact about it — see `formatDayAge`.
+                    h('span', { class: 'text-[12px] text-muted' }, formatDayAge(latest.date)),
                   ),
                   h(
                     'div',
@@ -748,18 +783,36 @@ export function trendsScreen() {
                       ),
                       h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
                     ),
-                    // Nothing at all when there is no rate yet. The notice below the
-                    // card already says what is missing and how far off it is, and
-                    // the trend figure above is already an em-dash — a second dash
-                    // under the first says the same thing twice, in the weaker of the
-                    // two positions.
-                    rate == null
-                      ? null
-                      : h(
-                          'span',
-                          { class: 'text-[12px] text-muted' },
-                          `${signed(kgToUnit(rate, unit))} ${unit} / week`,
-                        ),
+                    /**
+                     * Nothing is SAID when there is no rate yet, but the line is
+                     * still held.
+                     *
+                     * No text, for the reason this has always given: the notice
+                     * below the card already says what is missing and how far
+                     * off it is, and where the trend figure above is an em-dash,
+                     * a second dash under the first states one absence twice in
+                     * the weaker of the two positions.
+                     *
+                     * The empty line box is new, and it is a layout fact rather
+                     * than a copy decision. This row is `items-end`, so the two
+                     * columns hang from a shared baseline and the right one is
+                     * three lines tall — dropping the third let the whole Trend
+                     * stack slide down by a line the moment the rate was
+                     * withheld, which now happens in an ordinary state rather
+                     * than only on a fresh install. A card that reshuffles as
+                     * data crosses a threshold reads as a rendering fault, and
+                     * the reader is being asked to notice the number, not the
+                     * furniture moving under it.
+                     *
+                     * ` ` rather than a height: it is the same line box the
+                     * real text would occupy, so it stays correct if the type
+                     * size ever changes.
+                     */
+                    h(
+                      'span',
+                      { class: 'text-[12px] text-muted', 'aria-hidden': rate == null ? 'true' : null },
+                      rate == null ? ' ' : `${signed(kgToUnit(rate, unit))} ${unit} / week`,
+                    ),
                   ),
                 ),
 
@@ -774,10 +827,25 @@ export function trendsScreen() {
               ),
             ),
 
+            /**
+             * The same shape of sentence the History card makes about averages:
+             * where the threshold is, how far off it is, and what would be wrong
+             * with drawing it now.
+             *
+             * It read `The trend line needs 7 weigh-ins before it means
+             * anything. You have 2.` — which states the rule and the count but
+             * leaves "means anything" to be taken on trust.
+             *
+             * The closing clause states the reason instead, and states it as a
+             * principle rather than against the current count — the way
+             * `An average of one day is just that day` does. It has to hold at
+             * two weigh-ins and at six, so it cannot name a number.
+             */
             weights.length < MIN_ENTRIES_FOR_TREND
               ? notice(
-                  `The trend line needs ${MIN_ENTRIES_FOR_TREND} weigh-ins before it means anything. ` +
-                    `You have ${weights.length}.`,
+                  `The trend line starts at ${MIN_ENTRIES_FOR_TREND} weigh-ins, with ` +
+                    `${MIN_ENTRIES_FOR_TREND - weights.length} more to go. ` +
+                    'Fewer than that and the line is just tracing water weight.',
                 )
               : null,
 

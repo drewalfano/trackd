@@ -82,6 +82,38 @@ eq('trend smooths alternating 2.4kg water swings', Math.abs(noisy.at(-1).trend -
 const gappy = T.computeTrend(mk(30, i => (i % 3 === 0 ? 80 : null)).filter(p => p.kg !== null), 7)
 eq('gaps do not invent readings', gappy.filter(p => p.kg === null).length > 0 && gappy.every(p => p.trend !== null), true)
 
+// --- the chart may not overstate what it has
+// A fitted axis reports every dataset as the same amount of movement: two
+// readings 0.8lb apart used to fill the frame corner to corner. The floor is on
+// the span, so below it the line compresses toward flat instead.
+const spanOf = (vals, unit) => { const a = T.axisBounds(vals, unit); return +(a.max - a.min).toFixed(3) }
+eq('a near-flat window still gets 4lb of axis', spanOf([165.0, 165.4], 'lb'), 4)
+eq('one repeated value still gets a full axis', spanOf([80, 80], 'kg'), 2)
+eq('the floor is centred on the data', T.axisBounds([165.0, 165.4], 'lb').min, 163.2)
+eq('real spread expands past the floor', spanOf([160, 172], 'lb'), 15.6)   // 12, +15% each side
+eq('the floor is per unit, not converted', spanOf([80, 80.2], 'kg'), 2)
+// The gridlines used to be the data's own extremes, which collapse to one
+// repeated label once the axis stops being the data's.
+const grid = (vals, unit) => { const a = T.axisBounds(vals, unit); return T.GRID_FRACTIONS.map(f => (a.min + f * (a.max - a.min)).toFixed(1)) }
+eq('a floored axis still labels three distinct values', new Set(grid([165.0, 165.4], 'lb')).size, 3)
+eq('a fitted axis keeps the data extremes as gridlines', grid([160, 172], 'lb').join(), '172.0,166.0,160.0')
+
+// Least squares will fit a line to eight days of water weight and report it to
+// a tenth of a pound. A weekly rate needs weeks.
+const short = T.computeTrend(mk(8, i => 80 + (i % 2 ? 0.2 : -0.2)), 7)
+eq('eight days cannot state a weekly rate', T.ratePerWeek(short), null)
+// 15 daily readings, because 14 of them span 13 days — the gate is on elapsed
+// days between first and last, not on how many there are.
+eq('a fortnight can', T.ratePerWeek(T.computeTrend(mk(15, i => 80 - i * 0.05), 7)) !== null, true)
+eq('one day short cannot', T.ratePerWeek(T.computeTrend(mk(14, i => 80 - i * 0.05), 7)), null)
+
+// --- a stale reading reports its age, not its date
+const ago = n => D.formatDayAge(D.addDays(D.todayStr(), -n))
+eq('today is still today', ago(0), 'Today')
+eq('a week old is still a date', ago(7), D.formatDayLabel(D.addDays(D.todayStr(), -7)))
+eq('past a week it is an age', ago(9), '9 days ago')
+eq('and stays one, in days', ago(41), '41 days ago')
+
 // --- local dates never shift
 eq('date string is local, not UTC', D.toDateStr(new Date(2026, 0, 1, 0, 30)), '2026-01-01')
 eq('late-night entry keeps its local day', D.toDateStr(new Date(2026, 0, 1, 23, 59)), '2026-01-01')
