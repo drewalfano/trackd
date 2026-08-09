@@ -69,7 +69,20 @@ function bindEscape() {
   })
 }
 
-export function toast(message, { action, onAction, duration = 5000 } = {}) {
+/**
+ * `actionDismisses` says the labelled button IS the way out.
+ *
+ * An Undo toast has two different jobs on it — take the recovery, or decline it
+ * — so it draws two controls. A toast that is only telling you something has
+ * one job, and "Got it" is it. Drawing the bare circle beside it put two
+ * buttons on the same toast that did the same thing, with the toast's only
+ * emphasised control spending its weight on a choice that was not there.
+ *
+ * One flag rather than two options, because both of the things it changes
+ * follow from the same fact: the button gets the close glyph instead of the
+ * undo arrow, and the circle is not drawn at all.
+ */
+export function toast(message, { action, onAction, actionDismisses = false, duration = 5000 } = {}) {
   const el = h(
     'div',
     {
@@ -89,8 +102,17 @@ export function toast(message, { action, onAction, duration = 5000 } = {}) {
             onAction?.()
           },
         },
-        icon('undo', { size: 16 }),
-        action
+        // Trailing, where the circle it replaced was, and where a close on this
+        // app already lives — every sheet's X is the last thing on its header
+        // row. Leading is right for the undo arrow, which is a verb the label
+        // completes: the glyph says what happens and the word says to what. An X
+        // is not a verb. It is the exit, and the exit goes at the end.
+        //
+        // Same 16 at 2.25 the circle draws, so an X means one thing on a toast
+        // however it is labelled.
+        ...(actionDismisses
+          ? [action, icon('close', { size: 16, stroke: 2.25 })]
+          : [icon('undo', { size: 16 }), action])
       ),
     /**
      * A real close target, rather than dismissing on a tap anywhere.
@@ -103,20 +125,22 @@ export function toast(message, { action, onAction, duration = 5000 } = {}) {
      * you were explicitly offered.
      *
      * So the glyph earns its pixels: dismissal becomes deliberate, and Undo can
-     * never be lost to a mis-tap. Drawn on every toast rather than only the ones
-     * with an action, because a dismissal that is present sometimes is a
-     * dismissal nobody trusts is there.
+     * never be lost to a mis-tap. Drawn on every toast that does not already
+     * carry its own way out — the rule being fought for is that a toast is never
+     * without a visible dismissal, not that it always has this exact circle, and
+     * a second one next to "Got it" makes the first less trusted, not more.
      */
-    h(
-      'button',
-      {
-        class: 'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full',
-        style: { background: 'color-mix(in srgb, currentColor 12%, transparent)' },
-        'aria-label': 'Dismiss',
-        onclick: () => dismiss(),
-      },
-      icon('close', { size: 16, stroke: 2.25 })
-    )
+    !actionDismisses &&
+      h(
+        'button',
+        {
+          class: 'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full',
+          style: { background: 'color-mix(in srgb, currentColor 12%, transparent)' },
+          'aria-label': 'Dismiss',
+          onclick: () => dismiss(),
+        },
+        icon('close', { size: 16, stroke: 2.25 })
+      )
   )
 
   let timer = null

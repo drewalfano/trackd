@@ -476,6 +476,9 @@ function maybeShowInstallHint(settings) {
   setTimeout(() => {
     toast('Add to Home Screen from the Share menu to use this offline.', {
       action: 'Got it',
+      // Nothing to undo and nothing to decline: this toast tells you one thing,
+      // and acknowledging it is the same act as closing it.
+      actionDismisses: true,
       duration: 15000,
       onAction: () => saveSettings({ firstRunSeen: true }),
     })

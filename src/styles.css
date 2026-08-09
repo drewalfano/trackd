@@ -1996,6 +1996,60 @@
   }
 
   /**
+   * The circles arrive with the gesture instead of waiting behind it.
+   *
+   * They used to sit at full size under the row, so a swipe did not reveal two
+   * controls so much as slide a lid off two that had been there the whole time.
+   * Nothing about that is wrong, and it is exactly why it felt mechanical: the
+   * only thing moving on screen was the row.
+   *
+   * `--swipe-progress` is 0 to 1 across the reveal, written by the gesture on
+   * every frame, so each circle grows into place as the finger uncovers it and
+   * shrinks back if the swipe is abandoned halfway. The scale is deliberately
+   * modest — 0.68 of 44px is still a circle, not a dot — because the point is
+   * for them to feel like they are settling in, not being inflated.
+   *
+   * `--swipe-settle` is 0ms while a finger is down and the release duration
+   * after, which is what keeps the two halves of one movement together: pinned
+   * during the drag, travelling on the same curve as the row when it lets go.
+   */
+  .swipe-actions .icon-btn {
+    --reveal: 0;
+    opacity: var(--reveal);
+    transform: translateX(calc((1 - var(--reveal)) * 10px)) scale(calc(0.68 + 0.32 * var(--reveal)));
+    transition:
+      transform var(--swipe-settle, 0ms) cubic-bezier(0.22, 1.12, 0.36, 1),
+      opacity var(--swipe-settle, 0ms) ease-out;
+  }
+
+  /**
+   * Delete leads, edit follows, because that is the order they come out from
+   * under the row: the surface travels left, so the rightmost circle is the
+   * first one uncovered. A stagger running the other way would have edit
+   * appearing through a row that had not moved off it yet.
+   *
+   * Each finishes over the last two thirds of its own reveal rather than the
+   * whole of it, which is what makes them land one after another instead of
+   * together at slightly different sizes.
+   */
+  .swipe-actions .icon-btn:last-child {
+    --reveal: clamp(0, var(--swipe-progress, 0) / 0.62, 1);
+  }
+  .swipe-actions .icon-btn:first-child {
+    --reveal: clamp(0, (var(--swipe-progress, 0) - 0.38) / 0.62, 1);
+  }
+
+  /**
+   * A circle that has been focused is a circle someone reached without a
+   * finger, and the reveal it was waiting on is a gesture they did not make.
+   * `--reveal` is the whole treatment, so overriding it puts the button at full
+   * size, full opacity and in place, with nothing else to undo.
+   */
+  .swipe-actions .icon-btn:focus-visible {
+    --reveal: 1;
+  }
+
+  /**
    * Buttons are capsules, not rounded rectangles.
    *
    * 24px on a 56px box is the one shape in here that read as someone else's

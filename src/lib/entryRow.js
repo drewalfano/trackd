@@ -7,8 +7,9 @@ import { formatTime } from './dates.js'
 /**
  * One logged entry.
  *
- * Swiping left reveals edit and delete. The actions sit behind the row and the
- * surface tracks the finger directly — no spring, no bounce.
+ * Swiping left reveals edit and delete. The actions sit behind the row, the
+ * surface tracks the finger, and the two circles grow into place as it uncovers
+ * them. Only one row in the app is open at a time.
  *
  * They are full-size ink circles rather than the small tinted ones this used
  * to draw. Those were `bg-canvas` sitting on a `bg-canvas` track, so the only

@@ -206,8 +206,66 @@ const SWIPE_AXIS_THRESHOLD = 12
 const SWIPE_AXIS_RATIO = 1.5
 
 /**
- * Swipe an entry left to reveal actions. Tracks the finger directly — no
- * spring, no overshoot. Returns a cleanup function.
+ * How a released row settles.
+ *
+ * Opening and closing are not the same event and do not get the same curve.
+ * Opening ARRIVES at something — two controls that were not there a moment ago
+ * — so it is allowed a few pixels of overshoot and a little longer to spend
+ * them: the row passes its resting place, the circles settle back with it, and
+ * the whole thing reads as weight coming to rest. Closing is a dismissal, and
+ * a dismissal that bounces is asking to be noticed on its way out. It gets a
+ * plain decelerating curve, and it gets there sooner.
+ *
+ * Overshoot is also only safe in one direction. Past the open position there
+ * is empty track to move into; past the closed position there is the card's
+ * own left edge, and a row that springs off it exposes a sliver of nothing
+ * where the row used to be.
+ */
+const SWIPE_OPEN_MS = 260
+const SWIPE_CLOSE_MS = 200
+const SWIPE_OPEN_EASE = 'cubic-bezier(0.22, 1.12, 0.36, 1)'
+const SWIPE_CLOSE_EASE = 'cubic-bezier(0.33, 0.9, 0.2, 1)'
+
+/**
+ * Past the open position the row keeps moving, at a third of the finger.
+ *
+ * A hard stop at the reveal width told the truth — there is nothing further —
+ * but it told it by feeling like the row had jammed. Resistance says the same
+ * thing without the collision: keep pulling and it keeps giving, less and less,
+ * which is what the end of every scroll on this platform already does.
+ */
+const SWIPE_RESIST = 0.32
+
+/**
+ * A flick decides on its own, without having to reach halfway.
+ *
+ * The halfway rule alone punishes the fast gesture: a quick flick that lifts at
+ * 50px has clearly asked for the row to open, and springing it shut is the app
+ * disagreeing with something unambiguous. Above this speed the direction of the
+ * finger settles it and distance stops mattering. 0.45px/ms is roughly a
+ * deliberate flick and well clear of the drift at the end of a slow drag.
+ */
+const SWIPE_FLICK = 0.45
+
+/**
+ * The one row that is open, app-wide.
+ *
+ * Two open rows is four identical circles on screen with nothing to say which
+ * pair belongs to which entry, and the delete in that set is not a control to
+ * be vague about. Held here rather than per-list because the rows themselves do
+ * not know about each other, and because Today and the full-log sheet can both
+ * have entries mounted at once.
+ */
+let openSwipeRow = null
+
+/**
+ * Swipe an entry left to reveal actions. Returns a cleanup function.
+ *
+ * The row tracks the finger while the finger is down, resists past the end of
+ * its travel, and settles on release — see the constants above for what
+ * "settles" means in each direction. It publishes `--swipe-progress` (0 to 1)
+ * on the wrapper the whole time, which is how the revealed controls animate
+ * with the movement rather than appearing fully formed underneath it.
  */
 export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
   let startX = 0
@@ -216,6 +274,9 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
   let dragging = false
   let decided = false
   let open = false
+  let lastX = 0
+  let lastT = 0
+  let velocity = 0
   const surface = el.querySelector('[data-swipe-surface]')
   if (!surface) return () => {}
 
@@ -228,9 +289,22 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
    */
   el.style.touchAction = 'pan-y'
 
+  /**
+   * One write moves the row and tells the controls how far it got.
+   *
+   * `--swipe-settle` is the duration the buttons should take to catch up, and
+   * it has to be published here rather than keyed off `data-swiping`: that flag
+   * stays on while a row sits open, so it cannot distinguish "following a
+   * finger" from "settling after one". 0ms during the drag means the circles
+   * are pinned to the movement; the release duration means they arrive with it.
+   */
   const setX = (x, animate) => {
-    surface.style.transition = animate ? 'transform 200ms cubic-bezier(0.16,1,0.3,1)' : 'none'
+    const settle = x < 0 ? SWIPE_OPEN_MS : SWIPE_CLOSE_MS
+    const ease = x < 0 ? SWIPE_OPEN_EASE : SWIPE_CLOSE_EASE
+    surface.style.transition = animate ? `transform ${settle}ms ${ease}` : 'none'
     surface.style.transform = `translateX(${x}px)`
+    el.style.setProperty('--swipe-progress', Math.min(1, -x / width).toFixed(3))
+    el.style.setProperty('--swipe-settle', animate ? `${settle}ms` : '0ms')
   }
 
   const close = (animate = true) => {
@@ -239,14 +313,37 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
     setX(0, animate)
     el.dataset.open = 'false'
     delete el.dataset.swiping
+    if (openSwipeRow === el) openSwipeRow = null
     onClose?.()
+  }
+
+  /**
+   * Touching any row closes whichever other row is open.
+   *
+   * On touchstart rather than once the gesture is judged horizontal, because
+   * every way of reaching another row should dismiss the open one — a tap on a
+   * neighbour, a scroll of the list, a swipe on a second entry. Waiting for the
+   * axis decision would only handle the third, and leave a stale pair of
+   * circles sitting behind a sheet the tap just opened.
+   *
+   * `isConnected` because the list rebuilds on delete and on day change, which
+   * can leave this pointing at a row that is no longer in the document.
+   */
+  const closeOthers = () => {
+    if (!openSwipeRow || openSwipeRow === el) return
+    if (openSwipeRow.isConnected) openSwipeRow._closeSwipe?.(true)
+    openSwipeRow = null
   }
 
   const onStart = (e) => {
     if (e.touches?.length > 1) return
     const p = e.touches ? e.touches[0] : e
+    closeOthers()
     startX = p.clientX
     startY = p.clientY
+    lastX = p.clientX
+    lastT = e.timeStamp || performance.now()
+    velocity = 0
     dragging = true
     decided = false
   }
@@ -289,8 +386,35 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
        * the row settles open, since open is where it is meant to stay.
        */
       el.dataset.swiping = 'true'
+      /**
+       * Give back the threshold, and only the threshold.
+       *
+       * The 12px above is evidence, not travel: charging it to the gesture made
+       * the row jump 12px the instant it was captured, which is the single
+       * biggest thing that made this feel like a mechanism rather than a
+       * surface. Moving the origin forward by exactly that much starts the row
+       * from rest under the finger.
+       *
+       * By exactly that much, and no more. Resetting the origin to wherever the
+       * finger is on the deciding frame would also throw away the extra 40 or
+       * 50px a fast flick has already covered by the time we look, and the row
+       * would spend the rest of the gesture trailing the thumb.
+       */
+      startX += deltaX > 0 ? SWIPE_AXIS_THRESHOLD : -SWIPE_AXIS_THRESHOLD
+      return
     }
-    dx = Math.max(-width - 24, Math.min(0, (open ? -width : 0) + deltaX))
+
+    const now = e.timeStamp || performance.now()
+    const dt = now - lastT
+    // Last sample only, not an average over the gesture: what decides a release
+    // is where the finger was going as it left, and a slow drag that ends in a
+    // flick should read as a flick.
+    if (dt > 0) velocity = (p.clientX - lastX) / dt
+    lastX = p.clientX
+    lastT = now
+
+    const raw = (open ? -width : 0) + deltaX
+    dx = raw > 0 ? 0 : raw < -width ? -width + (raw + width) * SWIPE_RESIST : raw
     setX(dx, false)
   }
 
@@ -298,11 +422,16 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
     if (!dragging) return
     dragging = false
     if (!decided) return
-    if (dx < -width / 2) {
+    // A definite flick settles it; anything slower falls back to which side of
+    // halfway the row was left on.
+    const shouldOpen =
+      velocity < -SWIPE_FLICK ? true : velocity > SWIPE_FLICK ? false : dx < -width / 2
+    if (shouldOpen) {
       open = true
       dx = -width
       setX(-width, true)
       el.dataset.open = 'true'
+      openSwipeRow = el
       onOpen?.()
     } else {
       close()
