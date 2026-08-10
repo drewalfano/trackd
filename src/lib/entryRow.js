@@ -19,8 +19,31 @@ import { formatTime } from './dates.js'
  * the shape has to do all of that work by itself, so it gets the full 44px and
  * the fill.
  */
-export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
-  const actionBtn = (name, label, handler) =>
+/**
+ * How long the row spends collapsing before the delete is actually written.
+ *
+ * The write is what triggers the rebuild that replaces this list, so the
+ * animation has to finish first or it is replaced mid-flight. See
+ * `.swipe-row[data-removing]` for why 180 and why `ease-in`.
+ */
+const REMOVE_MS = 180
+
+export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap, isNew = false } = {}) {
+  /**
+   * `collapse` is for the one action that removes this row from the list.
+   *
+   * Edit and duplicate both open a sheet over a row that is still there, so
+   * they close the swipe and hand over immediately. Delete does not: the row is
+   * about to stop existing, and it should be seen to leave.
+   *
+   * The delete path deliberately does NOT close the swipe first. Snapping the
+   * surface 128px back to the right while the box collapses downward is two
+   * movements arguing, and the honest picture is the one where the circle you
+   * just pressed stays under your finger as the row goes. The open-row bookkeeping
+   * survives it: `openSwipeRow` is guarded by `isConnected` at every use, and
+   * this row is a frame away from leaving the document.
+   */
+  const actionBtn = (name, label, handler, collapse = false) =>
     h(
       'button',
       {
@@ -28,8 +51,32 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
         'aria-label': label,
         onclick: (e) => {
           e.stopPropagation()
-          wrapper._closeSwipe?.(false)
-          handler(entry)
+          if (!collapse) {
+            wrapper._closeSwipe?.(false)
+            handler(entry)
+            return
+          }
+          // Measured, then written, so there is a real number to animate from —
+          // `height: auto` does not interpolate and a guessed `max-height`
+          // spends the front of the animation closing space that was not there.
+          wrapper.style.height = `${wrapper.offsetHeight}px`
+          wrapper.dataset.removing = 'true'
+          /**
+           * The forced reflow is load-bearing, and a `requestAnimationFrame`
+           * here is NOT a substitute — it was tried and the row snapped shut.
+           *
+           * rAF callbacks run before the frame's style recalculation, so the
+           * measured height and the zero can both land before the browser has
+           * computed a style for either. What it then sees is `auto → 0`, which
+           * does not interpolate. Reading `offsetHeight` back commits the
+           * measured value first, so there is a real number to leave from.
+           *
+           * Same idiom, same reason, as the tab pill's first placement in
+           * main.js and the segment pill's handoff in lib/ui.js.
+           */
+          void wrapper.offsetHeight
+          wrapper.style.height = '0px'
+          setTimeout(() => handler(entry), REMOVE_MS)
         },
       },
       icon(name, { size: 20 })
@@ -61,14 +108,25 @@ export function entryRow(entry, { onEdit, onDelete, onDuplicate, onTap } = {}) {
 
   const wrapper = h(
     'div',
-    { class: 'swipe-row' },
+    // `data-entry-id` is how Today works out, on its NEXT build, which rows
+    // were already on screen — see `freshEntryIds`. It is on the row rather
+    // than held in a module-scoped set because a render that gets discarded
+    // before it mounts must not be able to claim a row was drawn.
+    //
+    // `row-in` is the one-shot that follows from that answer. Undo restoring a
+    // deleted entry counts as an arrival, since the row coming back is the
+    // whole point of the offer.
+    {
+      class: isNew ? 'swipe-row row-in' : 'swipe-row',
+      'data-entry-id': entry.id,
+    },
     // 20px on the right is the row's own side padding, so the trailing circle
     // lands on the same margin every other thing in the card lines up on.
     h(
       'div',
       { class: 'swipe-actions absolute inset-y-0 right-0 flex items-center gap-[10px] pr-[20px]' },
       onEdit && actionBtn('pencil', 'Edit entry', onEdit),
-      onDelete && actionBtn('trash', 'Delete entry', onDelete)
+      onDelete && actionBtn('trash', 'Delete entry', onDelete, true)
     ),
     surface
   )

@@ -185,6 +185,91 @@ function seedMode(settings) {
  */
 let lastKcal = 0
 
+/**
+ * Which entries were not on screen a moment ago, so a new row can arrive rather
+ * than appear.
+ *
+ * **Read from the DOM, not from a module-scoped memory, and that is the whole
+ * design.** A remembered id set was written first and was wrong on the app's
+ * most common action. `createScreen` serialises renders and DISCARDS one that
+ * was superseded mid-flight — and `quickLogFood` writes twice, the entry and
+ * then the food's recency, so logging emits two changes. The first build sees
+ * the new id and is thrown away before it paints; the second build finds the id
+ * already recorded and animates nothing. Every quick add took that path.
+ *
+ * The document does not have that problem. A build that is discarded never
+ * touches it, so what is mounted is exactly what the user is looking at, which
+ * is the only thing "was this row already there" can honestly mean.
+ *
+ * **Ids rather than a newest-timestamp**, because Undo restores a deleted
+ * record verbatim — original id, original `createdAt` — so "newer than anything
+ * we have seen" would miss the one case where a row coming back is the entire
+ * point of the offer.
+ *
+ * **A date change animates nothing.** Every row on the day you just swiped to
+ * is new by this test, and eight rows arriving at once is not an insertion, it
+ * is a screen. The mounted list carries the day it was built for, so the
+ * comparison is against what is on screen rather than against a second
+ * remembered value that could drift from it.
+ *
+ * Scoped to `[data-today-log]`, which only this screen sets. The Full log sheet
+ * builds `entryRow`s too, and an unscoped query would let the rows behind a
+ * scrim answer for the rows in front of it.
+ */
+/**
+ * Ids caught mid-arrival, and how long they stay that way.
+ *
+ * **Logging renders Today TWICE.** `quickLogFood` writes the entry and then the
+ * food's recency, and both emit — so the first render mounts the new row with
+ * its animation, and a second render lands about a frame later. By then the row
+ * IS painted, so the DOM check below correctly reports nothing new, rebuilds the
+ * list without the class, and destroys the animation before it has run a frame.
+ *
+ * The document is still the right thing to ask; it just has to be asked about a
+ * window rather than an instant. A row stays "arriving" for slightly longer than
+ * the animation it is playing, so a re-render inside that window re-applies the
+ * class instead of cancelling it. Past the window it is simply a row.
+ *
+ * 300 against the 200ms of `row-in`, which leaves room for the second render to
+ * be a few frames late without leaving so much that an unrelated repaint could
+ * fall inside it.
+ *
+ * The restart this causes is invisible in practice — the second mount is
+ * sub-frame — but it is a restart, and if the double render is ever collapsed
+ * into one emit this whole map can go with it. That would be the better fix and
+ * it belongs in the write path, not here: two full IndexedDB reads and two full
+ * tree rebuilds per logged item is a cost this screen pays whether or not
+ * anything is animating.
+ */
+const ARRIVAL_GRACE_MS = 300
+const arriving = new Map()
+
+function freshEntryIds(date, entries) {
+  const now = performance.now()
+  for (const [id, at] of arriving) {
+    if (now - at > ARRIVAL_GRACE_MS) arriving.delete(id)
+  }
+
+  const list = document.querySelector('[data-today-log]')
+  if (!list || list.dataset.todayLog !== date) {
+    arriving.clear()
+    return new Set()
+  }
+
+  const painted = new Set(
+    [...list.querySelectorAll('[data-entry-id]')].map((el) => el.dataset.entryId)
+  )
+  const fresh = new Set(entries.filter((e) => !painted.has(e.id)).map((e) => e.id))
+  for (const id of fresh) arriving.set(id, now)
+
+  // Still arriving, even though it is on screen now: this is the second render
+  // of the pair, and the row it is about to replace is mid-animation.
+  for (const [id] of arriving) {
+    if (entries.some((e) => e.id === id)) fresh.add(id)
+  }
+  return fresh
+}
+
 function calorieBlock({ value, target, mode, live = true, control = null, swapping = false }) {
   const { pct, over } = progress(value, target)
   // Round the operands, then difference — same rule the rings use.
@@ -466,6 +551,20 @@ function dayDeck({ current, prev, next }) {
 const LOG_PREVIEW_MAX = 8
 
 /**
+ * The log preview's card, stamped with the day it was built for.
+ *
+ * The stamp is what `freshEntryIds` reads on the next build, and it is on the
+ * card rather than held in a variable up here so that the record of what is on
+ * screen lives in the same place as the thing on screen. A discarded render
+ * cannot desynchronise them, because a discarded render never mounts.
+ */
+function logCard(date, children) {
+  const el = card(children)
+  el.dataset.todayLog = date
+  return el
+}
+
+/**
  * The way into the Log sheet, in the section head.
  *
  * It was briefly the last row of the card instead, on the argument that "there
@@ -635,6 +734,10 @@ export function todayScreen() {
       // stored reading. `createScreen` does not mount until this build resolves,
       // which is what makes that a guarantee rather than a fast correction.
       seedMode(settings)
+      // Read BEFORE the new tree is built, while the outgoing list is still the
+      // one in the document — `createScreen` does not mount until this whole
+      // build resolves.
+      const freshRows = freshEntryIds(state.date, entries)
 
       return h(
         'div',
@@ -765,7 +868,11 @@ export function todayScreen() {
             // Reversed here rather than in `listEntries`, so the sort stays
             // one screen's decision instead of both screens'.
             entries.length
-              ? card(
+              ? // Stamped with the day, on both branches, so the first entry of
+                // a day still reads as having arrived rather than as the list
+                // appearing for the first time.
+                logCard(
+                  state.date,
                   [...entries]
                     .reverse()
                     .slice(0, LOG_PREVIEW_MAX)
@@ -774,6 +881,7 @@ export function todayScreen() {
                         onEdit: openEditEntry,
                         onDelete: deleteEntryWithUndo,
                         onDuplicate: openDuplicateSheet,
+                        isNew: freshRows.has(entry.id),
                       })
                     )
                 )
@@ -785,7 +893,7 @@ export function todayScreen() {
                 //
                 // No route into the sheet needed down here: `Full log` sits in the
                 // head above and renders at every count, including this one.
-                card(emptyRow('Nothing logged yet'))
+                logCard(state.date, emptyRow('Nothing logged yet'))
           )
         )
       )

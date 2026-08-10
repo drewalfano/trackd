@@ -1852,6 +1852,72 @@
   }
 
   /**
+   * A row that was not in the list a moment ago.
+   *
+   * Logging is the app's primary action and four things already acknowledge it
+   * — the calorie hero counts, the rings grow, the bar fills, a toast rises —
+   * while the one element that IS the new entry appeared with nothing at all.
+   * The eye follows movement, so all of that motion pulled attention to the
+   * summary and away from the record it summarises; on an eight-row day you had
+   * to read the list to find out which row was yours.
+   *
+   * Downward from -6px, because the list is newest-first and the row arrives at
+   * the top of it. 200ms on the app's standard curve, which is `toast-in`'s
+   * duration — the two land together and they are reporting the same event.
+   *
+   * The rows below do not slide down to make room; the card simply gets taller.
+   * That is the fuller answer and it needs FLIP, which is not worth it here —
+   * the rows below are context, and the subject is the one that moved.
+   *
+   * Reduced motion is handled by the blanket rule at the foot of this file,
+   * as it is for `toast-in` and `sheet-in`.
+   */
+  @keyframes row-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .row-in {
+    animation: row-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /**
+   * A row on its way out, collapsing before the rebuild replaces the list.
+   *
+   * Deleting used to reflow instantly: the row was gone on the next paint and
+   * everything below it moved up by its full height with nothing in between. The
+   * gap closing is what confirms the RIGHT row went, and an instant jump throws
+   * that evidence away before the toast offering the undo has even been read.
+   *
+   * The height is measured and written by `entryRow` rather than animated from
+   * `auto` or from a guessed `max-height`, both of which either fail to
+   * interpolate or spend the first half of the animation doing nothing visible.
+   * `overflow: hidden` above is what clips the content as the box closes.
+   *
+   * `grid-template-rows: 0fr` would avoid the layout pass, and cannot be used:
+   * it needs the row to be a grid at both ends of the transition, and a grid
+   * `.swipe-row` would turn the in-flow `::before` divider into a grid ITEM —
+   * the exact failure documented on that pseudo-element.
+   *
+   * 180ms and `ease-in`: an exit, accelerating away, two thirds of the 260ms the
+   * row takes to open. Opacity leads slightly at 140 so the row has faded before
+   * the last of the box closes, rather than a sliver of full-strength content
+   * being pinched out.
+   */
+  .swipe-row[data-removing='true'] {
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      height 180ms ease-in,
+      opacity 140ms ease-in;
+  }
+
+  /**
    * The log's outer inset.
    *
    * Rows carry `10px 20px`, which already gives 20 down the sides and 10 either
@@ -2803,6 +2869,159 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/**
+ * A panel arriving on the sheet's stack, and the direction it came from.
+ *
+ * The stack is a real hierarchy — a back chevron, a history entry to unwind,
+ * `pop` to walk it — and none of it was visible. `showTop` replaced the body's
+ * contents on one frame, so pushing Search and popping back to the root looked
+ * identical: the contents changed. On the way back there was not even a
+ * direction to read.
+ *
+ * Only the INCOMING panel moves. The outgoing one is already detached by the
+ * time this runs, and keeping it alive to cross-fade against would mean holding
+ * two panels' DOM — which the stack already does for its own reasons, and which
+ * is not worth extending to an animation this short.
+ *
+ * **The first build of this read as a flash rather than a movement, and all
+ * three values were the reason.** It travelled 16px, faded from `opacity: 0`,
+ * and ran on `cubic-bezier(0.16, 1, 0.3, 1)` — the expo-out the rest of the app
+ * uses. That curve covers about nine tenths of its distance in the first third
+ * of its duration, which is right for a press dip settling and wrong for a
+ * navigation: over 16px the eye gets a blink and then a long tail with nothing
+ * happening in it. Fading fully out made it worse, because at that distance the
+ * opacity IS the animation and the translate is a rounding error.
+ *
+ * The second attempt overcorrected: 28px on `cubic-bezier(0.32, 0.72, 0, 1)`,
+ * the curve iOS is usually described by. Its second control point sits at x=0,
+ * so the surface lunges early and then floats a long way into its stop — which
+ * does not overshoot mathematically but reads as a bounce, and was rejected on
+ * sight for exactly that.
+ *
+ * **The sliding was the wrong idea and it is gone.** Three attempts tuned its
+ * distance, its opacity floor and its curve, and every one of them was still a
+ * second movement arguing with the first. What a panel change actually needs is
+ * for the SHEET to change size — pushing from the add sheet's search and
+ * favourites to the Custom form is a 94px difference, and that was happening on
+ * one frame — and for the controls inside it to exchange places quietly while
+ * it does. The resize is the movement. The contents just have to not flicker
+ * during it.
+ *
+ * So: no transform, no direction, one fade. `panel-push` and `panel-pop` were
+ * two keyframes to say which way you were going, and nothing says that any
+ * more; the back chevron and the title do. That is a real thing given up, and
+ * it was given up on purpose — it cost more in noise than it paid in legibility.
+ *
+ * From 0.35 rather than from 0, so the panel is never fully absent while the
+ * box around it is resizing. An empty sheet mid-resize is exactly the frame
+ * this is trying to remove.
+ *
+ * **`PANEL_MS` and `PANEL_EASE` in lib/sheet.js must match the values here.**
+ * The height is animated from JS and the contents from CSS, and they are one
+ * movement: if they drift apart the sheet finishes resizing before its contents
+ * have arrived, which is the original complaint in a subtler form.
+ */
+@keyframes panel-in {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.panel-in {
+  animation: panel-in 240ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/**
+ * The new screen arriving after a tab switch.
+ *
+ * `show()` holds the outgoing screen until the incoming one has read IndexedDB,
+ * which is right and is why there is no white flash on navigation — but it left
+ * the swap itself unmarked, so the sequence read as tap, a pause of
+ * unpredictable length, then a pop. In a local-first app that is the one thing
+ * navigation should never look like.
+ *
+ * **This was 160ms, 4px, and `opacity: 0` on the expo-out curve, and it read as
+ * a flicker.** 4px is not a distance the eye can follow, so the whole animation
+ * was carried by an opacity ramp short enough to look like a repaint fault —
+ * the screen blinked rather than arrived. The argument is written out on
+ * `panel-in`, which had the same three faults for the same reason.
+ *
+ * 200ms, 6px, and a floor of 0.65 on the opacity, on the same quad-out the
+ * sheet panels use — see `panel-in` for why that curve and not the iOS one,
+ * which read as a bounce here too. Nothing goes to fully transparent, so there
+ * is no frame where the page is missing, and the movement is small enough to
+ * register as a settle rather than as an arrival.
+ *
+ * The 6px is kept here where the panels' slide was dropped, because these are
+ * different situations: a tab switch replaces the whole page with no container
+ * resizing to carry the change, so this small lift is the only thing marking it.
+ *
+ * Deliberately NOT directional yet — `show()` is the path for pushed screens
+ * (`settings/data`, `foods/:id`) as well as for the three tabs, and a left/right
+ * slide would need to know which it is. Worth doing, and bigger than this.
+ *
+ * Vertical, so it cannot interact with `.screen`'s horizontal gutter. Nothing
+ * inside `#view` is `position: fixed` — the tab bar, its fade, every sheet and
+ * the toast host are all siblings or children of `<body>` — so the transform
+ * creating a containing block here reaches nothing.
+ */
+@keyframes view-in {
+  from {
+    opacity: 0.65;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+/**
+ * **The page header is excluded, and that is the point of the selector.**
+ *
+ * This was on `#view` itself, so the whole screen — title and all — lifted and
+ * faded. A nav bar that moves when you change tabs is the tell that a web app is
+ * animating a document rather than swapping a screen; the platform this ships to
+ * holds its title bar completely still and moves only what is under it. The
+ * header is the frame, not the payload.
+ *
+ * The exclusions are three because the app builds headers two ways, and both are
+ * real:
+ *
+ *   - Today, Trends and Settings render `<header class="page-header">`.
+ *   - Pushed screens — Preferences, Foods, About — have no header element at
+ *     all. They lay a `.back-btn` and a bare `h1` out as loose siblings at the
+ *     top of the same column as their content, so there is no single node to
+ *     exclude and each has to be named.
+ *
+ * Written as chained `:not()` rather than one `:not(header, .back-btn, h1)`
+ * because the chained form has no support floor worth checking.
+ *
+ * **The depth is three, and getting it wrong is silent.** `#view` holds
+ * `createScreen`'s own wrapper div, which holds the screen's root, whose
+ * children are the header and the content. Written at two levels this matched
+ * the screen ROOT — so it animated the header along with everything else while
+ * appearing to exclude it, because the root is not itself a header. The
+ * exclusions only bite at the level the header actually sits on.
+ *
+ * A screen built to some other shape simply will not match, which fails to "no
+ * animation" rather than to a broken one.
+ */
+/**
+ * This rule was briefly suspected of a scroll-repaint artefact — the screen
+ * painting blank above a horizontal line, with correct layout underneath — and
+ * was cleared by bisect on 2026-08-09: the artefact reproduces with this rule,
+ * and every other animation added with it, stashed back to HEAD. Recorded here
+ * because it is the obvious suspect and will be suspected again; it animates
+ * opacity across the screen's whole content column, which is a large
+ * short-lived compositing layer. That did not turn out to be the cause, and the
+ * artefact is not this batch's.
+ */
+#view[data-entering] > * > * > *:not(header):not(.back-btn):not(h1) {
+  animation: view-in 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 /**

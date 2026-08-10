@@ -75,6 +75,22 @@ async function show(factory) {
   }
   currentScreen?.destroy()
   currentScreen = next
+  /**
+   * Mark the arrival, since the swap itself had nothing to say it happened.
+   *
+   * Holding the outgoing screen through the read above is right and is why
+   * there is no white flash — but it left the sequence reading as tap, a pause
+   * of unpredictable length, then a pop, which is what a page load looks like.
+   *
+   * Cleared and re-set with a reflow between, the same idiom `syncTabs` uses on
+   * the pill below: re-applying an attribute a node already carries does not
+   * restart an animation, so the second navigation would be silent. Set BEFORE
+   * `mount` so the first painted frame is the new tree at its starting opacity
+   * rather than at full strength.
+   */
+  delete view.dataset.entering
+  void view.offsetWidth
+  view.dataset.entering = 'true'
   mount(view, next.el)
   window.scrollTo(0, 0)
 }

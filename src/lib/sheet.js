@@ -21,6 +21,20 @@ let active = null
 const STATE = 'mt-sheet'
 
 /**
+ * A panel change is ONE movement, so the content and the sheet that holds it
+ * are given the same duration and the same curve.
+ *
+ * They were tuned separately at first and that is exactly what read as wrong:
+ * the contents slid on one clock and the container resized on another (which is
+ * to say, instantly). Declared here rather than in the stylesheet because the
+ * height is animated from JS — see `resizeTo` — and two numbers that have to
+ * agree should not live in two files. `.panel-in` in styles.css carries the
+ * matching pair and a note pointing here.
+ */
+const PANEL_MS = 240
+const PANEL_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+
+/**
  * iOS-safe scroll lock.
  *
  * `overflow: hidden` on body does not reliably lock scrolling in mobile Safari,
@@ -328,15 +342,20 @@ export function openSheet({ title, render, footer = null }) {
      * permanently. Measured rather than assumed, because a footer is one button
      * on most sheets and two on the weigh-in editor.
      *
-     * After a frame, since the height is only knowable once the new content has
-     * laid out.
+     * **Synchronously, and that matters now.** This used to run in a
+     * `requestAnimationFrame`, on the reasoning that the height is only knowable
+     * once the new content has laid out — which is true, and which reading
+     * `offsetHeight` achieves on its own by forcing the layout rather than
+     * waiting for one. Deferring it put the padding change a frame INTO the
+     * panel resize, so the contents shifted vertically by the difference between
+     * the old footer and the new one while the sheet was already moving. One
+     * forced layout per panel change is the cost, and it was being paid a frame
+     * later anyway.
      */
-    requestAnimationFrame(() => {
-      body.style.paddingBottom = hasFooter
-        ? `${footerEl.offsetHeight}px`
-        : 'calc(20px + env(safe-area-inset-bottom, 0px))'
-      syncFooterFade()
-    })
+    body.style.paddingBottom = hasFooter
+      ? `${footerEl.offsetHeight}px`
+      : 'calc(20px + env(safe-area-inset-bottom, 0px))'
+    syncFooterFade()
   }
 
   /**
@@ -352,7 +371,21 @@ export function openSheet({ title, render, footer = null }) {
    * opacity, so the backdrop-filter layers stop compositing as well as stop
    * showing. That cost is paid every frame while the band exists.
    */
+  /**
+   * Frozen while the sheet is changing size.
+   *
+   * The test is "does the content overflow the scroller", and during a resize
+   * the scroller's height is a moving number — so this ran on every frame the
+   * ResizeObserver saw and flipped the band on and off partway through. A
+   * `display: none` toggle on three backdrop-filter layers, several times inside
+   * 240ms, is the flicker that reads as the sheet glitching.
+   *
+   * The answer is only meaningful at the end state, so it is taken there.
+   */
+  let resizing = false
+
   function syncFooterFade() {
+    if (resizing) return
     footerFade.dataset.active = String(body.scrollHeight > body.clientHeight + 1)
   }
 
@@ -365,14 +398,96 @@ export function openSheet({ title, render, footer = null }) {
   const contentObserver =
     typeof ResizeObserver === 'function' ? new ResizeObserver(syncFooterFade) : null
 
-  function showTop() {
+  /**
+   * `dir` says whether this is a navigation at all. It no longer says which
+   * way: the panels used to slide in from the side they came from, and that
+   * movement was dropped — see `panel-in` in styles.css. The argument is kept
+   * because it is what distinguishes a navigation from the two cases that must
+   * NOT animate: the ROOT panel, where the sheet itself is arriving and a
+   * second movement inside it would be two arrivals for one event, and
+   * `ctx.refresh`, which repaints a panel in place and has not gone anywhere.
+   *
+   * The class is stripped before it is re-added because panels keep their DOM
+   * when you push past them — so a panel being come BACK to already carries it,
+   * and re-adding an identical class to a node the browser has already animated
+   * does nothing. Setting it while the node is detached and animating on
+   * insertion is what makes it replay.
+   *
+   * **The header does not animate.** The title briefly faded with the body, on
+   * the reasoning that it is the other half of the same change — and that is the
+   * wrong model. The header is the sheet's chrome, not its content: the back
+   * chevron, the title and the close button are a fixed frame that the content
+   * moves through. Apple's sheets and nav bars hold exactly this line, and
+   * fading the title made the frame look like part of the payload. The title
+   * swaps outright; only the body crosses over.
+   */
+  function showTop(dir = null) {
     const top = panels[panels.length - 1]
+    const arrival = dir ? 'panel-in' : null
+    // Measured before the swap, while the outgoing panel is still setting the
+    // sheet's height. See `resizeTo`.
+    const fromHeight = arrival && panel.isConnected ? panel.offsetHeight : null
     clear(body)
-    if (top?.node) body.appendChild(top.node)
+    if (top?.node) {
+      top.node.classList.remove('panel-in')
+      if (arrival) top.node.classList.add(arrival)
+      body.appendChild(top.node)
+    }
     syncHeader()
     body.scrollTop = top?.scrollTop ?? 0
     contentObserver?.disconnect()
     if (top?.node) contentObserver?.observe(top.node)
+    if (fromHeight != null) resizeTo(fromHeight)
+  }
+
+  /**
+   * Carry the sheet's own height across a panel change.
+   *
+   * **This is the half that was missing, and it was the whole complaint.** A
+   * panel sets the sheet's height, so pushing from a tall panel to a short one
+   * — the add sheet's search and favourites, to the Custom form — resized the
+   * whole surface on one frame. Sliding the CONTENTS in over 240ms while the
+   * container they sit in snapped to a new size read as the sheet lurching,
+   * and no amount of tuning the slide could fix a container that was not
+   * moving with it.
+   *
+   * A first/last measurement rather than a CSS transition, because the height
+   * being animated from and to is `auto` at both ends — the panel is sized by
+   * whatever is in it, and `auto` does not interpolate. So: read the old height,
+   * let the new content lay out to get the new one, pin the old back, and
+   * release it on the next frame.
+   *
+   * The explicit height is removed when it lands so the panel goes back to being
+   * content-sized. A timer rather than `transitionend`, because `swipeToDismiss`
+   * writes `panel.style.transition` for its transform and would swallow the
+   * event — and if a drag DOES start mid-resize it simply wins, which is
+   * correct: the finger outranks a transition it interrupted.
+   */
+  let resizeTimer = null
+  function resizeTo(fromHeight) {
+    panel.style.transition = 'none'
+    panel.style.height = ''
+    // Measured with the new panel's padding already applied — `syncHeader` is
+    // synchronous for exactly this reason. A measurement taken before it would
+    // animate to a height the sheet then corrects a frame later.
+    const toHeight = panel.offsetHeight
+    if (toHeight === fromHeight) {
+      panel.style.transition = ''
+      syncFooterFade()
+      return
+    }
+    resizing = true
+    panel.style.height = `${fromHeight}px`
+    void panel.offsetHeight
+    panel.style.transition = `height ${PANEL_MS}ms ${PANEL_EASE}`
+    panel.style.height = `${toHeight}px`
+    clearTimeout(resizeTimer)
+    resizeTimer = setTimeout(() => {
+      panel.style.height = ''
+      panel.style.transition = ''
+      resizing = false
+      syncFooterFade()
+    }, PANEL_MS + 20)
   }
 
   function makeCtx(entry) {
@@ -418,7 +533,8 @@ export function openSheet({ title, render, footer = null }) {
     panels.push(entry)
 
     history.pushState({ [STATE]: { id, depth: panels.length } }, '')
-    showTop()
+    // The root panel arrives with the sheet, so it does not slide as well.
+    showTop(panels.length > 1 ? 'push' : null)
     return entry
   }
 
@@ -507,7 +623,7 @@ export function openSheet({ title, render, footer = null }) {
     }
     // Popped back to a panel we still have — drop everything above it.
     for (const entry of panels.splice(depth)) runDisposers(entry)
-    showTop()
+    showTop('pop')
   }
 
   const FOCUSABLE =
