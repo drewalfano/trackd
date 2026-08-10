@@ -1,7 +1,7 @@
 import { h } from '../lib/dom.js'
 import { getFood, getSettings } from '../lib/db.js'
 import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
-import { blockSelector, card, macroLine, notice } from '../lib/ui.js'
+import { blockSelector, card, macroLine, macroUnit, notice } from '../lib/ui.js'
 import { qty, servingLabel, unitLabel, pluralize } from '../lib/format.js'
 import { formatDayLabel, todayStr } from '../lib/dates.js'
 
@@ -126,7 +126,7 @@ export function mealPanel({
             'div',
             { class: 'flex items-baseline gap-[10px]' },
             h('span', { class: 'text-[30px] font-semibold leading-none' }, String(Math.round(totals.kcal))),
-            h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal')
+            macroUnit('kcal', 'text-[12px] font-medium')
           ),
           macroLine(totals, { size: 14, omit: ['kcal'] })
         ),
@@ -163,7 +163,7 @@ export function mealPanel({
                       'span',
                       { class: 'tnum shrink-0 text-[14px] font-semibold' },
                       String(Math.round(macros.kcal)),
-                      h('span', { class: 'ml-[4px] text-[12px] font-normal text-muted' }, 'cal')
+                      macroUnit('kcal', 'ml-[4px] text-[12px] font-semibold')
                     )
                   : null
               )

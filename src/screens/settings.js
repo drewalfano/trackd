@@ -50,6 +50,7 @@ export function settingsScreen() {
       const kcalField = numberInput({
         value: targets.kcal,
         suffix: 'cal',
+        suffixMacro: 'kcal',
         bare: true,
         onInput: (v) => {
           targets.kcal = Number(v) || 0

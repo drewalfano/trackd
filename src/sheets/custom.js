@@ -173,6 +173,7 @@ export function customPanel({ initial = {}, mode = 'create', onSaved }) {
           children: numberInput({
             value: values[key],
             suffix,
+            suffixMacro: key === 'kcal' ? 'kcal' : null,
             onInput: (v) => {
               values[key] = v
               if (key === 'kcal') kcalOverridden = v !== ''

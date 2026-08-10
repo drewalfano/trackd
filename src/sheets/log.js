@@ -3,7 +3,7 @@ import { icon } from '../lib/icons.js'
 import { listEntries, getSettings, toggleFavourite, onChange } from '../lib/db.js'
 import { sumEntries } from '../lib/compute.js'
 import { saveEntriesAsMeal } from '../lib/logging.js'
-import { card, macroLine } from '../lib/ui.js'
+import { card, macroLine, macroUnit } from '../lib/ui.js'
 import { textInput, labelledField } from '../lib/ui.js'
 import { entryRow } from '../lib/entryRow.js'
 import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
@@ -82,7 +82,13 @@ async function promptSaveAsMeal(entries, defaultName, host) {
                 'div',
                 { class: 'row' },
                 h('span', { class: 'flex-1 truncate text-[12px]' }, e.foodName),
-                h('span', { class: 'text-[12px] text-muted' }, `${Math.round(e.computed.kcal)} cal`)
+                h(
+                  'span',
+                  { class: 'text-[12px] text-muted' },
+                  String(Math.round(e.computed.kcal)),
+                  ' ',
+                  macroUnit('kcal', 'font-semibold')
+                )
               )
             )
           )

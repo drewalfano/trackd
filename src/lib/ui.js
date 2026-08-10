@@ -41,6 +41,34 @@ const MACRO_TEXT = {
   carbs: 'var(--color-carbs-text)',
 }
 
+/**
+ * The unit token that follows a number: `cal`, `P`, `F`, `C`.
+ *
+ * **It is always in its macro's hue, wherever it is drawn.** The figure stays
+ * in ink so the data is readable and the unit after it carries the identity —
+ * that is the whole convention, and it only works if it holds everywhere. It
+ * did not: `macroLine` coloured all four, and every hand-rolled `cal` beside a
+ * hero number — the serving sheet, the meal sheet, the plate, a Trends day row
+ * — was `text-muted`, so the same word was green in a 12px list and grey at
+ * 30px directly above it. Same drift `foodRowBody` describes: the component
+ * gets copied instead of called, then the copy disagrees about a detail.
+ *
+ * So there is one function and no literal `'cal'` in a span left in the app.
+ * Callers pass the size and weight they need; they do not get to pass a colour.
+ *
+ * The exception is prose. `average cal`, `3 items · 812 cal` and "The
+ * arithmetic came to 2100 cal." are sentences, not readings, and a hue inside a
+ * sentence is a highlight rather than a label. The word-labelled tables on the
+ * food detail screen are the same call, made in the note beside them.
+ */
+export function macroUnit(macro, cls = '') {
+  return h(
+    'span',
+    { class: cls, style: { color: MACRO_TEXT[macro] } },
+    MACRO_META[macro].short
+  )
+}
+
 /** Digit nodes for a string, for use inside an element that carries .tnum. */
 export function digits(text) {
   const holder = h('span')
@@ -184,7 +212,6 @@ export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) 
   const parts = []
   const shown = MACRO_ORDER.filter((m) => !omit.includes(m))
   shown.forEach((macro, i) => {
-    const meta = MACRO_META[macro]
     const value = macro === 'kcal' ? kcal(totals.kcal) : g(totals[macro])
     if (i > 0) parts.push(h('span', { class: 'text-muted', 'aria-hidden': 'true' }, '·'))
     parts.push(
@@ -193,11 +220,7 @@ export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) 
         { class: 'whitespace-nowrap' },
         h('span', { class: muted ? 'text-muted' : '' }, value),
         ' ',
-        h(
-          'span',
-          { style: { color: MACRO_TEXT[macro] }, class: 'font-semibold' },
-          macro === 'kcal' ? 'cal' : meta.letter
-        )
+        macroUnit(macro, 'font-semibold')
       )
     )
   })
@@ -855,6 +878,14 @@ export function numberInput({
   onInput,
   placeholder,
   suffix,
+  /**
+   * The macro whose hue the suffix carries, when the suffix IS a macro's unit.
+   * `cal` after a calorie field is the same token as `cal` after the hero
+   * number two screens away and reads in the same colour. `g`, `mg`, `cm` and
+   * `ft` are units of measure and stay muted — the hue means macro identity,
+   * and a green `g` would mean nothing.
+   */
+  suffixMacro = null,
   step = 'any',
   bare = false,
   width = 76,
@@ -877,7 +908,11 @@ export function numberInput({
     'div',
     { class: bare ? 'flex shrink-0 items-center gap-[10px]' : 'field' },
     input,
-    suffix ? h('span', { class: 'shrink-0 text-[14px] text-muted' }, suffix) : null
+    suffix
+      ? suffixMacro
+        ? macroUnit(suffixMacro, 'shrink-0 text-[14px] font-semibold')
+        : h('span', { class: 'shrink-0 text-[14px] text-muted' }, suffix)
+      : null
   )
   // Callers that need to write a new value back (the unit toggle converting
   // 2 servings into 60 g) need the field itself, not the wrapper.

@@ -78,6 +78,7 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
       const kcalField = numberInput({
         value: '',
         suffix: 'cal',
+        suffixMacro: 'kcal',
         placeholder: '—',
         onInput: (v) => {
           kcal = v

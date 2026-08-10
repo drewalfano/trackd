@@ -312,6 +312,7 @@ function targetsStep(draft) {
       children: numberInput({
         value: targets[key],
         suffix,
+        suffixMacro: key === 'kcal' ? 'kcal' : null,
         onInput: (v) => {
           targets[key] = Number(v) || 0
           sync()

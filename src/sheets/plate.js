@@ -14,6 +14,7 @@ import {
   estimateBadge,
   foodRowBody,
   macroLine,
+  macroUnit,
   numberInput,
   segmentedWide,
   labelledField,
@@ -418,7 +419,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                   { class: 'tnum text-[30px] font-semibold leading-none' },
                   String(Math.round(totals.kcal))
                 ),
-                h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal')
+                macroUnit('kcal', 'text-[12px] font-medium')
               ),
               macroLine(totals, { size: 14, omit: ['kcal'] })
             ),

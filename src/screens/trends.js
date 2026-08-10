@@ -36,6 +36,7 @@ import {
   pageHeader,
   macroColor,
   macroTextColor,
+  macroUnit,
 } from '../lib/ui.js'
 import { kgToUnit, unitToKg, weight as fmtWeight, signed, kcal, g } from '../lib/format.js'
 import { formatDayLabel, formatDayAge, todayStr, addDays, daysBetween } from '../lib/dates.js'
@@ -449,7 +450,7 @@ function dayRow(day, targets) {
       tracked
         ? [
             tnum(kcal(day.totals.kcal)),
-            h('span', { class: 'ml-[4px] text-[12px] font-normal text-muted' }, 'cal'),
+            macroUnit('kcal', 'ml-[4px] text-[12px] font-semibold'),
           ]
         : h('span', { class: 'text-muted' }, '—'),
     ),

@@ -12,7 +12,14 @@ import {
 } from '../lib/db.js'
 import { computeMacros } from '../lib/compute.js'
 import { logFood, defaultServing, DESCRIBE_SOURCE } from '../lib/logging.js'
-import { blockSelector, macroLine, segmentedWide, numberInput, labelledField } from '../lib/ui.js'
+import {
+  blockSelector,
+  macroLine,
+  macroUnit,
+  segmentedWide,
+  numberInput,
+  labelledField,
+} from '../lib/ui.js'
 import { unitLabel, servingLabel, round } from '../lib/format.js'
 import { blockForTime, formatDayLabel, addDays, todayStr } from '../lib/dates.js'
 import { QUICK_ADD_SOURCE } from './quickAdd.js'
@@ -295,7 +302,7 @@ export function servingPanel({
             'div',
             { class: 'flex items-baseline gap-[10px]' },
             kcalEl,
-            h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal')
+            macroUnit('kcal', 'text-[12px] font-medium')
           ),
           macrosEl
         ),
