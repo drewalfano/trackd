@@ -1909,6 +1909,48 @@
    * the last of the box closes, rather than a sliver of full-strength content
    * being pinched out.
    */
+  /**
+   * The rest of the screen, when the day changed.
+   *
+   * A day swipe moves the CARD and nothing else. The header, the Quick add rail
+   * and the log sit still through the drag and through the 200ms settle, and
+   * then cut to the new day in a single frame — so the gesture ends with one
+   * object having travelled a page width and everything around it having
+   * teleported. That mismatch is what reads as unnatural.
+   *
+   * It used to be covered rather than solved: the hero counted, the bar filled
+   * and three arcs swept after the slide landed, and the eye followed that
+   * instead of the cut. Those were removed because they asserted the DAY's
+   * numbers had changed when the day itself had changed, which is a different
+   * claim. Taking them out was right and it left the seam exposed.
+   *
+   * So the seam gets the smallest thing that closes it: a dissolve, opacity
+   * only, no movement. 140ms is shorter than the card's own 200 so the screen
+   * has settled by the time the card has, and it starts at 0.45 rather than 0
+   * for the reason every other fade in this file does — a frame of absent
+   * content reads as a fault, not as a transition.
+   *
+   * **Only the log wears it.** The Quick add rail sits between the card and the
+   * log and is byte-identical on every day — `quickAddFoods` ranks over a window
+   * ending at the real today and takes no date — so fading it would be claiming
+   * a change that did not happen, which is the thing this screen keeps being
+   * cleared of. The log is a different day's entries and genuinely did change.
+   *
+   * Only on a day change, too. Logging must not dissolve the list it just added
+   * a row to, and the mode toggle has `.reading-swap` for its own.
+   */
+  @keyframes day-swap {
+    from {
+      opacity: 0.45;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  .day-swap {
+    animation: day-swap 140ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
   .swipe-row[data-removing='true'] {
     opacity: 0;
     pointer-events: none;
@@ -3143,11 +3185,34 @@
   max-height: calc(100% - env(safe-area-inset-top, 0px) - var(--content-top));
   animation: sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
 }
-.sheet-panel[data-closing='true'] {
-  animation: sheet-out 200ms ease-in forwards;
-}
 .sheet-scrim {
   animation: scrim-in 260ms ease-out;
+}
+
+/**
+ * A sheet a finger has taken hold of, at any point in its life.
+ *
+ * `swipeToDismiss` writes an inline transform, and for the 260ms `sheet-in` is
+ * running a CSS animation outranks that — so a drag begun inside the entry
+ * window was tracked, wrote a transform, and moved nothing at all. Silently,
+ * which is the worst version: no lag, no snap, a sheet that ignored you during
+ * exactly the quarter-second in which a sheet opened by mistake gets thrown
+ * away.
+ *
+ * **The three flags are ordered, and the order is the whole design.** `dragging`
+ * suppresses the entry so the finger can own the panel; `closing` comes after it
+ * so a sheet that was merely touched can still animate away when it is closed
+ * properly; `dismissing` comes last so a sheet the finger is actively carrying
+ * out finishes under its own inline transition rather than being snapped back to
+ * `translateY(0)` by the exit keyframe. Specificity is equal across all three,
+ * so source order is what decides.
+ */
+.sheet-panel[data-dragging='true'],
+.sheet-scrim[data-dragging='true'] {
+  animation: none;
+}
+.sheet-panel[data-closing='true'] {
+  animation: sheet-out 200ms ease-in forwards;
 }
 .sheet-scrim[data-closing='true'] {
   animation: scrim-out 200ms ease-in forwards;

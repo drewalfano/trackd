@@ -244,6 +244,18 @@ let lastKcal = 0
 const ARRIVAL_GRACE_MS = 300
 const arriving = new Map()
 
+/**
+ * The day the card on screen is currently showing, or null on first paint.
+ *
+ * Read from the mounted list's own stamp for the reason `freshEntryIds` gives:
+ * a render that gets discarded before it paints must not be able to claim the
+ * day moved. Both callers read it before the new tree is built, while the
+ * outgoing one is still the document.
+ */
+function paintedDate() {
+  return document.querySelector('[data-today-log]')?.dataset.todayLog ?? null
+}
+
 function freshEntryIds(date, entries) {
   const now = performance.now()
   for (const [id, at] of arriving) {
@@ -270,7 +282,30 @@ function freshEntryIds(date, entries) {
   return fresh
 }
 
-function calorieBlock({ value, target, mode, live = true, control = null, swapping = false }) {
+/**
+ * Where the calorie bar was last drawn, so it resumes instead of replaying.
+ *
+ * The one mark on this card that had no memory. The number had `lastKcal` and
+ * the rings had `lastLen`, and both go to real trouble to avoid moving when the
+ * question changed rather than the data — while the bar underneath them wiped
+ * from empty to full on every single repaint, including a mode toggle, a day
+ * change, and any unrelated rebuild. It is the same argument `lastPct` makes for
+ * `progressBar` in lib/ui.js, applied to the one bar that never got it.
+ *
+ * Live card only. A neighbour that wrote here would leave its own fill behind as
+ * the next card's starting point, which is the mistake `lastKcal` documents.
+ */
+let lastKbarPct = null
+
+function calorieBlock({
+  value,
+  target,
+  mode,
+  live = true,
+  control = null,
+  swapping = false,
+  animate = true,
+}) {
   const { pct, over } = progress(value, target)
   // Round the operands, then difference — same rule the rings use.
   const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
@@ -296,8 +331,19 @@ function calorieBlock({ value, target, mode, live = true, control = null, swappi
    * Seeding `from` with the destination makes `countTo` write it outright, so
    * the swap is a swap. It still counts for everything that IS a data change:
    * logging, editing, deleting.
+   *
+   * **A DAY change is the same category, and was the louder bug of the two.**
+   * `lastKcal` survives the rebuild, so paging to yesterday made the hero count
+   * from today's total down to yesterday's — asserting that a thousand calories
+   * had just left a day you were not even looking at when it happened. And it
+   * arrived after the deck had already finished sliding, so the card came to
+   * rest and then kept moving. That is most of what made changing day feel long.
+   *
+   * `animate` is false whenever the day moved, so this takes the same route the
+   * toggle does and the number is simply written.
    */
-  number.dataset.value = String(swapping ? shown : live ? lastKcal : shown)
+  const instant = swapping || !animate
+  number.dataset.value = String(instant ? shown : live ? lastKcal : shown)
   if (live) lastKcal = shown
   countTo(number, shown, { format: (n) => kcal(n) })
 
@@ -313,14 +359,33 @@ function calorieBlock({ value, target, mode, live = true, control = null, swappi
    * read. The darker shade is `--color-kcal-edge`, the same pairing `.bar-over`
    * uses in the Log sheet, so past-target reads as one idea wherever it is drawn.
    */
+  /**
+   * Resumed from where it was last drawn, not replayed from empty.
+   *
+   * This was built at `width: 0%` and driven to `pct` in a frame, every time,
+   * unconditionally — on all three cards in the deck. So a mode toggle wiped it
+   * across, a day change wiped it across, and so did any rebuild caused by
+   * something else entirely. With `lastKbarPct` the common case is the one that
+   * should move: logging something grows the bar from where it already was.
+   *
+   * `?? 0` on first paint, so the card still fills in when it first appears.
+   * `animate` false — a neighbour, or a day change — starts it at its
+   * destination, which is the same thing `swapping` does for the number above
+   * and `animate` does for the rings below.
+   */
+  const from = animate ? (lastKbarPct ?? 0) : pct
+  if (live) lastKbarPct = pct
+
   const fill = h(
     'div',
-    { class: 'kbar-fill', style: { width: '0%' } },
+    { class: 'kbar-fill', style: { width: `${from}%` } },
     over > 0 ? h('span', { class: 'kbar-over' }, `+${over}`) : null
   )
-  requestAnimationFrame(() => {
-    fill.style.width = `${pct}%`
-  })
+  if (from !== pct) {
+    requestAnimationFrame(() => {
+      fill.style.width = `${pct}%`
+    })
+  }
 
   return h(
     'div',
@@ -391,7 +456,7 @@ function calorieBlock({ value, target, mode, live = true, control = null, swappi
  * focus stop, and being visible to a screen reader at all. Three days of
  * numbers announced as one card would be unreadable.
  */
-function dayCard({ totals, targets, live = false, position = 'current', onMode }) {
+function dayCard({ totals, targets, live = false, position = 'current', onMode, dayChanged = false }) {
   const el = h('div', {
     class: live ? 'day-card day-card-toggle' : 'day-card',
     'data-day': position,
@@ -410,6 +475,19 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode }
         mode: cardMode,
         live,
         swapping: live && modeSwap,
+        /**
+         * Nothing on this card moves when the DAY moved.
+         *
+         * The deck has already slid to say what happened; a number that then
+         * counts, a bar that then fills and three arcs that then sweep are all
+         * describing a change to a day, and the day is what changed. They also
+         * all land AFTER the slide finishes, so the card arrives and then keeps
+         * going — which is what made paging feel long and unsettled.
+         *
+         * The neighbours have never had a reason to animate at all: they are
+         * drawn at rest, two thirds off screen.
+         */
+        animate: live && !dayChanged,
         // Drawn on the neighbours too, not just the live card. They are the
         // real card at rest and a drag brings them fully into view — one that
         // arrived without the indicator, or with it on the other dot, would be
@@ -435,7 +513,12 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode }
             // get their own, or all three cards would fight over one memory and
             // every render would replay somebody's entrance.
             key: live ? macro : `${macro}:${position}`,
-            animate: live,
+            // `lastLen` survives the rebuild, so on a day change the live card's
+            // arcs would sweep from yesterday's values to today's — the same
+            // error as the hero counting across days, drawn three more times.
+            // `animate: false` makes `ringSvg` seed `from` with `to`, so they
+            // are simply drawn where they belong.
+            animate: live && !dayChanged,
             swapping: live && modeSwap,
           })
         )
@@ -467,7 +550,7 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode }
  * animation parks the incoming card precisely where a fresh deck will draw it,
  * so the rebuild has nothing to move.
  */
-function dayDeck({ current, prev, next }) {
+function dayDeck({ current, prev, next, dayChanged = false }) {
   /**
    * Set the reading, everywhere, and remember it.
    *
@@ -498,7 +581,7 @@ function dayDeck({ current, prev, next }) {
 
   const cards = [
     prev && dayCard({ ...prev, position: 'prev', onMode: setMode }),
-    dayCard({ ...current, live: true, position: 'current', onMode: setMode }),
+    dayCard({ ...current, live: true, position: 'current', onMode: setMode, dayChanged }),
     next && dayCard({ ...next, position: 'next', onMode: setMode }),
   ].filter(Boolean)
 
@@ -695,6 +778,18 @@ function quickAddTile(food, { date, block }) {
  * heading over an empty rail would be a section announcing that it has nothing
  * to say.
  */
+/**
+ * **This section does NOT dissolve on a day change, because it does not change.**
+ *
+ * `quickAddFoods` takes no date: it ranks over a rolling window ending at the
+ * real today, so the rail holds the same eight foods in the same order whichever
+ * day you are looking at. Only the tiles' `date` changes, and that is where a
+ * tap writes to rather than anything you can see.
+ *
+ * It briefly faded with the log below it, and that was the same dishonesty this
+ * screen keeps being cleared of: motion is a claim that something changed, and
+ * nothing here did. The log fades because the log is a different day's entries.
+ */
 function quickAddSection({ foods, firstRun, date, block }) {
   if (!foods.length && !firstRun) return null
 
@@ -734,9 +829,12 @@ export function todayScreen() {
       // stored reading. `createScreen` does not mount until this build resolves,
       // which is what makes that a guarantee rather than a fast correction.
       seedMode(settings)
-      // Read BEFORE the new tree is built, while the outgoing list is still the
-      // one in the document — `createScreen` does not mount until this whole
-      // build resolves.
+      // Both read BEFORE the new tree is built, while the outgoing one is still
+      // the document — `createScreen` does not mount until this whole build
+      // resolves. `was` is null on first paint, which is not a day change: the
+      // card has nowhere to have come from and should fill in normally.
+      const was = paintedDate()
+      const dayChanged = was != null && was !== state.date
       const freshRows = freshEntryIds(state.date, entries)
 
       return h(
@@ -801,6 +899,7 @@ export function todayScreen() {
             current: { totals, targets: t },
             prev: { totals: sumEntries(prevEntries), targets: t },
             next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
+            dayChanged,
           }),
 
           /**
@@ -852,7 +951,12 @@ export function todayScreen() {
            */
           h(
             'section',
-            { class: 'flex flex-col gap-[10px]' },
+            // `day-swap` dissolves this with the rail when the DAY moved, so the
+            // screen changes as one thing rather than the card travelling and
+            // everything under it cutting. Not applied on a log or an edit —
+            // those change this list, and a list that fades when you add a row
+            // to it argues with the row arriving.
+            { class: `flex flex-col gap-[10px]${dayChanged ? ' day-swap' : ''}` },
             h(
               'div',
               { class: 'section-head' },

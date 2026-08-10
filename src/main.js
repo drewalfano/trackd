@@ -57,6 +57,14 @@ let currentScreen = null
 let showToken = 0
 
 /**
+ * Must match `view-in`'s duration in styles.css. The attribute that drives it is
+ * cleared just after it lands — see `show` for why leaving it on is not
+ * cosmetic.
+ */
+const VIEW_IN_MS = 200
+let enteringTimer = null
+
+/**
  * Swap screens only once the new one has actually rendered.
  *
  * A screen's first render is async — it reads IndexedDB — so mounting it as
@@ -93,6 +101,24 @@ async function show(factory) {
   view.dataset.entering = 'true'
   mount(view, next.el)
   window.scrollTo(0, 0)
+  /**
+   * **Taken off again, and leaving it on was a real bug.**
+   *
+   * The rule this drives matches `#view[data-entering] > * > * > *`, which is
+   * the screen's content rather than `#view` itself — so while the attribute
+   * stayed, EVERY later subtree replacement re-triggered it. `createScreen`
+   * rebuilds on any data change, so logging a food faded Today's whole column,
+   * and so did changing day, and so did anything else on any screen. A screen
+   * arrival animation was playing on things that had not arrived.
+   *
+   * It only survived review because the reflow above restarts the animation
+   * correctly for real navigations, so the case it was tested against looked
+   * right.
+   */
+  clearTimeout(enteringTimer)
+  enteringTimer = setTimeout(() => {
+    delete view.dataset.entering
+  }, VIEW_IN_MS + 40)
 }
 
 /**

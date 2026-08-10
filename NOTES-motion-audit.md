@@ -5,6 +5,33 @@ the files as they stand.
 
 Judged against iOS at 390pt, per `runs-as-ios-pwa`.
 
+> **Status, 2026-08-10.** Findings 1, 2, 4, 5, 6, 7 and 10 are shipped, plus most
+> of 9. Read the code rather than the fix suggested below where they differ —
+> three of them turned out to be wrong when built:
+>
+> - **Finding 2** (bar replaying from zero) was the visible half of a larger bug.
+>   Logging renders Today *twice*, so every memory on the card was moved by the
+>   first render and found `from === to` by the second: the count-up, the bar and
+>   all three arcs were being started and thrown away, and logging animated
+>   nothing at all. Fixed in the write path — `logFood` does the recency bump
+>   first, so the render carrying the entry is the one that survives.
+> - **Findings 4 and 6** both need the painted position **written back**, not
+>   just read. A transition animates the computed value while the inline
+>   declaration already sits at the destination, so removing the transition snaps
+>   to the end point.
+> - **Finding 4** also needed its own flag. `data-dismissing` suppresses every
+>   keyframe including the exit; claiming a sheet uses `data-dragging`, never
+>   cleared, with the three ordered so `closing` beats `dragging` and
+>   `dismissing` beats `closing`.
+>
+> Finding 1 gained a neighbour worth knowing about: the deck never gave back its
+> axis-lock threshold, so it jumped 12px on capture. Rows had that fix from the
+> start.
+>
+> Still open: **8** (three bars animate `width`), **11**'s polish batch, and the
+> rest of 9. Also `swipeToDismiss` still does not give back its axis threshold,
+> which is finding 1's neighbour one surface over.
+
 ---
 
 ## Part 1 — inventory

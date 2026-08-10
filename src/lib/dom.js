@@ -138,6 +138,30 @@ export function haptic(pattern = 8) {
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
+ * Where an element is actually PAINTED right now, mid-animation included.
+ *
+ * The computed transform resolves to a matrix whichever way the element got
+ * there — an inline transform, a CSS transition still running, a keyframe
+ * animation halfway through — so this is the only honest answer to "where is
+ * this thing" while something is moving it.
+ *
+ * That is what makes a gesture interruptible. Every handler below that takes
+ * over from an animation in flight starts from this rather than from whatever
+ * the code last decided the element's state was, because those two disagree for
+ * exactly as long as the animation lasts, which is exactly when a second touch
+ * is most likely to arrive.
+ *
+ * `matrix(a, b, c, d, tx, ty)` — the last two are the translation. `none` on an
+ * untransformed element, which reads as the origin.
+ */
+export function paintedTranslate(el) {
+  const m = getComputedStyle(el).transform?.match(/matrix\(([^)]+)\)/)
+  if (!m) return { x: 0, y: 0 }
+  const v = m[1].split(',')
+  return { x: parseFloat(v[4]) || 0, y: parseFloat(v[5]) || 0 }
+}
+
+/**
  * Render text with every digit in its own span, so `countTo` can write through
  * them each frame rather than replacing a text node mid-animation.
  *
@@ -277,6 +301,8 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
   let lastX = 0
   let lastT = 0
   let velocity = 0
+  /** Where the surface was painted when this gesture took it over. */
+  let baseX = 0
   const surface = el.querySelector('[data-swipe-surface]')
   if (!surface) return () => {}
 
@@ -387,6 +413,31 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
        */
       el.dataset.swiping = 'true'
       /**
+       * Take over from where the row is PAINTED, not from where it belongs.
+       *
+       * The origin used to be the logical state — `open ? -width : 0` — and that
+       * is only true once a settle has finished. Catch a row during the 260ms it
+       * spends arriving and the next frame recomputed it from the destination,
+       * so the surface teleported to its end position and carried on from there.
+       * Catching something you just released is an ordinary correction, and it
+       * produced a jump.
+       *
+       * Read at the DECIDE, not at touchstart: between the two the settle is
+       * still running and the row has moved further along it, so a position
+       * captured at the start would be stale by the time it is used.
+       *
+       * **And written back, which is the half that is easy to miss.** The inline
+       * transform still says the DESTINATION — a transition animates the
+       * computed value while the declared one sits at its end point — so simply
+       * removing the transition snaps the row to where it was heading. Reading
+       * the painted position and pinning it as the new inline value is what
+       * makes the handover invisible. `setX` does both and republishes
+       * `--swipe-progress`, so the revealed circles hold their size too.
+       */
+      baseX = paintedTranslate(surface).x
+      dx = baseX
+      setX(baseX, false)
+      /**
        * Give back the threshold, and only the threshold.
        *
        * The 12px above is evidence, not travel: charging it to the gesture made
@@ -413,7 +464,8 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
     lastX = p.clientX
     lastT = now
 
-    const raw = (open ? -width : 0) + deltaX
+    // From where the row was when this gesture claimed it — see `baseX`.
+    const raw = baseX + deltaX
     dx = raw > 0 ? 0 : raw < -width ? -width + (raw + width) * SWIPE_RESIST : raw
     setX(dx, false)
   }
@@ -473,19 +525,86 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
  * those is a bug. The give says "there is nothing that way" — the same thing a
  * rubber band says at the end of a scroll.
  */
-export function swipePages(deck, { track, pageWidth, reach, onCommit, duration = 220 }) {
+/**
+ * How a released page settles.
+ *
+ * This was 220ms on `cubic-bezier(0.16, 1, 0.3, 1)`, the expo-out the app
+ * reaches for by default. That curve is right for a press dip — it is nearly
+ * done before you can see it — and wrong for a surface travelling a whole page
+ * width: it covers about nine tenths of the distance in the first third of the
+ * time and then floats through the rest, which does not overshoot but reads
+ * exactly like it does. It was called a bounce on device, as the same curve was
+ * on the sheet panels and the screen arrival before it.
+ *
+ * Quad-out decelerates at close to a constant rate, so the page arrives instead
+ * of drifting in. 200ms with no float in it is shorter than 220 with one.
+ *
+ * Deliberately the same pair as `.panel-in` and `view-in` in styles.css: three
+ * different navigations, one way of moving.
+ */
+const PAGE_MS = 200
+const PAGE_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+
+/**
+ * Resistance as a curve rather than a fraction.
+ *
+ * The boundary damping here was a flat `× 0.25`, which is not what a rubber band
+ * does: a constant multiplier still moves 75px for a 300px pull, so "there is
+ * nothing that way" was being said at a quarter volume forever. This tapers —
+ * 1:1 for the first few pixels, so the surface still feels live under the
+ * finger, then asymptotically toward `limit` however hard you pull.
+ */
+const rubber = (d, limit) => (d * limit) / (Math.abs(d) + limit)
+
+export function swipePages(deck, { track, pageWidth, reach, onCommit, duration = PAGE_MS }) {
   let startX = 0
   let startY = 0
   let dx = 0
   let dragging = false
   let decided = false
   let committing = false
+  let lastX = 0
+  let lastT = 0
+  let velocity = 0
+  /** Measured once, when the gesture is claimed, rather than on every frame. */
+  let pageW = 0
 
   deck.style.touchAction = 'pan-y'
 
-  const setX = (x, animate) => {
-    track.style.transition = animate ? `transform ${duration}ms cubic-bezier(0.16,1,0.3,1)` : 'none'
+  const setX = (x, ms) => {
+    track.style.transition = ms ? `transform ${ms}ms ${PAGE_EASE}` : 'none'
     track.style.transform = `translateX(${x}px)`
+  }
+
+  /**
+   * How long the rest of the journey should take.
+   *
+   * A fixed duration is wrong at both ends. Released at nine tenths of the way
+   * over, the last sliver still took the whole 200ms and visibly decelerated
+   * into a stop it had already reached; thrown hard from a standing start, the
+   * page dawdled behind the thumb that threw it.
+   *
+   * So it is whichever is sooner: the time the finger's own speed implies, or
+   * the time the remaining distance implies at the full-page rate. Floored at
+   * 90ms so it can never become a snap, capped at the full duration so it can
+   * never become a crawl.
+   */
+  const settleMs = (travel, w) => {
+    const byFinger = Math.abs(velocity) > 0.05 ? travel / Math.abs(velocity) : Infinity
+    const byDistance = (travel / w) * duration
+    return Math.round(Math.min(duration, Math.max(90, Math.min(byFinger, byDistance))))
+  }
+
+  /**
+   * Past a full page there is no third card, so the track gives rather than
+   * running on into bare canvas. Nothing used to stop it: a long drag carried
+   * the neighbour clean past the opposite edge and exposed the page tint where
+   * a card should be.
+   */
+  const withinReach = (d) => {
+    const over = Math.abs(d) - pageW
+    if (over <= 0) return d
+    return (d < 0 ? -1 : 1) * (pageW + rubber(over, pageW * 0.15))
   }
 
   const onStart = (e) => {
@@ -493,6 +612,9 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     const p = e.touches ? e.touches[0] : e
     startX = p.clientX
     startY = p.clientY
+    lastX = p.clientX
+    lastT = e.timeStamp || performance.now()
+    velocity = 0
     dx = 0
     dragging = true
     decided = false
@@ -515,38 +637,97 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       }
       decided = true
       deck.dataset.paging = 'true'
+      pageW = pageWidth() || 1
+      /**
+       * Give back the threshold, exactly as a row swipe does.
+       *
+       * The 12px above is evidence that the gesture is horizontal, not travel
+       * the finger meant to spend — and charging it to the deck made the whole
+       * card jump 12px the instant it was captured. `swipeToReveal` fixed this
+       * for rows and calls it "the single biggest thing that made this feel like
+       * a mechanism rather than a surface"; the deck never got the same
+       * treatment, so the two gestures started differently under one thumb.
+       */
+      startX += deltaX > 0 ? SWIPE_AXIS_THRESHOLD : -SWIPE_AXIS_THRESHOLD
+      return
     }
+
+    const now = e.timeStamp || performance.now()
+    const dt = now - lastT
+    // Last sample only, for the reason a row swipe gives: what decides a release
+    // is where the finger was going as it left, not its average over the drag.
+    if (dt > 0) velocity = (p.clientX - lastX) / dt
+    lastX = p.clientX
+    lastT = now
+
     // A drag to the RIGHT reveals what is to the left, which is the previous
     // day — so the sign of the movement and the sign of the step are opposite.
     const dir = deltaX > 0 ? -1 : 1
-    dx = reach(dir) ? deltaX : deltaX * 0.25
-    setX(dx, false)
+    dx = reach(dir) ? withinReach(deltaX) : rubber(deltaX, pageW * 0.3)
+    setX(dx, 0)
   }
 
   const onEnd = () => {
     if (!dragging) return
     dragging = false
     if (!decided) return
-    const w = pageWidth()
+    const w = pageW || pageWidth() || 1
+
+    /**
+     * A flick decides on its own, without having to reach a quarter of a page.
+     *
+     * The deck was distance-only while the row swipe eight pixels away had used
+     * velocity since it was written — so the same quick flick of the same thumb
+     * opened a row and sprang the day back, and the app disagreed with something
+     * unambiguous depending on where the finger happened to land. The argument
+     * and the constant are `SWIPE_FLICK`'s, unchanged: above that speed the
+     * direction of travel settles it and distance stops mattering.
+     *
+     * The direction comes from the velocity when it is a flick, so reversing at
+     * the last moment does what the last moment said — drag left, flick right,
+     * and you get the previous day.
+     */
+    const flick = Math.abs(velocity) > SWIPE_FLICK
+    const dir = flick ? (velocity > 0 ? -1 : 1) : dx > 0 ? -1 : 1
     // A quarter of a page, or 60px, whichever is further. The floor is what
     // stops a small flick on a large phone from being read as indecision.
-    const enough = Math.abs(dx) > Math.max(60, w * 0.25)
-    const dir = dx > 0 ? -1 : 1
+    const enough = flick || Math.abs(dx) > Math.max(60, w * 0.25)
 
     if (!enough || !reach(dir)) {
       delete deck.dataset.paging
-      setX(0, true)
+      setX(0, settleMs(Math.abs(dx), w))
       return
     }
 
+    const target = dir === -1 ? w : -w
+    const ms = settleMs(Math.abs(target - dx), w)
     committing = true
-    setX(dir === -1 ? w : -w, true)
-    const done = (e) => {
-      if (e.target !== track) return
+    setX(target, ms)
+
+    /**
+     * The commit fires once, whichever way the transition ends.
+     *
+     * `committing` is cleared only by the rebuild that `onCommit` triggers, so a
+     * `transitionend` that never arrives left the deck refusing gestures for the
+     * life of the screen. It can genuinely not arrive: an unrelated data change
+     * rebuilds this screen and replaces the track mid-flight, a backgrounded tab
+     * never runs the frame, or the target happens to equal where it already is.
+     * The timer is the backstop and `settled` keeps the pair idempotent.
+     */
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(fallback)
       track.removeEventListener('transitionend', done)
       onCommit(dir)
     }
+    const done = (e) => {
+      if (e.target !== track) return
+      finish()
+    }
     track.addEventListener('transitionend', done)
+    const fallback = setTimeout(finish, ms + 80)
   }
 
   /**
@@ -611,6 +792,8 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
   let startY = 0
   let startX = 0
   let dy = 0
+  /** How far the finger has travelled, as distinct from where the panel is. */
+  let pulled = 0
   let lastY = 0
   let lastT = 0
   let velocity = 0
@@ -618,6 +801,8 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
   let decided = false
   let fromScroller = false
   let done = false
+  /** Where the panel was painted when the drag claimed it — see `onMove`. */
+  let baseY = 0
 
   const setY = (y, animate) => {
     panel.style.transition = animate
@@ -639,6 +824,8 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
     startX = p.clientX
     lastT = e.timeStamp
     dy = 0
+    pulled = 0
+    baseY = 0
     velocity = 0
     dragging = true
     decided = false
@@ -665,6 +852,44 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
         return
       }
       decided = true
+      /**
+       * Take the sheet off its entry animation, at the position it has reached.
+       *
+       * `.sheet-panel` runs a 260ms `sheet-in` keyframe, and a CSS animation
+       * outranks an inline style — so for the whole of that window this handler
+       * tracked the finger, wrote a transform, and nothing moved. Silently: no
+       * lag, no snap, just a sheet that ignored you. It is also the exact
+       * quarter-second in which someone who opened a sheet by mistake reaches to
+       * throw it away.
+       *
+       * **`data-dragging`, not `data-dismissing`.** The existing flag means "the
+       * finger is carrying this out" and suppresses every keyframe including the
+       * EXIT, which is right at release and wrong here — a drag that gets
+       * abandoned leaves the sheet open, and it must still be able to animate
+       * away when it is eventually closed. So claiming the sheet gets its own
+       * flag, and the stylesheet orders the three so that `closing` beats
+       * `dragging` and `dismissing` beats `closing`.
+       *
+       * **Never cleared.** Un-suppressing would hand `sheet-in` back to a sheet
+       * that has already arrived, and a fresh animation-name plays from the
+       * start — so abandoning a drag would drop the sheet to the bottom of the
+       * screen and slide it up again. It has served its purpose the moment the
+       * sheet is on screen; leaving it off costs nothing.
+       *
+       * The position has to be carried across either way, or cancelling the
+       * entry would drop the sheet from wherever it had risen to straight back
+       * down. `baseY` is that position, and every offset below is measured from
+       * it — so a sheet caught halfway in keeps rising to `0` if the drag is
+       * abandoned, and carries on down if it is not.
+       */
+      baseY = paintedTranslate(panel).y
+      panel.dataset.dragging = 'true'
+      if (scrim) scrim.dataset.dragging = 'true'
+      // Pinned to where it was actually painted, in the same breath. Turning the
+      // keyframes off drops the panel to whatever its inline transform says, and
+      // during the entry that is nothing at all — so without this the sheet
+      // would jump to fully-open before starting to follow the finger down.
+      setY(baseY, false)
     }
 
     // Claimed. Without this the sheet moves AND the page behind it scrolls.
@@ -675,7 +900,22 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
     lastY = p.clientY
     lastT = e.timeStamp
 
-    dy = Math.max(0, deltaY)
+    /**
+     * Two numbers, because they answer different questions.
+     *
+     * `dy` is where the panel is DRAWN — from wherever it actually was when the
+     * drag claimed it, which is 0 for a sheet at rest and part-way down for one
+     * still arriving. `pulled` is how far the FINGER has travelled, which is
+     * what the release is judged on.
+     *
+     * They were the same value until a sheet could be caught mid-entry, and
+     * collapsing them was briefly a real bug: a sheet grabbed 130px into its
+     * arrival started with `dy` already past the 120px dismissal threshold, so
+     * the smallest touch threw it away before the finger had moved at all. How
+     * far a sheet happens to have risen is not something the user did.
+     */
+    pulled = Math.max(0, deltaY)
+    dy = Math.max(0, baseY + deltaY)
     setY(dy, false)
   }
 
@@ -684,7 +924,9 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
     dragging = false
     if (!decided) return
 
-    const far = dy > Math.min(120, panel.offsetHeight * 0.3)
+    // `pulled`, not `dy` — see the note in `onMove`. What was asked for is how
+    // far the finger went, not how far down the panel happens to be sitting.
+    const far = pulled > Math.min(120, panel.offsetHeight * 0.3)
     const fast = velocity > 0.6
     if (!far && !fast) {
       setY(0, true)

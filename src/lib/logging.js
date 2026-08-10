@@ -39,8 +39,29 @@ export function defaultServing(food) {
   return { quantity: 1, unit: 'serving' }
 }
 
+/**
+ * **The recency bump goes FIRST, and the order is load-bearing.**
+ *
+ * These are two writes and each one emits, so logging rebuilds Today twice. With
+ * `putEntry` first, the render that carries the new entry was the EARLIER of the
+ * pair: it moved every memory on the card to its new value — `lastKcal`, the
+ * calorie bar's fill, each ring's arc length — and then the second render, a
+ * frame later, found `from === to` everywhere and replaced the whole subtree
+ * with a static one. The count-up, the bar and the three arcs were all being
+ * started and then thrown away, so logging animated nothing at all.
+ *
+ * Reversed, the first render sees the food's new recency but the same entries,
+ * so it moves nothing and disturbs no memory. The second render is the one with
+ * the entry in it, it is the one that survives, and it animates from where the
+ * card actually was.
+ *
+ * The alternative was to batch both writes behind a single emit, which is the
+ * better fix and belongs in the write layer rather than here. This is the
+ * version that does not require it.
+ */
 export async function logFood({ food, quantity, unit, date, block }) {
   const macros = computeMacros(food, quantity, unit)
+  await touchFood(food.id, { quantity, unit })
   const entry = await putEntry({
     date,
     block,
@@ -58,7 +79,6 @@ export async function logFood({ food, quantity, unit, date, block }) {
       carbs: round(macros.carbs, 1),
     },
   })
-  await touchFood(food.id, { quantity, unit })
   return entry
 }
 

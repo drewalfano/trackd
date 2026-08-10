@@ -23,6 +23,18 @@ Ranked by how often the interaction happens, not by how good the fix is.
 > - Item 4's collapse needs a forced reflow, not a `requestAnimationFrame` —
 >   `auto → 0` will not interpolate. See `entryRow`.
 >
+> Item 7 shipped on 2026-08-10, and its second half — the hero counting across a
+> day change — turned out to be the larger of the two. Nothing on the card moves
+> when the DAY moved now. The first half went the other way: the chevrons were
+> NOT routed through the deck's slide, because the complaint on device was that
+> the day change had too much motion rather than too little.
+>
+> What replaced it is a 140ms dissolve on the log alone. Not the Quick add rail —
+> `quickAddFoods` takes no date and ranks over a window ending at the real today,
+> so the rail is identical on every day and fading it would assert a change that
+> did not happen. That rule is now the general one; see the `motion-asserts-change`
+> memory.
+>
 > Item 2 is still unbuilt and still needs a device reading first.
 
 ---
