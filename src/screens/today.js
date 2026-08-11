@@ -1,4 +1,4 @@
-import { h, countTo, haptic, swipePages, pressable } from '../lib/dom.js'
+import { h, repaint, countTo, haptic, swipePages, pressable } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listEntries,
@@ -10,7 +10,7 @@ import {
 } from '../lib/db.js'
 import { sumEntries, progress, computeMacros, MACRO_META } from '../lib/compute.js'
 import { macroRing } from '../lib/ring.js'
-import { tnum, card, emptyRow, macroTextColor, pageHeader } from '../lib/ui.js'
+import { tnum, card, emptyRow, macroTextColor, pageHeader, slot } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
 import { kcal, qty, servingLabel, unitLabel } from '../lib/format.js'
 import { formatDayHeader, isToday, addDays, blockForTime } from '../lib/dates.js'
@@ -550,7 +550,7 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode, 
  * animation parks the incoming card precisely where a fresh deck will draw it,
  * so the rebuild has nothing to move.
  */
-function dayDeck({ current, prev, next, dayChanged = false }) {
+function paintDeck(deck, track, { current, prev, next, dayChanged = false }) {
   /**
    * Set the reading, everywhere, and remember it.
    *
@@ -586,8 +586,37 @@ function dayDeck({ current, prev, next, dayChanged = false }) {
   ].filter(Boolean)
 
   const live = cards.find((c) => c.el.dataset.day === 'current')
-  const track = h('div', { class: 'day-deck-track' }, ...cards.map((c) => c.el))
-  const deck = h('div', { class: 'day-deck' }, track)
+
+  /**
+   * Put the track back where a freshly built deck used to sit.
+   *
+   * This is the invariant the rebuild used to satisfy for free, and the one
+   * NOTES-node-identity.md flags as most likely to break silently. `swipePages`
+   * commits on `transitionend` precisely BECAUSE the track is then parked a full
+   * page width over, exactly where the incoming day would be drawn — the swap
+   * had nothing to animate and nothing to correct. What made that true was the
+   * caller throwing the whole deck away. The deck stays now, so the offset stays
+   * with it, and the day change would land a page width off screen.
+   *
+   * The forced reflow is load-bearing and not decoration. Style is computed once
+   * at the end of a task, so setting `transition: none` and clearing the
+   * transform together would leave only the final pair — a live transition
+   * against a changed transform — and the track would glide back over 200ms
+   * instead of being where it belongs. Reading `offsetWidth` commits the
+   * suppression first. Same idiom, same reason, as `entryRow`'s collapse.
+   *
+   * `data-paging` goes with it. `swipePages` puts its own flag down now, but a
+   * gesture interrupted by an unrelated rebuild never reaches the code that
+   * does, and a deck stuck in `paging` suppresses the day card's press dip for
+   * good.
+   */
+  track.style.transition = 'none'
+  track.style.transform = ''
+  void track.offsetWidth
+  track.style.transition = ''
+  delete deck.dataset.paging
+
+  repaint(track, ...cards.map((c) => c.el))
 
   // The tap that predates the switch, kept for the hands that learned it. It
   // goes through the same setter, so the control it did not come from still
@@ -601,23 +630,9 @@ function dayDeck({ current, prev, next, dayChanged = false }) {
   })
   pressable(live.el)
 
-  swipePages(deck, {
-    track,
-    // Measured, not computed from the gap token, so the two cannot drift. Both
-    // cards sit on the same track, so the distance holds mid-drag.
-    pageWidth: () => {
-      const other = (prev ? cards[0] : cards[cards.length - 1])?.el
-      const a = live.el.getBoundingClientRect()
-      if (!other || other === live.el) return a.width
-      return Math.abs(other.getBoundingClientRect().left - a.left)
-    },
-    // Forward off today would be tomorrow, which has not happened. Same rule
-    // the header's forward chevron is disabled by.
-    reach: (dir) => dir === -1 || !isToday(state.date),
-    onCommit: (dir) => setDate(dir),
-  })
-
-  return deck
+  // The gesture is not wired here any more. It binds once, in `todayScreen`, to
+  // a deck and a track that outlive every one of these repaints — see the note
+  // on the shell.
 }
 
 /* ----------------------------------------------------------------- the log */
@@ -807,6 +822,88 @@ function quickAddSection({ foods, firstRun, date, block }) {
 }
 
 export function todayScreen() {
+  /**
+   * The shell, built once per mount and never repainted.
+   *
+   * Everything here is furniture the data cannot change: the row the header sits
+   * in, the column's rhythm, and the deck's own box and track. The payload — the
+   * header's contents, the three day cards, the rail, the log — is repainted
+   * into it, always with a freshly built subtree, so nothing on screen is ever
+   * detached and reattached. That is onboarding's pattern and the rule that
+   * makes it safe; `createScreen` leaves the root alone because `build` hands
+   * back the same one it was given last time.
+   *
+   * The deck has to be in here rather than repainted with the rest, and it is
+   * the reason any of this is happening: `swipePages` binds to `deck` and
+   * `track`, and a gesture cannot survive its own element being replaced three
+   * times a second. Everything else on this screen is here so that it can be —
+   * the column persists because a fresh column handed the persistent deck would
+   * detach it on the way in, which is the exact operation this pattern exists to
+   * avoid.
+   *
+   * `slot()` rather than a plain div: an empty flex child still spends a full
+   * 20px gap, and Quick add genuinely goes away on a day with no recents. That
+   * used to be free — `appendAll` dropped the null before it could become a flex
+   * item — and a permanent wrapper would have quietly started paying for it.
+   */
+  const track = h('div', { class: 'day-deck-track' })
+  const deck = h('div', { class: 'day-deck' }, track)
+  const headerSlot = slot()
+  const railSlot = slot()
+  const logSlot = slot()
+  const column = h('div', { class: 'flex flex-col gap-[20px]' }, deck, railSlot, logSlot)
+  /**
+   * The header is a sibling of the column, not a member of it.
+   *
+   * `.page-header` carries the 20px that puts the first card at 64, and a flex
+   * gap would ADD to that margin rather than absorbing it — so a header inside
+   * the column would sit 20 + 20 clear of the deck here and a different total on
+   * every other screen. Outside, the 20 is the whole distance and it is the same
+   * 20 on all three tabs. See `.page-header`.
+   *
+   * `headerSlot` wraps it without changing that: the wrapper is a plain block
+   * with no padding or border, so the header's bottom margin collapses straight
+   * through it. Measured at 390 and 320 rather than assumed — 44px to the bottom
+   * of the header and 20 to the deck, both unchanged.
+   */
+  const root = h('div', {}, headerSlot, column)
+
+  /**
+   * Bound once, to elements that outlive every render.
+   *
+   * It used to be re-wired inside `dayDeck` on every build, which was not a
+   * choice so much as the only option: the deck it bound to was thrown away and
+   * rebuilt each time, taking the listeners with it. Now the deck stays, so
+   * binding per render would stack a fresh set of touch handlers on the same
+   * element on every log.
+   *
+   * The cost is that nothing here may close over a render's variables, and
+   * `pageWidth` did. It read `live`, `prev` and `cards` from the build that
+   * created it — fine when the closure died with them, stale the moment it does
+   * not. It reads the track instead, which is the same measurement taken from
+   * the only thing that is still guaranteed to be there.
+   */
+  swipePages(deck, {
+    track,
+    // Measured, not computed from the gap token, so the two cannot drift. Both
+    // cards sit on the same track, so the distance holds mid-drag.
+    pageWidth: () => {
+      const liveEl = track.querySelector('[data-day="current"]')
+      if (!liveEl) return 0
+      const a = liveEl.getBoundingClientRect()
+      // The previous day where there is one, the next where there is not —
+      // whichever neighbour exists is the same distance away.
+      const other =
+        track.querySelector('[data-day="prev"]') || track.querySelector('[data-day="next"]')
+      if (!other || other === liveEl) return a.width
+      return Math.abs(other.getBoundingClientRect().left - a.left)
+    },
+    // Forward off today would be tomorrow, which has not happened. Same rule
+    // the header's forward chevron is disabled by.
+    reach: (dir) => dir === -1 || !isToday(state.date),
+    onCommit: (dir) => setDate(dir),
+  })
+
   return createScreen(
     async () => {
       // The neighbours are read alongside the day itself rather than lazily on
@@ -837,23 +934,18 @@ export function todayScreen() {
       const dayChanged = was != null && was !== state.date
       const freshRows = freshEntryIds(state.date, entries)
 
-      return h(
-        'div',
-        /**
-         * The header is a sibling of the column, not a member of it.
-         *
-         * `.page-header` carries the 20px that puts the first card at 64, and a
-         * flex gap would ADD to that margin rather than absorbing it — so a
-         * header inside the column would sit 20 + 20 clear of the deck here and
-         * a different total on every other screen. Outside, the 20 is the whole
-         * distance and it is the same 20 on all three tabs. See `.page-header`.
-         */
-        {},
+      /**
+       * Every payload gets a freshly built subtree, and none of them is ever the
+       * node its slot is already holding. That is the whole safety rule — see
+       * the shell above.
+       */
 
-        // Both chevrons are always drawn; forward dims on today rather than
-        // vanishing. One chevron on the left of a root screen reads as Back,
-        // which is not what it does — it steps the day, and the pair is what
-        // says so.
+      // Both chevrons are always drawn; forward dims on today rather than
+      // vanishing. One chevron on the left of a root screen reads as Back,
+      // which is not what it does — it steps the day, and the pair is what
+      // says so.
+      repaint(
+        headerSlot,
         pageHeader(formatDayHeader(state.date), {
           onPrev: () => setDate(-1),
           onNext: () => setDate(1),
@@ -872,35 +964,19 @@ export function todayScreen() {
            * means closing it.
            */
           onPick: () => openSheet(datePickerPanel({ value: state.date, onPick: setDate })),
-        }),
+        })
+      )
 
-        h(
-          'div',
-          /**
-           * One gap for the whole column, where each section used to carry its
-           * own `mt-[20px]`.
-           *
-           * The old note here said gaps were set per element because "even
-           * spacing reads as a list; varied spacing reads as a composition" —
-           * and every one of those per-element gaps was 20 anyway, so the
-           * variation was theoretical. What it actually bought was three places
-           * for the number to drift, and two other screens that set the same 20
-           * a different way. A null section costs nothing: `appendAll` drops it
-           * before it can become a flex item, so Quick add going away on a day
-           * with no recents does not leave a gap behind it.
-           */
-          { class: 'flex flex-col gap-[20px]' },
-
-          // Targets are `settings.targets` for every card in the deck, including
-          // the neighbours. That is what Today already did for the day you step
-          // to with a chevron, so the deck is not inventing a second rule —
-          // per-day targets are History's job, and this is not History.
-          dayDeck({
-            current: { totals, targets: t },
-            prev: { totals: sumEntries(prevEntries), targets: t },
-            next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
-            dayChanged,
-          }),
+      // Targets are `settings.targets` for every card in the deck, including
+      // the neighbours. That is what Today already did for the day you step
+      // to with a chevron, so the deck is not inventing a second rule —
+      // per-day targets are History's job, and this is not History.
+      paintDeck(deck, track, {
+        current: { totals, targets: t },
+        prev: { totals: sumEntries(prevEntries), targets: t },
+        next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
+        dayChanged,
+      })
 
           /**
            * Quick add sits ABOVE the log, and the argument is what it is for.
@@ -918,12 +994,15 @@ export function todayScreen() {
            * carries its own heading, so it is still named and still positioned; what
            * it stops being is the thing between you and the fastest way to log.
            */
-          quickAddSection({
-            foods: railFoods,
-            firstRun: everLogged === null,
-            date: state.date,
-            block: blockForTime(new Date(), settings.blockThresholds),
-          }),
+      repaint(
+        railSlot,
+        quickAddSection({
+          foods: railFoods,
+          firstRun: everLogged === null,
+          date: state.date,
+          block: blockForTime(new Date(), settings.blockThresholds),
+        })
+      )
 
           /**
            * The log. Its own group, and the route to the full Log screen — which
@@ -949,8 +1028,10 @@ export function todayScreen() {
            * would be the weakest fact available: it sits directly above the list
            * it counts.
            */
-          h(
-            'section',
+      repaint(
+        logSlot,
+        h(
+          'section',
             // `day-swap` dissolves this with the rail when the DAY moved, so the
             // screen changes as one thing rather than the card travelling and
             // everything under it cutting. Not applied on a log or an edit —
@@ -998,9 +1079,10 @@ export function todayScreen() {
                 // No route into the sheet needed down here: `Full log` sits in the
                 // head above and renders at every count, including this one.
                 logCard(state.date, emptyRow('Nothing logged yet'))
-          )
         )
       )
+
+      return root
     },
     { watch: ['entries', 'settings', 'foods'] }
   )
