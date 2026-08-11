@@ -3381,8 +3381,20 @@
 .sheet-panel[data-closing='true'] {
   animation: sheet-out 200ms ease-in forwards;
 }
+/**
+ * The scrim leaves on `ease-out`, and the panel above it keeps its `ease-in` —
+ * audit 1, finding 11.
+ *
+ * They are not the same event. The panel is an object travelling off the bottom
+ * of the screen, and accelerating away is what leaving looks like. The scrim is
+ * not going anywhere; it is a dimming being taken off the page, and an opacity
+ * fade that starts slow holds the page dark for most of the exit and then clears
+ * it in the last few frames. The page appears to snap back into brightness after
+ * the sheet has already gone, which reads as two things happening rather than
+ * one.
+ */
 .sheet-scrim[data-closing='true'] {
-  animation: scrim-out 200ms ease-in forwards;
+  animation: scrim-out 200ms ease-out forwards;
 }
 /**
  * A sheet the finger is already carrying out finishes under its own transition.
