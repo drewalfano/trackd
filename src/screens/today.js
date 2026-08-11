@@ -904,6 +904,35 @@ export function todayScreen() {
     onCommit: (dir) => setDate(dir),
   })
 
+  /**
+   * The rail's order is decided once and then holds still — gaps item 6.
+   *
+   * `quickAddFoods` ranks by frequency and recency, and its cache is dropped on
+   * every `entries` or `foods` change, so logging re-ranked it. Measured before
+   * this: logging the tile in position five moved it to position one and its
+   * left edge went from 660px to 20px — 640px of travel on a 390pt screen, on
+   * the tile still under your thumb, delivered as the feedback for the tap
+   * having worked. The node was replaced, so it was a hard cut with no motion at
+   * all.
+   *
+   * **The fix is not to animate that.** Node identity would make the reorder
+   * legible, and a legible reorder is still a rail that will not hold still
+   * while it is being used. It is the same call `today.js:99` already makes for
+   * the card's mode, and for the same reason: the surface under the thumb does
+   * not get to move as a side effect of a successful action.
+   *
+   * So: ranked on mount, held for the life of the screen, ranked again next
+   * time you arrive. Navigating away and back is the re-rank, which is often
+   * enough for a list built from a thirty-day window.
+   *
+   * **An empty rail keeps asking, and that matters more than it looks.** Frozen
+   * unconditionally, the very first food anyone ever logs would not appear in
+   * Quick add until they navigated away and back — trading a teleport for a rail
+   * that looks broken on the one day it is most closely watched. So the freeze
+   * only takes hold once there is something to freeze.
+   */
+  let railFoods = null
+
   return createScreen(
     async () => {
       // The neighbours are read alongside the day itself rather than lazily on
@@ -911,15 +940,16 @@ export function todayScreen() {
       // show you what it is dragging in is a gesture that stutters exactly
       // once, on the first use, which is the worst possible time.
       const forward = isToday(state.date) ? null : addDays(state.date, 1)
-      const [entries, prevEntries, nextEntries, settings, railFoods, everLogged] =
+      const [entries, prevEntries, nextEntries, settings, rankedFoods, everLogged] =
         await Promise.all([
           listEntries(state.date),
           listEntries(addDays(state.date, -1)),
           forward ? listEntries(forward) : Promise.resolve(null),
           getSettings(),
-          quickAddFoods(RAIL_MAX),
+          railFoods?.length ? railFoods : quickAddFoods(RAIL_MAX),
           firstLoggedDate(),
         ])
+      railFoods = rankedFoods
       const totals = sumEntries(entries)
       const t = settings.targets
       // Before anything is built, so the first card drawn is already in the
