@@ -2407,6 +2407,25 @@
     background: var(--color-canvas);
   }
 
+  /**
+   * A field sharing its row with two others gives back some of its inset.
+   *
+   * `.field`'s 20px works because a field normally owns the width. Three to a
+   * row it does not: at 390pt a column is 110px, of which 40 is padding and 10
+   * is the gap before the unit, leaving the input 51px — four characters, so
+   * `188.8` fits and `1888.8` clips by five pixels. 14px takes the input to
+   * 63px, which held everything measured at both 390 and 375pt.
+   *
+   * Declared in this layer rather than outside it, so it wins on specificity —
+   * two classes against one — rather than on being unlayered. `.sheet-footer`
+   * records what that shortcut costs: an unlayered rule silently beats every
+   * Tailwind utility of equal specificity, including the ones a caller passes
+   * deliberately, and the failure is invisible until something stops moving.
+   */
+  .macro-row .field {
+    padding-inline: 14px;
+  }
+
   .chip {
     display: inline-flex;
     align-items: center;

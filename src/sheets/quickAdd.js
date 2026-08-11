@@ -88,7 +88,21 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
       })
 
       const derived = slot('px-0 text-[12px] leading-snug text-muted')
-      const preview = h('div')
+
+      /**
+       * The strip is the panel, rather than a div inside one, so it can take
+       * itself out of the form when it has nothing to say.
+       *
+       * `empty:hidden` needs the emptiable element and the styled element to be
+       * the SAME element — with the old arrangement the panel always held one
+       * child, an empty div, so `:empty` never matched and a card of blank
+       * canvas stayed in the layout. `display: none` rather than a height
+       * animation because a flex gap belongs to a visible child; hidden, the
+       * strip costs its own 61px and the 20px above it.
+       */
+      const preview = h('div', {
+        class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px] empty:hidden',
+      })
 
       const totals = () => ({
         kcal: Number(kcal) || 0,
@@ -111,7 +125,24 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           kcalField.input.value = kcal
         }
         const current = totals()
-        repaint(preview, macroLine(current, { size: 14 }))
+        /**
+         * Nothing typed, nothing to summarise.
+         *
+         * The test is on the VALUES rather than on whether a field has been
+         * touched, because `0` is a real answer here — a 0 cal drink, 0 g of
+         * fat — and answering it does not give the strip anything to say. It
+         * would read `0 cal · 0 P · 0 F · 0 C`, which is the form narrating its
+         * own blankness; `derived` below already declines to do exactly that on
+         * an untouched sheet, and for the same reason.
+         *
+         * Calories count, not just the three macros. Someone who only knows
+         * "about 600" types that and leaves the rest blank, and `600 cal` is
+         * worth reading back. In practice the two rarely differ, since typing a
+         * macro derives calories anyway.
+         */
+        const hasAnything =
+          current.kcal > 0 || current.protein > 0 || current.fat > 0 || current.carbs > 0
+        repaint(preview, hasAnything ? macroLine(current, { size: 14 }) : null)
 
         /**
          * Same rule as the Settings targets, and now the same arrangement.
@@ -329,19 +360,40 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
         )
       }
 
+      /**
+       * One of three equal columns, not a row of its own.
+       *
+       * The three are the same question asked three times in the same unit, and
+       * stacked they took 277px of a 802px form — a third of it, to hold three
+       * numbers that are each at most four characters. Side by side they take
+       * 79px and read as the set they are.
+       *
+       * `min-w-0` on the wrapper because a `flex-1` column will not shrink below
+       * its content's intrinsic width without it, and a `type="number"` input
+       * reports a wide one — three columns would overflow the sheet rather than
+       * divide it.
+       *
+       * Calories keeps its own full-width row. It is not a fourth macro: it is
+       * derived from these three, carries a hint underneath about that, and is
+       * the number most likely to be four digits.
+       */
       const macroField = (key) =>
-        labelledField({
-          label: MACRO_META[key].label,
-          children: numberInput({
-            value: '',
-            suffix: 'g',
-            placeholder: '—',
-            onInput: (v) => {
-              macros[key] = v
-              sync()
-            },
-          }),
-        })
+        h(
+          'div',
+          { class: 'min-w-0 flex-1' },
+          labelledField({
+            label: MACRO_META[key].label,
+            children: numberInput({
+              value: '',
+              suffix: 'g',
+              placeholder: '—',
+              onInput: (v) => {
+                macros[key] = v
+                sync()
+              },
+            }),
+          })
+        )
 
       const nameRow = h('div')
       const paintName = () =>
@@ -380,15 +432,19 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
         'div',
         { class: 'flex flex-col gap-[20px]' },
 
-        h('div', { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' }, preview),
+        preview,
 
         nameRow,
 
         labelledField({ label: 'Calories', children: kcalField }),
         derived,
-        macroField('protein'),
-        macroField('fat'),
-        macroField('carbs'),
+        h(
+          'div',
+          { class: 'macro-row flex gap-[10px]' },
+          macroField('protein'),
+          macroField('fat'),
+          macroField('carbs')
+        ),
 
         h(
           'div',
@@ -409,7 +465,13 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
           { class: 'panel flex flex-col gap-[20px] px-[20px] py-[20px]' },
           switchRow({
             label: 'Save to my foods',
-            hint: 'Keep it for next time. Off, this is one entry on one day and nothing else.',
+            // One line, and the text column is what sets this row's height —
+            // 56px against the switch's 31 — so the second line was costing the
+            // panel 16px to restate the first. Measured at 375pt, the app's
+            // narrowest target and the binding one: the column is 224px there
+            // and this is 196. "not just this once" reads better and measures
+            // 220, which is four pixels of headroom and not worth trusting.
+            hint: 'Keep it for next time, not just once.',
             checked: keep,
             onChange: (v) => {
               keep = v
