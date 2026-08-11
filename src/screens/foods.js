@@ -335,7 +335,7 @@ export function foodDetailScreen(id) {
                 rerender()
               },
             },
-            icon('star', { size: 19, filled: pinned })
+            icon('star', { size: 20, stroke: 2, filled: pinned })
           )
         ),
 

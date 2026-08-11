@@ -154,7 +154,7 @@ export function presentSheet(spec, host) {
  * control already visible on Today through the scrim. With the stepper gone the
  * log wants a plain title like everything else, so the option went with it.
  */
-export function openSheet({ title, render, footer = null }) {
+export function openSheet({ title, render, footer = null, action = null }) {
   // One sheet at a time. A second open replaces the first.
   if (active) active.destroy()
 
@@ -243,11 +243,31 @@ export function openSheet({ title, render, footer = null }) {
     icon('close', { size: 20, stroke: 2 })
   )
 
+  /**
+   * One optional control, in front of the close button.
+   *
+   * This is deliberately a SLOT and not a return of the old `header` option: a
+   * panel hands over one `.icon-btn` and the frame decides where it sits, where
+   * the old option handed the panel the whole row. The distinction is what kept
+   * the back chevron, the title and the close where they are on every sheet.
+   *
+   * It swaps in `syncHeader` with the title, because it belongs to the panel on
+   * top rather than to the sheet — push a second panel and the root's action has
+   * to leave with the root's title.
+   *
+   * The amount sheet is the caller: its favourite star used to sit in the body,
+   * on the row under the title, where it read as an orphaned control rather than
+   * as part of the frame. Beside the close it is unmistakably chrome, and the two
+   * match — both `.icon-btn`, both `size: 20, stroke: 2`.
+   */
+  const actionSlot = h('div', { class: 'contents' })
+
   const header = h(
     'header',
     { class: 'flex items-center gap-[10px] px-[20px] pb-[20px] pt-[20px]' },
     backBtn,
     titleEl,
+    actionSlot,
     closeBtn
   )
   /**
@@ -387,6 +407,7 @@ export function openSheet({ title, render, footer = null }) {
     const top = panels[panels.length - 1]
     titleEl.textContent = top?.title ?? ''
     backBtn.style.display = panels.length > 1 ? '' : 'none'
+    actionSlot.replaceChildren(...(top?.actionNode ? [top.actionNode] : []))
     const hasFooter = !!top?.footerNode
     footerEl.replaceChildren(...(hasFooter ? [footerFade, top.footerNode] : []))
     /**
@@ -561,6 +582,11 @@ export function openSheet({ title, render, footer = null }) {
         entry.footerNode = node
         syncHeader()
       },
+      /** One `.icon-btn` in the header, in front of the close. See `actionSlot`. */
+      setAction: (node) => {
+        entry.actionNode = node
+        syncHeader()
+      },
       /** Re-run this panel's render in place, e.g. after a data change. */
       refresh: () => {
         runDisposers(entry)
@@ -580,6 +606,7 @@ export function openSheet({ title, render, footer = null }) {
       title: spec.title,
       render: spec.render,
       footerNode: spec.footer ?? null,
+      actionNode: spec.action ?? null,
       disposers: [],
     }
     entry.node = spec.render(makeCtx(entry))
@@ -765,7 +792,7 @@ export function openSheet({ title, render, footer = null }) {
   lockScroll(true)
 
   active = { scrim, destroy, closeAll }
-  pushPanel({ title, render, footer })
+  pushPanel({ title, render, footer, action })
 
   /**
    * A reading of the sheet, once it has finished arriving.

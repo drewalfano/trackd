@@ -201,18 +201,40 @@ export function servingPanel({
         )
       }
 
+      /**
+       * In the header, beside the close — not in the body.
+       *
+       * It used to sit on the row under the title, to the right of the food's
+       * name, and the two problems there were the same problem. It carried
+       * `bg-canvas`, which is what an `.icon-btn` wears when it sits ON a card
+       * where the page tint reads as a well cut into white — but this sheet
+       * already IS the canvas, so the button was #f0f0f0 on #f0f0f0. Measured,
+       * not guessed: 1:1, no edge at all. A star with no visible control around
+       * it, hanging beside a line of body text, is not obviously a button.
+       *
+       * Both go away in the header. It takes the plain surface fill every other
+       * `.icon-btn` has, and it sits in the frame with the close rather than in
+       * the payload — which is what it is. The two match exactly: same class,
+       * same `size: 20, stroke: 2`.
+       *
+       * `stroke: 2` rather than the 1.75 default because the star is ten
+       * vertices with concave curves where most icons here are two or three
+       * strokes, so it loses more weight than they do at the same number. The
+       * `+` on a food tile takes 2.25 for the same reason.
+       */
       const favBtn = h('button', {
-        class: 'icon-btn bg-canvas',
+        class: 'icon-btn',
         'aria-label': 'Pin to favourites',
         onclick: async () => {
           const now = await toggleFavourite('food', food.id)
-          favBtn.replaceChildren(icon('star', { size: 18, filled: now }))
+          favBtn.replaceChildren(icon('star', { size: 20, stroke: 2, filled: now }))
           toast(now ? 'Pinned to Favourites' : 'Unpinned')
         },
       })
       isFavourite('food', food.id).then((on) =>
-        favBtn.replaceChildren(icon('star', { size: 18, filled: on }))
+        favBtn.replaceChildren(icon('star', { size: 20, stroke: 2, filled: on }))
       )
+      ctx.setAction(favBtn)
 
       paintUnits()
       paintBlocks()
@@ -285,14 +307,9 @@ export function servingPanel({
         { class: 'flex flex-col gap-[20px]' },
         h(
           'div',
-          { class: 'flex items-start gap-[10px]' },
-          h(
-            'div',
-            { class: 'min-w-0 flex-1' },
-            h('div', { class: 'text-[16px] font-semibold leading-tight' }, food.name),
-            food.brand ? h('div', { class: 'text-[12px] text-muted' }, food.brand) : null
-          ),
-          favBtn
+          { class: 'min-w-0' },
+          h('div', { class: 'text-[16px] font-semibold leading-tight' }, food.name),
+          food.brand ? h('div', { class: 'text-[12px] text-muted' }, food.brand) : null
         ),
 
         h(
