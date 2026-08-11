@@ -43,27 +43,7 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
         const content = await build({ rerender })
         if (disposed) return
         if (queued) continue
-        /**
-         * A build that hands back what is already on screen has patched in
-         * place, and re-mounting it would undo the point of having done so.
-         *
-         * `mount` is `clear` plus append, so the node is detached and
-         * reattached — and **that cancels every running transition and
-         * animation in the subtree**. Measured rather than assumed: an element
-         * mid-transition reports one running animation and its computed value
-         * still at the start; after a synchronous remove-and-re-append it
-         * reports none and the computed value has jumped straight to the
-         * destination. So a screen cannot keep its nodes just by returning the
-         * same ones — the remount destroys exactly the continuity keeping them
-         * was for.
-         *
-         * Hence the identity check rather than a flag. A screen opts in simply
-         * by returning the element it was given last time, which is what "this
-         * build patched rather than rebuilt" already means; every screen that
-         * returns a fresh tree is untouched and takes the same path it always
-         * did. See NOTES-node-identity.md.
-         */
-        if (el.childNodes.length !== 1 || el.firstChild !== content) mount(el, content)
+        mount(el, content)
         /**
          * Rebuilding changes document height; keep the user where they were.
          *
