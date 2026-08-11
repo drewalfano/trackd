@@ -2664,7 +2664,18 @@
     background: transparent;
     border: 1px solid var(--color-ink);
     pointer-events: none;
-    transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+    /**
+     * 200ms, not the 300 this used to take — audit 1, finding 9.
+     *
+     * 300 is sheet-tier timing on the most frequently tapped control in the
+     * app, and it put the bar and the page on two clocks: `view-in` mounts the
+     * new screen over 200ms while the marker is still travelling toward the tab
+     * that owns it, so for the last third of the movement the indicator and the
+     * content disagree about where you are. Three tabs' worth of travel is not
+     * a modal arriving, and the standards already put a frequent interaction
+     * under 200.
+     */
+    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .tab {
@@ -2680,7 +2691,25 @@
     border-radius: 999px;
     border: 1px solid transparent;
     color: var(--color-muted);
-    transition: color 200ms ease-out;
+    /**
+     * The press dip the three tabs never had — audit 1, finding 9.
+     *
+     * Every other control in the app acknowledges a finger, including the add
+     * button eight pixels to the right of this bar. The tabs were the only
+     * untouched controls on the screen, which on the most-tapped row in the app
+     * reads as the bar not having received the tap at all.
+     *
+     * `scale(0.94)` sits between `.icon-btn`'s 0.92 and `.segment`'s 0.96, which
+     * is where a tab sits by size — the same rule the rest of the scales follow
+     * rather than an exception to it. 120ms is the press duration everywhere.
+     */
+    transition:
+      color 200ms ease-out,
+      transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .tab:active,
+  .tab[data-pressed='true'] {
+    transform: scale(0.94);
   }
 
   /**

@@ -191,6 +191,10 @@ function tabBar() {
       h('span', { class: 'text-[12px] font-semibold' }, tab.label)
     )
   )
+  // Same reason the add button beside them takes it: iOS does not hand `:active`
+  // to these reliably, and a press state that appears on some taps is worse than
+  // none. The CSS carries both selectors so a pointer still gets it on desktop.
+  tabButtons.forEach((b) => pressable(b))
 
   // The one control on this bar that does something rather than going
   // somewhere, so it is the one that most wants to feel like it was pressed.
