@@ -3421,6 +3421,28 @@
  * the opacity it rides alongside was already 160.
  */
 /**
+ * The confirm box arrives with its own scrim — gaps item 14.
+ *
+ * `.sheet-scrim` gives it `scrim-in` for free, but the box inside was a plain
+ * div with nothing on it, so it appeared at full size on frame one while the
+ * backdrop was still a quarter of a second from settling. The app's one
+ * blocking dialog was the only modal surface that turned up before its own
+ * ground.
+ *
+ * It borrows `toast-in` outright rather than declaring a second set of numbers.
+ * That keyframe already is this app's vocabulary for a floating surface
+ * arriving over the page — 12px and 200ms on the house curve — and a dialog is
+ * the same event at a different size. Naming the class separately keeps the
+ * relationship legible: change one and you are deciding about the other.
+ *
+ * No exit of its own. The box is a child of the scrim, so `scrim-out` already
+ * takes both together, which is the right answer and was true by accident.
+ */
+.confirm-in {
+  animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/**
  * The vertical padding has to go with it, and this is the part that is easy to
  * miss. The toast carries its own `p-[20px]`, and a border-box height cannot
  * compress below its own padding — so `height: 0` alone bottoms out at 40px and

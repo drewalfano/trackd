@@ -325,7 +325,11 @@ export function confirm(
       h(
         'div',
         {
-          class: 'w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
+          // `confirm-in`, because the box used to arrive at full size on frame
+          // one while the scrim was still fading in behind it — the app's one
+          // blocking dialog turning up ahead of its own backdrop. See the rule.
+          class:
+            'confirm-in w-full max-w-[380px] rounded-[24px] border border-outline bg-canvas p-[20px]',
           role: 'alertdialog',
           'aria-modal': 'true',
         },
