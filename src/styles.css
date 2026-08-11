@@ -3355,7 +3355,51 @@
    * from, which is what makes this land on the card's edge and not near it.
    */
   max-height: calc(100% - env(safe-area-inset-top, 0px) - var(--content-top));
-  animation: sheet-in 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  /**
+   * Quad-out, not the expo-out this used to take, and it is the last surface in
+   * the app to make the move.
+   *
+   * The argument is already written twice, in the two places that made it first.
+   * `PAGE_MS` in lib/dom.js: expo-out "is right for a press dip — it is nearly
+   * done before you can see it — and wrong for a surface travelling a whole page
+   * width: it covers about nine tenths of the distance in the first third of the
+   * time and then floats through the rest, which does not overshoot but reads
+   * exactly like it does." And `panel-in`, which found the same thing on an
+   * arriving screen. `view-in`, `step-in`, `day-swap` and the deck's own page
+   * slide are all on quad-out for this reason; the sheet was the one left, and it
+   * travels FURTHER than any of them — a full panel height rather than a page
+   * width, most of the screen on a tall one.
+   *
+   * That is what "popping up" is: nearly all of the distance is spent before the
+   * eye has caught up, and then the panel drifts the last few pixels into place.
+   * Quad-out decelerates at close to a constant rate, so it arrives instead of
+   * settling.
+   *
+   * **320ms, and the distance is why.** This is the same curve onboarding's step
+   * change uses, and the two are not otherwise comparable: a step travels 10px
+   * and this travels a whole panel height — most of the screen on a tall one.
+   * The same duration over sixty times the distance is not the same movement,
+   * and 260 across that gap is what reads as a pop. 320 is still inside the
+   * 250-350 the standards give sheets, and it is the top of that band because
+   * this is the longest travel in the app.
+   *
+   * **No opacity, deliberately, and this is where the onboarding comparison
+   * stops.** `step-in` floors at 0.65 because the step body is REPLACED in place
+   * and there must be no frame where it is absent. A sheet arrives from off
+   * screen, where opacity means nothing until it is already over the page — so
+   * an opacity ramp here would not soften the arrival, it would make the panel
+   * briefly translucent against the content behind it, which is the fade this is
+   * explicitly not doing.
+   *
+   * The scrim keeps its own 260. It used to match this exactly, so the dimming
+   * and the arrival were one blended event; now the ground settles first and the
+   * last 60ms is nothing but the panel sliding, which is what makes the slide
+   * the thing you watch rather than the brightness change.
+   *
+   * The exit stays at 200 — 0.63x of this, still comfortably faster than the
+   * entrance, which is the direction the standards care about.
+   */
+  animation: sheet-in 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 .sheet-scrim {
   animation: scrim-in 260ms ease-out;
