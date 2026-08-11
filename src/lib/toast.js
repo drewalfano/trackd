@@ -213,7 +213,7 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
     'div',
     {
       class:
-        'toast-in pointer-events-auto flex w-full max-w-[430px] flex-col ' +
+        'toast toast-in pointer-events-auto flex w-full max-w-[430px] flex-col ' +
         'gap-[10px] rounded-[24px] bg-ink p-[20px] text-canvas',
     },
     /**
@@ -247,8 +247,24 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
     clearTimeout(timer)
     open.delete(dismiss)
     if (!el.isConnected) return
-    el.style.transition = 'opacity 160ms ease-in'
-    el.style.opacity = '0'
+    /**
+     * The box collapses with the fade rather than after it.
+     *
+     * It used to hold its full height for the whole 160ms and then vanish on the
+     * frame `remove()` ran, so a survivor sitting above it stayed put through
+     * the fade and then dropped by a toast height plus the gap. That jump is the
+     * last thing that happens after a delete, and a jump at the end reads as a
+     * glitch rather than as a queue draining.
+     *
+     * Measured, written, reflowed, then zeroed — `height: auto` does not
+     * interpolate, and a `requestAnimationFrame` here is not a substitute. The
+     * long form of that argument is at `entryRow`, which leaves a list the same
+     * way for the same reason.
+     */
+    el.style.height = `${el.offsetHeight}px`
+    el.dataset.removing = 'true'
+    void el.offsetHeight
+    el.style.height = '0px'
     setTimeout(() => el.remove(), 170)
   }
 

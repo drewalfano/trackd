@@ -3401,6 +3401,48 @@
   animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/**
+ * A toast leaving takes its space with it — gaps item 8.
+ *
+ * `MAX_VISIBLE` is 2, so deleting a couple of rows in a row puts two of these on
+ * screen and expires the older one underneath the newer. Fading alone left the
+ * box occupying its full height for the whole exit and then removed it, so the
+ * survivor held position through the fade and jumped on the frame the node left
+ * the DOM.
+ *
+ * The negative margin is the host's `gap-[10px]` being paid for, the same way
+ * `.reveal` pays for its column's gap: a collapsed toast is zero pixels tall and
+ * still a child, so the gap outlives the box and leaves a last 10px to drop. It
+ * transitions on the same curve and duration as the height, because it is the
+ * same movement.
+ *
+ * 160ms is the toast's own exit number, not the 180 the deleting row takes —
+ * this is a queue draining on its own, not something you asked to remove, and
+ * the opacity it rides alongside was already 160.
+ */
+/**
+ * The vertical padding has to go with it, and this is the part that is easy to
+ * miss. The toast carries its own `p-[20px]`, and a border-box height cannot
+ * compress below its own padding — so `height: 0` alone bottoms out at 40px and
+ * the survivor still has 40 to drop. Both are animated, on the same curve, so
+ * the clamp relaxes at exactly the rate the box closes. `.swipe-row` never hit
+ * this because its padding sits on a child.
+ */
+.toast[data-removing='true'] {
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  padding-top: 0;
+  padding-bottom: 0;
+  margin-bottom: -10px;
+  transition:
+    height 160ms ease-in,
+    padding-top 160ms ease-in,
+    padding-bottom 160ms ease-in,
+    margin-bottom 160ms ease-in,
+    opacity 160ms ease-in;
+}
+
 /* ========================================================================== *
  * ONBOARDING — the five-step flow's own motion
  * ========================================================================== *
