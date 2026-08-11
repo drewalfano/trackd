@@ -547,8 +547,8 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
        * library — so it adopts first and opens the serving sheet, and the
        * chevron says as much.
        */
-      const remoteRow = (draft) =>
-        listRow({
+      const remoteRow = (draft) => {
+        const row = listRow({
           title: draft.name,
           subtitle: [draft.brand, draft.servingLabel].filter(Boolean).join(' · '),
           chevron: true,
@@ -557,6 +557,14 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
             pushServing(ctx, { food, date, block: targetBlock, onStage: stageOne })
           },
         })
+        // Every remote row carries the same fade and they are all appended in
+        // one pass, so twenty-five of them start on the same frame and arrive as
+        // one block. Marked per row rather than on a wrapper because the card's
+        // dividers are `> * + *` — a wrapper would collapse twenty-five of them
+        // into one. See `.results-in`.
+        row.classList.add('results-in')
+        return row
+      }
 
       /**
        * A common food, from the bundled table.

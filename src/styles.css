@@ -3458,6 +3458,28 @@
 }
 
 /**
+ * Remote search results arriving — gaps item 11.
+ *
+ * "Searching Open Food Facts…" is one row, and what replaces it is up to
+ * twenty-five. On a fast connection nothing about that needs help; on a slow one
+ * the card sits still for a second and then triples in height on a single frame,
+ * which reads as a jolt rather than as an arrival — and the local results you
+ * might have wanted have moved down the screen without warning.
+ *
+ * **One fade, not a stagger.** Twenty-five rows arriving in sequence is a
+ * loading animation pretending to be content, and it would take longer than the
+ * request did on a good connection. They all carry the same class and are all
+ * appended in one pass, so they start on the same frame and read as one block.
+ *
+ * `scrim-in` is a plain `opacity: 0 → 1` ramp that happens to be named for its
+ * first user. Borrowed rather than duplicated, the same way `.confirm-in`
+ * borrows `toast-in`.
+ */
+.results-in {
+  animation: scrim-in 120ms ease-out;
+}
+
+/**
  * The vertical padding has to go with it, and this is the part that is easy to
  * miss. The toast carries its own `p-[20px]`, and a border-box height cannot
  * compress below its own padding — so `height: 0` alone bottoms out at 40px and
