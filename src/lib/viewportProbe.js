@@ -69,6 +69,46 @@ export function readViewport() {
   const panel = document.querySelector('.sheet-panel')
   const panelBox = panel ? panel.getBoundingClientRect() : null
 
+  /**
+   * Where the page STOPS, which is the one thing every earlier reading left out.
+   *
+   * Every row above describes the box; none of them says where content comes to
+   * rest inside it, so the tab bar's band could stand over a parked row for as
+   * long as it did without any reading contradicting it.
+   *
+   * **The content edge, not the border edge.** `#view`'s border-box bottom is
+   * the padding's own end, so at full scroll it is the bottom of the viewport by
+   * definition and every gap measured from it reads the same number on a page
+   * that is fine and a page that is not — it was `-88` on both. The reservation
+   * has to come off: what is left is the last line content can reach.
+   *
+   * Measured against the BAND rather than the bar, since the band is what
+   * `--nav-clear` reserves and the veil is what showed the fault. Zero is the
+   * designed state — the resting line and the band's top edge are meant to be
+   * the same edge — so negative is the regression to watch. The bar's own gap
+   * rides along because on the installed PWA the bar and the scrolling box are
+   * anchored to two different heights, and that is the open question this
+   * instrument exists for.
+   *
+   * Both only describe the resting state while `scrollLeftToGo` reads 0.
+   */
+  const view = document.getElementById('view')
+  const viewBox = view ? view.getBoundingClientRect() : null
+  const restLine = viewBox
+    ? viewBox.bottom - (parseFloat(getComputedStyle(view).paddingBottom) || 0)
+    : null
+  /**
+   * `getClientRects().length`, because the band is `display: none` whenever the
+   * page does not scroll — and a `display: none` element still answers
+   * `getBoundingClientRect` with zeros. Taken at face value that puts the band's
+   * top at 0 and the gap below at several hundred negative, which is a false
+   * alarm on precisely the screens the capture stashes.
+   */
+  const fadeEl = document.querySelector('.tabbar-fade')
+  const fadeBox = fadeEl && fadeEl.getClientRects().length ? fadeEl.getBoundingClientRect() : null
+  const root = document.documentElement
+  const scrollLeftToGo = round1(root.scrollHeight - (window.scrollY + root.clientHeight))
+
   return {
     build: BUILD_ID,
     version: VERSION,
@@ -110,6 +150,13 @@ export function readViewport() {
     'tabbar.bottom': barBox ? round1(barBox.bottom) : '—',
     gapBelowBarFromInner: barBox ? round1(window.innerHeight - barBox.bottom) : '—',
     gapBelowBarFromScreen: barBox ? round1(window.screen.height - barBox.bottom) : '—',
+
+    '--nav-clear': round1(measure('padding-bottom:var(--nav-clear)').paddingBottom),
+    'content rest line': restLine == null ? '—' : round1(restLine),
+    /* 0 is the designed state, negative is veil over a parked row. */
+    gapRestLineToBandTop: restLine != null && fadeBox ? round1(fadeBox.top - restLine) : '—',
+    gapRestLineToBarTop: restLine != null && barBox ? round1(barBox.top - restLine) : '—',
+    scrollLeftToGo,
 
     'panel.bottom': panelBox ? round1(panelBox.bottom) : '—',
     gapBelowPanel: panelBox ? round1(window.innerHeight - panelBox.bottom) : '—',

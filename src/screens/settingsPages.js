@@ -637,12 +637,18 @@ export function viewportScreen() {
       const captured = h('div', { class: 'flex flex-col gap-[20px]' })
 
       /**
-       * The rows that decide it, for a reading taken on some other screen.
+       * The rows that decide it, for a reading taken on some other screen. A
+       * subset rather than a count — the count drifted the first time a row was
+       * added — and the rest are the working behind these.
        *
-       * Eleven of the thirty, because two of them are the answer and the rest are
-       * the working: the bar asks for 20px off the bottom of the screen, so
+       * The bar asks for 20px off the bottom of the screen, so
        * `gapBelowBarFromScreen` should read 20 and `100dvh` should equal
-       * `screen.height`. Copy still exports every field of all three readings.
+       * `screen.height`. The last three are the newer question: where the PAGE
+       * stops. `gapRestLineToBandTop` should read 0 — the resting line and the
+       * band's top edge are the same edge by construction — and both gaps only
+       * describe the resting state while `scrollLeftToGo` reads 0.
+       *
+       * Copy still exports every field of all three readings.
        */
       const KEYS = [
         'route',
@@ -657,6 +663,9 @@ export function viewportScreen() {
         'gapBelowBarFromScreen',
         'panel.bottom',
         'gapBelowPanel',
+        'gapRestLineToBandTop',
+        'gapRestLineToBarTop',
+        'scrollLeftToGo',
       ]
 
       const capturedBlock = (title, reading) =>
@@ -673,7 +682,7 @@ export function viewportScreen() {
                       'span',
                       {
                         class: `text-[12px] ${
-                          key.startsWith('gapBelowBar') ? 'font-semibold' : 'text-muted'
+                          key.startsWith('gap') ? 'font-semibold' : 'text-muted'
                         }`,
                       },
                       String(reading[key] ?? '—')
@@ -705,7 +714,7 @@ export function viewportScreen() {
                 'span',
                 {
                   class: `text-[12px] ${
-                    key.startsWith('gapBelowBar') ? 'font-semibold' : 'text-muted'
+                    key.startsWith('gap') ? 'font-semibold' : 'text-muted'
                   }`,
                 },
                 String(value)

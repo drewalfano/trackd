@@ -665,6 +665,32 @@
     --nav-fade: 159px;
 
     /**
+     * What a scrolling page reserves at its bottom, and it is THE BAND rather
+     * than the bar.
+     *
+     * This was `--nav-height + --nav-inset + 30` — 118px, derived from the pill,
+     * which is the object that never overlapped anything. Measured at 390pt: the
+     * pill's top edge sits 88px off the bottom, so 118 cleared it by 30 and no
+     * page has ever touched it. The BAND is 159, so 41px of veil stood above the
+     * resting line — at full scroll Today's last card parked under roughly 37%
+     * canvas, computed from `.fade-veil`'s stops, with nowhere further to go.
+     * Settings/target was the report: the primary button's bottom edge visibly
+     * greyed against a page that had stopped scrolling.
+     *
+     * It is the bug `.sheet-fade` was rewritten to fix, still here because the
+     * note on `FADE_RAMP` exempted this band on the grounds that a page under the
+     * tab bar has no end to park at. It has one, and this is it.
+     *
+     * Reserving the band makes the two edges the same edge by construction, so at
+     * rest the veil covers nothing and the ramp's length stays a free choice.
+     *
+     * **No safe-area inset, and that is not an oversight.** The bar itself
+     * excludes it — see `--nav-inset` above — so adding it here would reserve
+     * 34pt against an object that never moved by it.
+     */
+    --nav-clear: var(--nav-fade);
+
+    /**
      * The height of the box the page is actually painted into, for anchoring
      * anything that floats at its bottom. One definition, because getting it
      * wrong is not a local mistake — see `.screen-floor`.
@@ -760,7 +786,9 @@
     margin-inline: auto;
     padding-inline: 20px;
     padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: calc(var(--nav-height) + var(--nav-inset) + 30px);
+    /* The band, not the bar. The arithmetic and what it cost are on
+       `--nav-clear`. */
+    padding-bottom: var(--nav-clear);
   }
 
   /**
@@ -3521,10 +3549,13 @@
  * last field parks at the footer's top edge, so those 51px dimmed a row that
  * had nowhere further to go, and the sheet read as clipping its own last field.
  *
- * The tab bar can reach above itself because a page under it has no end to
- * park at — there is always more below, and saying so is true. A form is
- * finite. Past its last field the claim is false, and a fade that makes it
- * reads as a bug rather than as depth.
+ * A form is finite. Past its last field the claim is false, and a fade that
+ * makes it reads as a bug rather than as depth.
+ *
+ * The tab bar's band was exempted here on the grounds that a page under it has
+ * no end to park at. It has one — `.screen`'s bottom reservation — and the same
+ * 41px of veil stood over it until `--nav-clear` made that reservation the band.
+ * Both bands now rest on the rule below rather than only this one.
  *
  * So the band is sized from the footer rather than from the control, and the
  * scroller reserves THE BAND rather than the footer (`syncHeader` in

@@ -59,8 +59,17 @@ export function fadeLayers(ramp) {
  * own box with a one-gutter ramp, and shares none of this. See `.sheet-fade` in
  * styles.css.
  *
- * A page under the tab bar has no such end — there is always more below and the
- * band is entitled to say so — which is why this ramp stays as it is.
+ * **A page under the tab bar was held to have no such end, and it does.** That
+ * exemption is what kept this band unchanged while the sheet's was rewritten,
+ * and it was wrong in the one state it needed to be right in: `.screen` reserves
+ * a bottom margin, so at full scroll the last card parks on a line and stops.
+ * The line was 118px and the band is 159, which put 41px of veil over a row with
+ * nowhere left to go — the same claim the sheet's band was making, on the same
+ * evidence.
+ *
+ * The ramp does stay as it is. What changed is the reservation: `--nav-clear` is
+ * now the band rather than the bar, so the resting line and the band's top edge
+ * are the same edge and the ramp reaches over open page again.
  */
 export const FADE_RAMP = [
   [1.5, 34, 62],
