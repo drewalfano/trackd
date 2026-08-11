@@ -736,10 +736,9 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     /**
      * The commit fires once, whichever way the transition ends.
      *
-     * `committing` is cleared only by the rebuild that `onCommit` triggers, so a
-     * `transitionend` that never arrives left the deck refusing gestures for the
-     * life of the screen. It can genuinely not arrive: an unrelated data change
-     * rebuilds this screen and replaces the track mid-flight, a backgrounded tab
+     * A `transitionend` that never arrives would leave the deck refusing
+     * gestures for the life of the screen, and it can genuinely not arrive: an
+     * unrelated data change replaces the track mid-flight, a backgrounded tab
      * never runs the frame, or the target happens to equal where it already is.
      * The timer is the backstop and `settled` keeps the pair idempotent.
      */
@@ -749,9 +748,27 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       settled = true
       clearTimeout(fallback)
       track.removeEventListener('transitionend', done)
-      // Before the rebuild, which replaces this track anyway — belt and braces
-      // for the paths where it does not.
       hint(false)
+      /**
+       * The gesture packs up after itself rather than being thrown away.
+       *
+       * `committing` and `data-paging` used to be cleared by the caller
+       * rebuilding the deck — discarding this whole closure and the element both
+       * flags were written on. That worked only for as long as a day change
+       * meant a new deck, and it is the first thing to break when the deck keeps
+       * its nodes: `committing` gates `onStart`, so it would refuse every
+       * gesture after the first committed swipe, and `data-paging` suppresses
+       * the day card's press dip, so that would stay suppressed for good.
+       *
+       * Clearing them here is not merely a repair for that: this is where they
+       * were always finished. `finish` runs when the settle animation has ended,
+       * which is the moment the gesture is genuinely over — the rebuild happened
+       * to arrive shortly afterwards and got the credit. The post-gesture click
+       * guard is unaffected; it reads `decided`, which is still standing and is
+       * consumed by `onClickCapture` as before.
+       */
+      committing = false
+      delete deck.dataset.paging
       onCommit(dir)
     }
     const done = (e) => {
