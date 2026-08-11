@@ -3368,6 +3368,288 @@
   animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* ========================================================================== *
+ * ONBOARDING — the five-step flow's own motion
+ * ========================================================================== *
+ *
+ * Everything in this block exists because the flow had none of it. Five screens
+ * replaced each other on a single frame; a progress bar that recoloured instead
+ * of filling; a footer button destroyed and rebuilt at every step despite being
+ * the one control on screen that never changes. Both motion audits covered the
+ * app, and neither covered the thing that runs before the app exists.
+ *
+ * Two rules already written elsewhere in this file decide most of what is here.
+ *
+ * From `view-in`: **the chrome is the frame, not the payload.** A tab switch
+ * moves what is under the header and leaves the header still, because a nav bar
+ * that travels is the tell that a web app is animating a document rather than
+ * swapping a screen. The same line is drawn here — the chevron, the step label
+ * and the bar hold position while the step beneath them changes. What the chrome
+ * IS allowed to do is show its own value changing, which is a different claim
+ * entirely: the bar fills, the label swaps. Neither moves the frame.
+ *
+ * From the `motion-asserts-change` memory: **only what changed may move.** Four
+ * of the five progress segments are in exactly the state they were in a moment
+ * ago, so four of them are written with no transition at all and exactly one
+ * animates.
+ */
+
+/**
+ * The step's contents arriving — and the one screen change in this app that gets
+ * to be directional.
+ *
+ * `view-in` is vertical and `panel-in` gave up its slide entirely, both for the
+ * same reason: neither of them knew which way it was going. `view-in` is the
+ * path for three sibling tabs AND for pushed screens, and sheet panels push and
+ * pop through one function. This one knows. The screen is literally numbered,
+ * there is a bar under the number filling left to right, and a chevron in the
+ * corner whose entire job is to say which direction back is. A step that arrives
+ * from the right and leaves to the left agrees with three things already on
+ * screen rather than inventing a fourth.
+ *
+ * **10px, not the 16 the sheet panels tried and rejected.** That slide was built
+ * and pulled on device feel, and the finding underneath it was that the panel
+ * was also *resizing* — 16px of travel laid over a 94px height snap, which no
+ * easing on the contents could cover. Nothing resizes here: the body is a
+ * fixed-height scroller between a fixed header and a pinned footer, so the
+ * distance only has to be big enough to read as movement. `view-in` arrived at
+ * 6px from the other side after 4px turned out to be a flicker rather than a
+ * distance; 10 is that number plus the room a horizontal axis needs, since the
+ * eye tracks sideways motion across a shorter span than it tracks vertical.
+ *
+ * Opacity floors at 0.65, again from `view-in`: there is no frame where the step
+ * is absent, only frames where it is arriving.
+ *
+ * Quad-out rather than the house expo-out. Expo-out read as a bounce on an
+ * arriving screen in both places it was tried — see `panel-in`.
+ *
+ * 220ms sits between `view-in`'s 200 and the sheet's 260. A step change is more
+ * than a tab switch (the whole question changed) and less than a modal arriving
+ * (the container did not).
+ *
+ * **There is no exit half, and that is a constraint rather than a decision.**
+ * `repaint` has already replaced the body by the time anything could play, so
+ * the outgoing step does not exist as a node to animate. Same wall `panel-in`
+ * ran into, named there.
+ */
+@keyframes step-in-fwd {
+  from {
+    opacity: 0.65;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes step-in-back {
+  from {
+    opacity: 0.65;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.step-in-fwd {
+  animation: step-in-fwd 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.step-in-back {
+  animation: step-in-back 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/**
+ * The guard the horizontal slide needs, and the reason a vertical one would not.
+ *
+ * `overflow-y: auto` with `overflow-x: visible` is not a state CSS will hold —
+ * the visible axis computes to `auto`. So the moment a child is translated 10px
+ * sideways the scroller grows a horizontal scroll range, and on iOS that is a
+ * screen the user can drag off its own left edge, which is worse than the hard
+ * cut this replaced. `.day-deck` reached for the same guard one screen over.
+ *
+ * Written as `clip` and it computes to `hidden` — measured. One axis cannot clip
+ * while the other scrolls, so CSS resolves the pair for you. The guard works
+ * either way; what it does NOT buy is the thing `clip` is usually reached for.
+ * The box is still a scroll container, so a forward slide leaves ~10px of scroll
+ * range for the length of the animation: unreachable by finger, reachable by a
+ * focus jump. Moving the guard to a non-scrolling wrapper is what would buy real
+ * `clip` semantics, and nothing so far has needed it.
+ */
+.step-body {
+  overflow-x: clip;
+}
+
+/**
+ * The progress bar — filling rather than recolouring.
+ *
+ * It was five spans whose `background` was rewritten on every render: ink for
+ * the steps behind you, a 12% mix for the ones ahead. That is a bar reporting a
+ * position, and the point of a progress bar is to show that you MOVED. A colour
+ * swapped on one frame cannot. Rebuilding the whole strip per step also meant
+ * there was never a node left over to transition *from* — the structural problem
+ * `NOTES-motion-gaps.md` opens with, in miniature.
+ *
+ * The five are now built once and only the one that changed is touched.
+ *
+ * **`scaleX`, not `width`** — audit 1's finding 8, taken as read rather than
+ * re-argued. The fill is laid out at full width and scaled down, so it is a
+ * compositor transform and the 3px track is never re-laid-out. The rounded-cap
+ * distortion that made finding 8 expensive for `.kbar-fill` costs nothing at
+ * this size: the radius is 1.5px on a 3px bar, and unlike the calorie bar there
+ * is no chip riding inside the fill that would need a counter-scale.
+ *
+ * **`transform-origin` is set by the direction of travel, and that is the whole
+ * idea.** Going forward, a segment fills from its left edge — the way you are
+ * heading. Going back, it drains toward its right edge — the way you came. Same
+ * element, same duration, and the bar now says which way you moved rather than
+ * only how far along you are. A fill that always grew from the left would run
+ * the film backwards on a back gesture, which is the specific thing that makes a
+ * progress bar feel like a readout instead of a place.
+ *
+ * 260ms, the sheet's number rather than the 200 of a frequent control. This runs
+ * once per step with an entire screen changing beside it; at 200 it finished
+ * before the step had settled and the two read as separate events.
+ *
+ * There is no "hold still" flag and none is needed: `paintProgress` writes
+ * `--fill` only on the segment whose value differs, and a transition on a
+ * property nobody touched does not run. The rule is enforced by not writing
+ * rather than by writing a suppression, which is the version that cannot drift.
+ */
+/* The strip holds its space on the welcome screen and only its ink arrives —
+   see `paintProgress`. 120ms is `.icon-btn`'s, so the chevron beside it and the
+   bar under it turn up on the same clock. */
+.step-track {
+  transition: opacity 120ms ease-out;
+}
+.step-seg {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--color-ink) 12%, transparent);
+}
+.step-seg-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--color-ink);
+  transform: scaleX(var(--fill, 0));
+  transform-origin: left center;
+  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.step-seg-fill[data-drain='true'] {
+  transform-origin: right center;
+}
+
+/**
+ * A block that appears because of the choice just made — the note under "Rather
+ * not", the rate control under Lose or Gain.
+ *
+ * Both used to arrive at full height on the frame the segment was tapped, so
+ * everything below them jumped down by 60–140px with nothing in between. That is
+ * gaps item 4's complaint pointed the other way: a layout that jumps has thrown
+ * away the evidence of what caused it to jump, and here the cause is a control
+ * the user is still looking at.
+ *
+ * `grid-template-rows: 0fr → 1fr` is this app's way of collapsing to nothing
+ * without measuring first — it already carries the deleting row and the draining
+ * toast stack. The child needs `min-height: 0` or it refuses to go under its own
+ * content height, which is the part that is easy to leave out and then looks
+ * like the transition simply not working.
+ *
+ * The opacity is shorter than the height and starts *after* it, so the words
+ * become readable only once there is a box to read them in. Reversed — text
+ * fading up inside a box that is still opening — reads as two animations
+ * fighting over one event.
+ *
+ * Closing takes the same numbers rather than the two-thirds an exit usually
+ * gets. This is not a sheet leaving; it is the page changing shape, and the
+ * content below has to be carried at exactly the speed the gap closes or it
+ * lurches at the end.
+ */
+/**
+ * The negative margin is not a hack, it is the flex gap being paid for.
+ *
+ * A collapsed slot is zero pixels tall but it is still a child, so the 20px
+ * column gap lands on both sides of it and the two real neighbours end up 40
+ * apart. That was already true of the empty `<div>` this replaced — the About
+ * you screen has been shipping a double gap under Sex — but a collapse that
+ * visibly stops 20px short of closed is the version you can see.
+ *
+ * `--reveal-gap` so the cancellation is stated by whoever knows the column's
+ * spacing rather than assumed here. It transitions on the same curve and
+ * duration as the rows, because it is the same movement: half the gap closing is
+ * the other half of the box closing.
+ *
+ * There is no default, and that is deliberate. A default of 20 is right for the
+ * two columns that happen to be `gap-[20px]` and silently wrong everywhere else
+ * — in a column with no gap the negative margin has nothing to cancel and eats
+ * the padding underneath instead. `revealSlot` writes the value inline at every
+ * call site, so a slot that states nothing collapses to nothing rather than to a
+ * number that was true of somewhere else.
+ */
+.reveal {
+  --reveal-gap: 0px;
+  display: grid;
+  grid-template-rows: 0fr;
+  margin-bottom: calc(-1 * var(--reveal-gap));
+  transition:
+    grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    margin-bottom 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal[data-open='true'] {
+  margin-bottom: 0;
+}
+.reveal > * {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 140ms ease-out 80ms;
+}
+.reveal[data-open='true'] {
+  grid-template-rows: 1fr;
+}
+.reveal[data-open='true'] > * {
+  opacity: 1;
+}
+
+/**
+ * The press dip `.segment` never had — audit 1, finding 11 — shipped here
+ * because onboarding is the screen that leans on this control hardest: three of
+ * its five questions are asked with it, and on those three it is the only thing
+ * on the page you can touch.
+ *
+ * `scale(0.96)`, not `.btn-primary`'s 0.97. A segment is a third of a row rather
+ * than the whole of one, and the same ratio on a smaller box reads as less
+ * movement — the scale numbers in this file vary by control size on purpose
+ * (0.92 circles, 0.97 pills, 0.9 calendar day), and this is that rule rather
+ * than an exception to it.
+ *
+ * The transform goes on the button and the pill is a sibling above it, so
+ * pressing a segment dips the *label* and never the selection travelling toward
+ * it. A pill that scaled mid-flight would be the control disagreeing with
+ * itself.
+ *
+ * **The colour transition is the smaller half and the more visible one.** The
+ * pill takes 300ms to travel and the label ink was switching on frame one, so
+ * for a fifth of a second the destination read as selected while the selection
+ * was still plainly somewhere else. 200ms sits inside the pill's 300 without
+ * chasing it. If audit finding 9 ships and `.segment-pill` comes down to 200ms,
+ * this should come down to 160 with it — the relationship is the point, not
+ * either number on its own.
+ */
+.segment {
+  transition:
+    transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
+    color 200ms ease-out;
+}
+.segment:active,
+.segment[data-pressed='true'] {
+  transform: scale(0.96);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

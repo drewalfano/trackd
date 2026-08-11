@@ -1,4 +1,4 @@
-import { h, repaint, mount } from '../lib/dom.js'
+import { h, repaint, mount, countTo } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { toast } from '../lib/toast.js'
 import { getSettings, saveSettings, putWeight, listWeights } from '../lib/db.js'
@@ -52,6 +52,91 @@ const STEP_COUNT = 5
 /** Marks the history entries this flow owns, the way the sheet marks its own. */
 const HISTORY_KEY = 'mt-onboarding'
 
+/* ------------------------------------------------------------------ motion */
+
+/**
+ * Restart a one-shot animation on an element that is already on screen.
+ *
+ * Adding a class the element already carries does nothing, and every mark in
+ * this flow fires repeatedly on the same node — the step label swaps five times
+ * on one journey through. The forced reflow between the two writes is what makes
+ * the browser treat it as a new animation rather than a no-op; `main.js` uses
+ * the same trick in the opposite direction, to suppress the tab pill's first
+ * placement.
+ */
+function replay(el, cls) {
+  el.classList.remove(cls)
+  void el.offsetWidth
+  el.classList.add(cls)
+}
+
+/**
+ * The horizontal scale an element is actually painted at, mid-transition
+ * included.
+ *
+ * Asked rather than stored, which is the whole point: a flag saying "this
+ * segment is still moving" is a second thing that can drift out of sync with
+ * the first, and the element already knows. Same technique as `translateXOf` in
+ * `ui.js`, one axis over.
+ *
+ * `1` for an element with no transform yet — that is the resting full state, and
+ * the only caller checks the value rather than trusting it blindly.
+ */
+function paintedScaleX(el) {
+  const value = getComputedStyle(el).transform
+  const matrix = value && value.startsWith('matrix') ? value.slice(7, -1).split(',') : null
+  return matrix ? Number(matrix[0]) : 1
+}
+
+/**
+ * A block that is present or absent depending on a choice made above it.
+ *
+ * The wrapper persists across the repaints of its own contents, which is the
+ * whole reason this is a pair of functions rather than a class on the child —
+ * `repaint` replaces children, so a child cannot transition from a state it was
+ * never in. See `.reveal`.
+ *
+ * **The open state is written synchronously and that is what makes both cases
+ * right without a flag.** A slot built already-open — which is what going BACK
+ * to a step looks like — is set before its node is in the document, so `1fr` is
+ * its first computed style and there is nothing to transition from. A slot
+ * opened later is set on a node that has been laid out at `0fr`, so the same
+ * line animates. Same reason the segment pill fades in rather than sliding from
+ * an edge it was never at.
+ *
+ * Closing keeps the children for the length of the collapse. Emptying the box
+ * first would give a transition with nothing in it — the content would vanish on
+ * the tap frame and the reader would watch an empty gap close, which says the
+ * opposite of what happened.
+ */
+function revealSlot({ gap = 20 } = {}) {
+  const inner = h('div')
+  const node = h('div', { class: 'reveal' }, inner)
+  // The column's own spacing, stated by the caller who knows it. A collapsed
+  // slot is zero pixels tall and still a child, so the gap lands on both sides
+  // of it and `.reveal` cancels one; a column with no gap has nothing to cancel,
+  // and taking the default 20 there eats the padding below instead. See the
+  // rule.
+  node.style.setProperty('--reveal-gap', `${gap}px`)
+  let clearTimer = null
+
+  return {
+    node,
+    set(children) {
+      clearTimeout(clearTimer)
+      if (children != null) {
+        repaint(inner, children)
+        node.dataset.open = 'true'
+        return
+      }
+      delete node.dataset.open
+      // 240, twenty past the collapse, so the node is emptied after the box has
+      // finished closing rather than one frame before it.
+      clearTimer = setTimeout(() => repaint(inner), 240)
+    },
+  }
+}
+
 /* ------------------------------------------------------------------- steps */
 
 function unitsStep(draft, { repaintStep }) {
@@ -92,11 +177,12 @@ function unitsStep(draft, { repaintStep }) {
 
 function bodyStep(draft) {
   const sexRow = h('div')
-  const note = h('div')
+  // Not a bare div any more: this appears and disappears under the finger that
+  // caused it, so it opens rather than arriving at full height. See `revealSlot`.
+  const note = revealSlot()
 
   const paintNote = () =>
-    repaint(
-      note,
+    note.set(
       draft.sex === 'unspecified'
         ? notice(
             'The standard formula needs sex as one of its terms, so there is nothing to ' +
@@ -141,7 +227,7 @@ function bodyStep(draft) {
       'div',
       { class: 'flex flex-col gap-[20px]' },
       h('div', { class: 'flex flex-col gap-[10px]' }, h('div', { class: 'section-label' }, 'Sex'), sexRow),
-      note,
+      note.node,
       labelledField({
         label: 'Birth year',
         children: numberInput({
@@ -213,15 +299,16 @@ function activityStep(draft) {
 
 function goalStep(draft) {
   const goalRow = h('div')
-  const rateRow = h('div')
+  // Maintain has no rate to set, so this block is the answer to the question
+  // directly above it — it opens when the answer creates it. See `revealSlot`.
+  const rateRow = revealSlot()
 
   const paintRate = () => {
     const presets = RATE_PRESETS[draft.goal] || RATE_PRESETS.maintain
     if (!presets.some((p) => p.kgPerWeek === draft.rateKgPerWeek)) {
       draft.rateKgPerWeek = presets[0].kgPerWeek
     }
-    repaint(
-      rateRow,
+    rateRow.set(
       draft.goal === 'maintain'
         ? null
         : h(
@@ -272,17 +359,32 @@ function goalStep(draft) {
   return {
     title: 'Your goal',
     lede: 'What are you aiming for?',
-    node: h('div', { class: 'flex flex-col gap-[20px]' }, goalRow, rateRow),
+    node: h('div', { class: 'flex flex-col gap-[20px]' }, goalRow, rateRow.node),
   }
 }
 
 function targetsStep(draft) {
   const calc = computeTargets(draft, { weightKg: draft.weightKg })
-  const targets =
-    draft.targets ??
-    (calc
-      ? { kcal: calc.kcal, protein: calc.protein, fat: calc.fat, carbs: calc.carbs }
-      : { kcal: 2000, protein: 150, fat: 65, carbs: 200 })
+  /**
+   * The fields follow the calculation until you overrule them, and then they
+   * stop.
+   *
+   * This used to be `draft.targets ?? …`, so the four numbers were worked out on
+   * the FIRST arrival at this step and never again. Go back, change your
+   * activity level, come back: the prose under the hero updated, the hero
+   * counted to the new figure, and the Calories field — the number `finish`
+   * actually saves — still held the old one. The count-up made it loud rather
+   * than causing it, which is the usual way round.
+   *
+   * `targetsEdited` is set by the fields themselves, so the rule is stated by
+   * the only thing that knows: untouched numbers are a suggestion and track the
+   * questions behind them, typed numbers are an answer and are left alone. It is
+   * also what the paragraph on this screen already promises.
+   */
+  const suggested = calc
+    ? { kcal: calc.kcal, protein: calc.protein, fat: calc.fat, carbs: calc.carbs }
+    : { kcal: 2000, protein: 150, fat: 65, carbs: 200 }
+  const targets = draft.targetsEdited && draft.targets ? draft.targets : suggested
   draft.targets = targets
   draft.calculated = Boolean(calc)
 
@@ -315,12 +417,42 @@ function targetsStep(draft) {
         suffixMacro: key === 'kcal' ? 'kcal' : null,
         onInput: (v) => {
           targets[key] = Number(v) || 0
+          // The moment a number is typed it stops being a suggestion, and the
+          // questions behind it stop being allowed to overwrite it. See above.
+          draft.targetsEdited = true
           sync()
         },
       }),
     })
 
   sync()
+
+  /**
+   * The one figure the whole flow was for, and the only thing in it that counts.
+   *
+   * Four screens of questions resolve to this number, so it arriving at full
+   * value on frame one is the payoff delivered as a fact that was always there.
+   * `countTo` is already the app's answer for a figure that changed and it is
+   * the same 200ms Today's calorie hero uses — same number, same instrument, one
+   * screen earlier.
+   *
+   * **It counts from zero the first time and from the old figure afterwards, and
+   * the difference is the point.** Arriving at step five for the first time,
+   * this number is new information and there is nothing to count from. Coming
+   * back to it after changing your activity level, the number MOVED and how far
+   * it moved is the useful part — 2,140 to 2,390 is a different fact from 2,140
+   * to 2,150, and only one of them is worth going back for.
+   *
+   * And if you go back, change nothing, and return, `from === to` and `countTo`
+   * does not run. The `motion-asserts-change` rule, enforced by the mechanism
+   * rather than by a branch.
+   */
+  const calcHero = h('span', { class: 'tnum text-display font-semibold leading-none' })
+  if (calc) {
+    if (lastCalcKcal != null) calcHero.dataset.value = String(lastCalcKcal)
+    lastCalcKcal = calc.kcal
+    countTo(calcHero, calc.kcal)
+  }
 
   return {
     title: 'Your targets',
@@ -334,7 +466,7 @@ function targetsStep(draft) {
             h(
               'div',
               { class: 'flex items-baseline gap-[10px]' },
-              h('span', { class: 'tnum text-display font-semibold leading-none' }, String(calc.kcal)),
+              calcHero,
               h('span', { class: 'text-[12px] font-medium text-muted' }, 'cal a day')
             ),
             h(
@@ -378,6 +510,21 @@ function targetsStep(draft) {
     ),
   }
 }
+
+/**
+ * The last calculated figure this flow drew, so the fifth step can count from it
+ * rather than from wherever a brand-new node happens to start.
+ *
+ * `countTo` keeps its own memory on `dataset.value`, which is enough for Today —
+ * that element survives between renders. This one does not: step five is rebuilt
+ * from scratch every time you arrive at it, so the memory has to sit outside the
+ * node. Exactly the problem `lastKcal`, `lastPct` and `lastSegmentPill` solve,
+ * one screen earlier than any of them.
+ *
+ * Reset per flow rather than per module, so opening the Settings preview twice
+ * shows the number arrive twice. The second viewing is a first viewing.
+ */
+let lastCalcKcal = null
 
 const STEPS = [unitsStep, bodyStep, activityStep, goalStep, targetsStep]
 
@@ -543,6 +690,10 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
   /** 0 is the welcome screen; 1..5 are the steps. */
   let index = 0
 
+  // A fresh run has nothing to count from, and the preview is a fresh run every
+  // time it is opened. See `lastCalcKcal`.
+  lastCalcKcal = null
+
   // Back is the gesture, and the chevron is a second way to perform it — not a
   // parallel path. Both go through history, so they cannot disagree about where
   // "back" is.
@@ -566,7 +717,28 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     class: 'min-w-0 flex-1 truncate text-center text-[16px] font-semibold',
   })
   const headerSpacer = h('div', { class: 'w-11 shrink-0' })
-  const progress = h('div', { class: 'flex items-center gap-[4px]' })
+
+  /**
+   * Five segments built once and kept, rather than five spans recoloured per
+   * render.
+   *
+   * The old version rebuilt the whole strip inside `paintProgress`, which is the
+   * structural bug `NOTES-motion-gaps.md` opens with: after the repaint there is
+   * no element left that was there before, so there is nothing to transition
+   * from and every frame is a first frame. Holding the nodes is what makes the
+   * fill possible at all — the CSS in `.step-seg-fill` is the cheap half.
+   */
+  const segments = Array.from({ length: STEP_COUNT }, () => {
+    const fill = h('span', { class: 'step-seg-fill' })
+    fill.style.setProperty('--fill', '0')
+    fill.dataset.fill = '0'
+    return { node: h('span', { class: 'step-seg' }, fill), fill }
+  })
+  const progress = h(
+    'div',
+    { class: 'step-track flex items-center gap-[4px]' },
+    segments.map((seg) => seg.node)
+  )
 
   /**
    * The inset and nothing more, which is what `.screen` does — this flow owns
@@ -599,11 +771,68 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     )
   )
 
-  const body = h('div', { class: 'min-h-0 flex-1 overflow-y-auto px-[20px] pt-[20px]' })
+  // `.step-body` is the overflow guard the horizontal step slide needs — an
+  // `overflow-y: auto` box will not hold `overflow-x: visible`, so without it a
+  // 10px translate becomes 10px of draggable page. See the rule.
+  const body = h('div', { class: 'step-body min-h-0 flex-1 overflow-y-auto px-[20px] pt-[20px]' })
   const footer = h('div', {
     class: 'shrink-0 px-[20px] pt-[10px]',
     style: { paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' },
   })
+
+  /**
+   * The footer is built once and kept, and this is the largest structural change
+   * in the flow.
+   *
+   * It used to be repainted per step like everything else, which meant the one
+   * control that is on screen for the entire journey — bottom of the viewport,
+   * under the thumb, the same shape and the same job on all six screens — was
+   * destroyed and rebuilt five times. Nothing about it CHANGED except the word
+   * inside it on the last step, and `motion-asserts-change` cuts both ways: a
+   * thing that did not change should not be replaced either. The rebuild also
+   * threw away `data-pressed` mid-press, so a finger held down across a step
+   * change lost its dip.
+   *
+   * So: one button, one label span, and the only thing written per step is the
+   * text and the handler. The secondary slot below it — Skip on the welcome
+   * screen, Discard on the last step of a preview — is a `revealSlot`, so it
+   * opens and closes instead of the footer changing height on one frame and
+   * shoving the primary button up under the thumb reaching for it.
+   */
+  const primaryLabel = h('span')
+  let primaryAction = null
+  const primary = h(
+    'button',
+    { class: 'btn-primary', onclick: () => primaryAction?.() },
+    primaryLabel
+  )
+  // No `gap` on this column: the collapsed slot would hold a 10px gap open below
+  // a button that is the last thing on the screen. The spacing lives on the
+  // revealed child instead, where it collapses with it.
+  //
+  // Which is also why the slot cancels nothing. `.reveal` pays back a column gap
+  // it does not have here, and the negative margin lands on the footer's own
+  // bottom padding instead: measured at 390pt, that put the primary button's
+  // bottom edge at the bottom edge of the viewport on all four middle steps, and
+  // slid it 20px on every step change because the margin transitions.
+  const secondary = revealSlot({ gap: 0 })
+  mount(
+    footer,
+    h('div', { class: 'mx-auto flex max-w-[430px] flex-col' }, primary, secondary.node)
+  )
+
+  /** Swap the button's word, and mark the swap only when there was one. */
+  function setPrimary(label, onclick) {
+    primaryAction = onclick
+    if (primaryLabel.textContent === label) return
+    const first = primaryLabel.textContent === ''
+    primaryLabel.textContent = label
+    // `.reading-swap` is the app's mark for "the reading changed, the instrument
+    // did not" — written for the calorie card's mode toggle and exactly right
+    // for a button that stays put while the thing it does is renamed. Not on
+    // first paint: there was no previous word for it to have replaced.
+    if (!first) replay(primaryLabel, 'reading-swap')
+  }
 
   const root = h(
     'div',
@@ -694,27 +923,98 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     onDone?.(Boolean(save))
   }
 
+  /**
+   * The chrome showing its own value change — which is the only thing the chrome
+   * is allowed to do here. Nothing in this function moves the header; the label
+   * swaps in place and the bars fill in place. See the block comment on
+   * `.step-in-fwd` for why that line is drawn where it is.
+   */
   function paintProgress() {
     // The count says where you are; the bars say how much is left without
     // having to do the subtraction. They are not redundant, they answer
     // different questions — which is why both stay.
-    stepLabel.textContent = index === 0 ? '' : `Step ${index} of ${STEP_COUNT}`
-    repaint(
-      progress,
-      index === 0
-        ? null
-        : Array.from({ length: STEP_COUNT }, (_, i) =>
-            h('span', {
-              class: 'h-[3px] flex-1 rounded-full',
-              style: {
-                background:
-                  i < index ? 'var(--color-ink)' : 'color-mix(in srgb, var(--color-ink) 12%, transparent)',
-              },
-            })
-          )
-    )
+    const label = index === 0 ? '' : `Step ${index} of ${STEP_COUNT}`
+    if (stepLabel.textContent !== label) {
+      const had = stepLabel.textContent !== ''
+      stepLabel.textContent = label
+      // Same argument as the primary button's word, and the same 180ms: the
+      // instrument is in the same place, the reading on it is different. Not on
+      // the way in from the welcome screen, where there was no reading before.
+      if (label && had) replay(stepLabel, 'reading-swap')
+    }
+
+    segments.forEach((seg, i) => {
+      const to = i < index ? 1 : 0
+      const from = Number(seg.fill.dataset.fill)
+      /**
+       * The `motion-asserts-change` rule, enforced per segment. Four of these
+       * five are in the state they were already in — leaving them alone is not
+       * an optimisation, it is the difference between a bar that reports a
+       * position and a bar that shows a move.
+       */
+      if (from === to) return
+      seg.fill.dataset.fill = String(to)
+      /**
+       * Filling forward from the left edge, draining backward toward the right:
+       * the segment moves the way YOU did. Written before the scale so the
+       * origin is already correct on the frame the transition starts.
+       *
+       * **Only while the segment is where the record says it is.** At rest the
+       * origin is a free move — `scaleX(0)` and `scaleX(1)` draw the same
+       * regardless of which edge they are anchored to, which is what makes the
+       * whole idea work. Half way through, it is not: reverse inside the 260ms
+       * and flipping the origin jumps the visible half of the bar across to the
+       * other end before it drains. Rare, and the one frame in this flow that
+       * pops.
+       *
+       * So the origin is left alone mid-flight and the segment drains back out
+       * the edge it came in by. Continuous rather than correct, which is the
+       * right trade for a frame nobody can read anyway.
+       */
+      if (Math.abs(paintedScaleX(seg.fill) - from) < 0.01) {
+        seg.fill.dataset.drain = String(to === 0)
+      }
+      seg.fill.style.setProperty('--fill', String(to))
+    })
+
+    /**
+     * The chevron appearing at the top of step one.
+     *
+     * `visibility` alone is a hard cut, and this is the only frame in the flow
+     * where a control arrives rather than changes — the welcome screen has no
+     * back to offer and step one does. It rides `.icon-btn`'s existing 120ms
+     * opacity transition rather than declaring a second one; a button that
+     * fades in over the same time it dips under a finger is the same button
+     * behaving consistently.
+     *
+     * `visibility` stays alongside it so the control is genuinely gone for
+     * assistive tech rather than merely transparent.
+     */
     backBtn.style.visibility = index === 0 ? 'hidden' : ''
+    // Cleared rather than set to '1'. An inline `opacity: 1` outranks
+    // `.icon-btn:active`'s 0.85, so the chevron kept its press scale and lost
+    // the fade that goes with it — half a press state, which is the failure
+    // `pressable` exists to avoid. Removing the declaration still transitions
+    // from the computed 0 up to the stylesheet's 1.
+    backBtn.style.opacity = index === 0 ? '0' : ''
     headerSpacer.style.display = index === 0 ? 'none' : ''
+
+    /**
+     * The bar is hidden on the welcome screen rather than absent from it.
+     *
+     * It used to be built and destroyed with the rest of the strip, so the
+     * header was 18px shorter on screen zero and everything under it started
+     * higher — which meant the flow's first navigation moved the title, the
+     * lede and the whole body down by 18px as a side effect of a bar appearing.
+     * A frame that changes height is not a frame.
+     *
+     * So the row keeps its space and only its ink arrives, on `.icon-btn`'s
+     * 120ms so the chevron and the bar turn up together rather than in
+     * sequence. The first segment fills over its own 260ms underneath, and the
+     * two overlapping read as one arrival — the track appearing and being
+     * marked at once, which is what actually happened.
+     */
+    progress.style.opacity = index === 0 ? '0' : '1'
   }
 
   /** Forward: one new entry per step, so one back gesture undoes exactly one. */
@@ -742,24 +1042,43 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
   }
 
   function render(next) {
+    const from = index
     index = Math.max(0, Math.min(STEPS.length, next))
+
+    /**
+     * Whether this is navigation at all, and if so which way.
+     *
+     * A step repainting itself calls `render(index)` — choosing a sex, picking a
+     * goal — and that is not a screen change, it is a control answering. Giving
+     * it the arrival animation would say "you have moved" every time someone
+     * taps a segment, which is the loudest possible version of asserting a
+     * change that did not happen.
+     */
+    const moved = from !== index
+    const slide = !moved ? null : index > from ? 'step-in-fwd' : 'step-in-back'
+
     paintProgress()
-    body.scrollTop = 0
+
+    /**
+     * Only on a real move.
+     *
+     * This was unconditional, which meant tapping "Rather not" near the bottom
+     * of the About you screen scrolled you back to the top to watch a notice
+     * appear somewhere off screen. The scroll position belongs to the step; a
+     * repaint of the step's own contents has no business resetting it.
+     */
+    if (moved) body.scrollTop = 0
 
     if (index === 0) {
       repaint(body, welcomeNode())
-      repaint(
-        footer,
+      setPrimary('Get started', () => go(1))
+      secondary.set(
         h(
           'div',
-          { class: 'mx-auto flex max-w-[430px] flex-col gap-[10px]' },
-          h('button', { class: 'btn-primary', onclick: () => go(1) }, 'Get started'),
+          { class: 'flex flex-col pt-[10px]' },
           h(
             'button',
-            {
-              class: 'chip-sm self-center',
-              onclick: () => finish(false),
-            },
+            { class: 'chip-sm self-center', onclick: () => finish(false) },
             preview ? 'Close the preview' : 'Skip for now'
           )
         )
@@ -775,31 +1094,31 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
       body,
       h(
         'div',
-        { class: 'mx-auto flex max-w-[430px] flex-col gap-[20px] pb-[20px]' },
+        {
+          class: [
+            'mx-auto flex max-w-[430px] flex-col gap-[20px] pb-[20px]',
+            slide,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        },
         h('h1', { class: 'text-title font-semibold leading-tight' }, step.title),
         step.lede ? h('p', { class: 'px-0 text-[14px] leading-snug' }, step.lede) : null,
         step.node
       )
     )
 
-    repaint(
-      footer,
-      h(
-        'div',
-        { class: 'mx-auto flex max-w-[430px] flex-col gap-[10px]' },
-        h(
-          'button',
-          { class: 'btn-primary', onclick: () => (last ? finish(true) : go(index + 1)) },
-          last ? (preview ? 'Save these for real' : 'Start tracking') : 'Continue'
-        ),
-        last && preview
-          ? h(
-              'button',
-              { class: 'btn-secondary', onclick: () => finish(false) },
-              'Discard the preview'
-            )
-          : null
-      )
+    setPrimary(last ? (preview ? 'Save these for real' : 'Start tracking') : 'Continue', () =>
+      last ? finish(true) : go(index + 1)
+    )
+    secondary.set(
+      last && preview
+        ? h(
+            'div',
+            { class: 'flex flex-col pt-[10px]' },
+            h('button', { class: 'btn-secondary', onclick: () => finish(false) }, 'Discard the preview')
+          )
+        : null
     )
   }
 
