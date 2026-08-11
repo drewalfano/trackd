@@ -2,7 +2,7 @@ import { h } from '../lib/dom.js'
 import { getFood, getSettings } from '../lib/db.js'
 import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
 import { blockSelector, card, macroLine, macroUnit, notice } from '../lib/ui.js'
-import { qty, servingLabel, unitLabel, pluralize } from '../lib/format.js'
+import { qty, servingLabel, unitLabel, pluralize, displayName } from '../lib/format.js'
 import { formatDayLabel, todayStr } from '../lib/dates.js'
 
 /**
@@ -53,7 +53,7 @@ export function mealPanel({
   onStage,
 }) {
   return {
-    title: meal.name,
+    title: displayName(meal.name),
     render: (ctx) => {
       let block = initialBlock
 
@@ -150,7 +150,7 @@ export function mealPanel({
                         'truncate text-[14px] font-semibold leading-tight' +
                         (food ? '' : ' text-muted line-through'),
                     },
-                    food?.name || 'Deleted food'
+                    displayName(food?.name) || 'Deleted food'
                   ),
                   h(
                     'div',

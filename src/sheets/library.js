@@ -13,7 +13,7 @@ import {
   toggleFavourite,
 } from '../lib/db.js'
 import { card, emptyRow, textInput } from '../lib/ui.js'
-import { pluralize } from '../lib/format.js'
+import { pluralize, displayName } from '../lib/format.js'
 
 /**
  * Curating what is already in the library: the pinned order, and the saved
@@ -44,7 +44,7 @@ export function favouritesSheet() {
               h(
                 'div',
                 { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[14px] font-semibold' }, item.name),
+                h('div', { class: 'truncate text-[14px] font-semibold' }, displayName(item.name)),
                 h(
                   'div',
                   { class: 'text-[12px] text-muted' },
@@ -132,7 +132,7 @@ export function mealsSheet() {
                     h(
                       'div',
                       { class: 'min-w-0 flex-1' },
-                      h('div', { class: 'truncate text-[14px] font-semibold' }, meal.name),
+                      h('div', { class: 'truncate text-[14px] font-semibold' }, displayName(meal.name)),
                       h(
                         'div',
                         { class: 'text-[12px] text-muted' },
@@ -162,6 +162,9 @@ export function mealsSheet() {
                         class: 'icon-btn bg-canvas',
                         'aria-label': 'Rename',
                         onclick: async () => {
+                          // The RAW name, not the cased one. This field edits the
+                          // record, and an edit box prefilled with a display
+                          // transform would write the transform back on save.
                           const name = await promptText('Rename meal', meal.name)
                           if (name) {
                             await putMeal({ ...meal, name })
@@ -178,7 +181,7 @@ export function mealsSheet() {
                         'aria-label': 'Delete',
                         onclick: async () => {
                           const ok = await confirm({
-                            title: `Delete "${meal.name}"?`,
+                            title: `Delete "${displayName(meal.name)}"?`,
                             message: 'Entries already logged from it are not affected.',
                           })
                           if (ok) {

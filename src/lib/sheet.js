@@ -293,7 +293,17 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * would have fixed this instance and left the next one to be found by eye.
    */
   const body = h('div', {
-    class: 'isolate min-h-0 flex-1 overflow-y-auto overscroll-contain px-[20px]',
+    /**
+     * `overflow-x-clip` is load-bearing, not tidying.
+     *
+     * A panel arriving with `panel-in-fwd` is translated 10px sideways, and a
+     * translated child in an `overflow-y: auto` box grows a horizontal scroll
+     * range — which on iOS is a sheet you can drag off its own edge for the
+     * length of the animation. `.step-body` hit exactly this one flow over and
+     * documents it at length, including that `clip` computes to `hidden` here
+     * because one axis cannot clip while the other scrolls.
+     */
+    class: 'isolate min-h-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain px-[20px]',
   })
 
   /**
@@ -503,7 +513,9 @@ export function openSheet({ title, render, footer = null, action = null }) {
     const fromHeight = arrival && panel.isConnected ? panel.offsetHeight : null
     clear(body)
     if (top?.node) {
-      top.node.classList.remove('panel-in')
+      // All three, because a panel kept in the DOM while you pushed past it
+      // still carries whichever one it arrived with.
+      top.node.classList.remove('panel-in', 'panel-in-fwd', 'panel-in-back')
       if (arrival) top.node.classList.add(arrival)
       body.appendChild(top.node)
     }
@@ -511,7 +523,7 @@ export function openSheet({ title, render, footer = null, action = null }) {
     body.scrollTop = top?.scrollTop ?? 0
     contentObserver?.disconnect()
     if (top?.node) contentObserver?.observe(top.node)
-    if (fromHeight != null) resizeTo(fromHeight)
+    if (fromHeight != null) resizeTo(fromHeight, top?.node, dir)
   }
 
   /**
@@ -538,7 +550,7 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * correct: the finger outranks a transition it interrupted.
    */
   let resizeTimer = null
-  function resizeTo(fromHeight) {
+  function resizeTo(fromHeight, node = null, dir = null) {
     panel.style.transition = 'none'
     panel.style.height = ''
     // Measured with the new panel's padding already applied — `syncHeader` is
@@ -547,6 +559,28 @@ export function openSheet({ title, render, footer = null, action = null }) {
     const toHeight = panel.offsetHeight
     if (toHeight === fromHeight) {
       panel.style.transition = ''
+      /**
+       * No resize, so the CONTENT carries the change instead.
+       *
+       * This branch is not the rare one it looks like. The sheet is capped at
+       * `calc(100% - 64px)`, so any two panels that both overflow the cap are
+       * the same height as each other — which on a phone is the add sheet's
+       * root and every form you can push from it. The height comes back equal,
+       * this returns early, and the arrival was left as a bare opacity ramp
+       * under a layout that had already changed: the panel appearing rather
+       * than arriving, which is what it was reported as.
+       *
+       * Upgrading the class here rather than choosing it in `showTop` is what
+       * keeps the rule honest — the answer depends on a height that cannot be
+       * measured until the new panel is laid out, and this is the only place
+       * that knows it. Nothing has painted yet: `showTop` and this both run
+       * inside the click, so swapping the class now starts the directional
+       * animation cleanly rather than restarting a visible one.
+       */
+      if (node && dir) {
+        node.classList.remove('panel-in')
+        node.classList.add(dir === 'pop' ? 'panel-in-back' : 'panel-in-fwd')
+      }
       syncFooterFade()
       return
     }

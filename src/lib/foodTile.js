@@ -1,6 +1,7 @@
 import { h, longPress } from './dom.js'
 import { icon } from './icons.js'
 import { macroLine } from './ui.js'
+import { displayName } from './format.js'
 
 /**
  * One food, as a card in a horizontal rail.
@@ -51,9 +52,14 @@ export function foodTile({
   /** Long-press. Optional — the tile is complete without one. */
   onOpen,
 }) {
+  // Cased once, then used for both the visible name and the label read aloud,
+  // so the two never diverge. Callers that compose their own `bodyLabel` case
+  // it themselves — the string is already built by the time it arrives.
+  const name = displayName(title)
+
   const hit = h('button', {
     class: 'absolute inset-0 rounded-[inherit]',
-    'aria-label': bodyLabel ?? (subtitle ? `${title}, ${subtitle}` : title),
+    'aria-label': bodyLabel ?? (subtitle ? `${name}, ${subtitle}` : name),
     onclick: onBody,
   })
   if (onOpen) longPress(hit, onOpen)
@@ -64,7 +70,7 @@ export function foodTile({
     hit,
     // `relative` lifts the content over the overlay so it is not dimmed or
     // clipped by it; `pointer-events-none` hands the taps straight back.
-    h('div', { class: 'food-tile-name pointer-events-none relative' }, title),
+    h('div', { class: 'food-tile-name pointer-events-none relative' }, name),
     // `mt-auto` on the row, so the numbers and the `+` land on the same
     // baseline in every card whether the name above them took one line or two.
     h(

@@ -20,7 +20,7 @@ import {
   numberInput,
   labelledField,
 } from '../lib/ui.js'
-import { unitLabel, servingLabel, round } from '../lib/format.js'
+import { unitLabel, servingLabel, round, displayName } from '../lib/format.js'
 import { blockForTime, formatDayLabel, addDays, todayStr } from '../lib/dates.js'
 import { QUICK_ADD_SOURCE } from './quickAdd.js'
 
@@ -308,8 +308,8 @@ export function servingPanel({
         h(
           'div',
           { class: 'min-w-0' },
-          h('div', { class: 'text-[16px] font-semibold leading-tight' }, food.name),
-          food.brand ? h('div', { class: 'text-[12px] text-muted' }, food.brand) : null
+          h('div', { class: 'text-[16px] font-semibold leading-tight' }, displayName(food.name)),
+          food.brand ? h('div', { class: 'text-[12px] text-muted' }, displayName(food.brand)) : null
         ),
 
         h(
@@ -383,7 +383,7 @@ export async function pushServing(ctx, { food, date, block, onStage }) {
       onSubmit: async ({ quantity, unit, block: b, date: d }) => {
         await logFood({ food, quantity, unit, date: d, block: b })
         ctx.close()
-        toast(`Logged ${food.name}`)
+        toast(`Logged ${displayName(food.name)}`)
       },
       onStage:
         onStage &&
@@ -402,7 +402,7 @@ export async function openServingSheet({ food, date, block }) {
     onSubmit: async ({ quantity, unit, block: b, date: d }) => {
       await logFood({ food, quantity, unit, date: d, block: b })
       closeCurrent()
-      toast(`Logged ${food.name}`)
+      toast(`Logged ${displayName(food.name)}`)
     },
   })
   let closeCurrent = () => {}
@@ -500,7 +500,7 @@ export async function openEditEntry(entry, host) {
         return h(
           'div',
           { class: 'flex flex-col gap-[20px]' },
-          h('div', { class: 'text-[16px] font-semibold' }, entry.foodName || 'Deleted food'),
+          h('div', { class: 'text-[16px] font-semibold' }, displayName(entry.foodName) || 'Deleted food'),
           /**
            * The padding is on the CHILDREN, not on the card. Every other card in
            * the app is built that way and this one was not, which cost it both of

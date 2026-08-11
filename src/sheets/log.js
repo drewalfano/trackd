@@ -10,6 +10,7 @@ import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
 import { openEditEntry } from './serving.js'
 import { openAddFood } from './addFood.js'
 import { toast } from '../lib/toast.js'
+import { displayName } from '../lib/format.js'
 import { openSheet, presentSheet } from '../lib/sheet.js'
 import { BLOCKS } from '../lib/dates.js'
 import { state, subscribe } from '../state.js'
@@ -54,7 +55,7 @@ async function promptSaveAsMeal(entries, defaultName, host) {
               const meal = await saveEntriesAsMeal(name.trim() || defaultName, entries)
               await toggleFavourite('meal', meal.id)
               ctx.pop()
-              toast(`Saved "${meal.name}" and pinned it`)
+              toast(`Saved "${displayName(meal.name)}" and pinned it`)
             },
           },
           'Save meal'
@@ -81,7 +82,7 @@ async function promptSaveAsMeal(entries, defaultName, host) {
               h(
                 'div',
                 { class: 'row' },
-                h('span', { class: 'flex-1 truncate text-[12px]' }, e.foodName),
+                h('span', { class: 'flex-1 truncate text-[12px]' }, displayName(e.foodName)),
                 h(
                   'span',
                   { class: 'text-[12px] text-muted' },

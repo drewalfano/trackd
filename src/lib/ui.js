@@ -1,7 +1,7 @@
 import { h, countTo, setTabularText, fitText, pressable } from './dom.js'
 import { icon, sparkleHalf } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
-import { g, kcal, round, cmToFtIn, ftInToCm } from './format.js'
+import { g, kcal, round, cmToFtIn, ftInToCm, displayName } from './format.js'
 
 
 /**
@@ -277,6 +277,17 @@ export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) 
  * parts, so they want to sit as a block rather than as a list. The weight change
  * from a semibold name to muted figures already separates them.
  */
+/**
+ * `name` is cased here rather than at the twenty call sites that reach this
+ * function, because this is the one place every food row in the app passes
+ * through — the log rows, the add sheet's results, the plate. See
+ * `displayName`: it is a display rule, the stored record is untouched, and a
+ * caller that wants the raw string simply does not render it through a food
+ * row. The editable fields are the ones that must not come through here, and
+ * they do not: the custom sheet's name input and the meal rename prompt both
+ * take the record's own value, because an edit box that shows you something
+ * other than what you are editing is a trap.
+ */
 export function foodRowBody({ name, detail, sub, totals, badge = null, missing = false }) {
   return h(
     'div',
@@ -289,7 +300,7 @@ export function foodRowBody({ name, detail, sub, totals, badge = null, missing =
           (missing ? ' text-muted line-through' : ''),
       },
       badge,
-      h('span', { class: 'min-w-0 truncate' }, name),
+      h('span', { class: 'min-w-0 truncate' }, displayName(name)),
       detail ? h('span', { class: 'shrink-0 whitespace-pre text-muted' }, ' · ') : null,
       detail ? h('span', { class: 'shrink-0 font-normal' }, detail) : null
     ),

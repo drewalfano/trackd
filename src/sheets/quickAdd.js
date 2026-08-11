@@ -112,17 +112,70 @@ export function quickAddPanel({ settings, date, block: initialBlock, onDone }) {
         }
         const current = totals()
         repaint(preview, macroLine(current, { size: 14 }))
+
+        /**
+         * Same rule as the Settings targets, and now the same arrangement.
+         *
+         * The chip was shown whenever there were macros to derive from, which
+         * meant it stayed up while the calorie field already held the number it
+         * was offering — `600 cal` typed, macros working out to 600, and a
+         * button proposing to write 600 over it. The test is whether pressing
+         * it would change the value, rounded on both sides because that is what
+         * it would write; the long form is on `syncDerived` in screens/settings.
+         *
+         * The block was a vertical stack, and it moved from 58px tall to 18 the
+         * moment the two figures met — a 40px jump in the middle of a sheet,
+         * from typing a digit. Side by side under a `min-h-[30px]` it is 30
+         * either way. That it now matches the arrangement of the identical
+         * sentence one screen over is the point rather than a side effect: this
+         * is one component that had been copied twice and allowed to drift.
+         */
+        const rounded = Math.round(fromMacros)
+        const wouldChange = rounded > 0 && rounded !== Math.round(Number(kcal) || 0)
+
+        /**
+         * The hint stays once calories are following the macros, and says so.
+         *
+         * **It used to vanish outright.** The block was gated on
+         * `kcalOverridden`, so pressing `Use that` removed the sentence along
+         * with the button — the reader pressed something and the only line
+         * describing what it did disappeared, leaving a calorie field that had
+         * silently changed and nothing accounting for it. Settings has always
+         * kept the line and appended `Calories now follow the macros.`, which
+         * is the state the reader has just entered and the one they need told,
+         * because it persists: every later macro edit moves the calorie figure
+         * too.
+         *
+         * So the gate moves from the block to the chip. The block appears as
+         * soon as there is a figure to state and stays put; the chip is the
+         * only thing that comes and goes.
+         *
+         * The remaining `fromMacros` guard is not the same test. An untouched
+         * sheet has no macros at all, and `The macros work out to 0 cal.` over
+         * three empty fields is the form narrating its own blankness. Settings
+         * shows it at zero because that card always holds four saved numbers;
+         * this one starts empty.
+         */
         repaint(
           derived,
-          kcalOverridden && fromMacros
+          fromMacros
             ? h(
                 'div',
-                { class: 'flex flex-col items-start gap-[10px]' },
-                h('span', {}, `The macros work out to ${Math.round(fromMacros)} cal.`),
+                { class: 'flex items-center gap-[10px]' },
+                h(
+                  'span',
+                  { class: 'min-w-0 flex-1' },
+                  `The macros work out to ${rounded} cal.`,
+                  kcalOverridden ? '' : ' Calories now follow the macros.'
+                ),
                 h(
                   'button',
                   {
-                    class: 'chip-sm',
+                    // `self-end` and `invisible` for the reasons Settings gives
+                    // at length: one bottom edge for the group, and the chip's
+                    // box held in the line whether or not it is offering
+                    // anything, so the sentence wraps the same way either way.
+                    class: `chip-sm self-end${kcalOverridden && wouldChange ? '' : ' invisible'}`,
                     onclick: () => {
                       kcalOverridden = false
                       sync()

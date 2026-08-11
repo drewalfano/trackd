@@ -4,7 +4,7 @@ import { searchFoods } from '../lib/db.js'
 import { searchNewStaples, stapleDraft, stapleName } from '../lib/staples.js'
 import { searchProducts, isOnline } from '../lib/off.js'
 import { card, listRow, emptyRow } from '../lib/ui.js'
-import { servingLabel } from '../lib/format.js'
+import { servingLabel, displayName } from '../lib/format.js'
 
 /**
  * Attaching a food to a row that has none.
@@ -91,14 +91,16 @@ export function pushMatchItem(ctx, { initial = '', onPick }) {
         const list = card([
           ...found.map((food) =>
             listRow({
-              title: food.name,
-              subtitle: [food.brand, servingLabel(food)].filter(Boolean).join(' · '),
+              title: displayName(food.name),
+              subtitle: [displayName(food.brand), servingLabel(food)].filter(Boolean).join(' · '),
+              // `name` goes onto the plate item, where it is a search and re-match
+              // target rather than a label — so it carries the RAW stored string.
               onclick: () => choose({ foodId: food.id, name: food.name }),
             })
           ),
           ...staples.map((staple) =>
             listRow({
-              title: stapleName(staple),
+              title: displayName(stapleName(staple)),
               subtitle: staple.servingLabel,
               onclick: () => {
                 const draft = { ...stapleDraft(staple), name: stapleName(staple) }
@@ -141,8 +143,8 @@ export function pushMatchItem(ctx, { initial = '', onPick }) {
           fresh.slice(0, 20).forEach(({ draft }) =>
             list.appendChild(
               listRow({
-                title: draft.name,
-                subtitle: [draft.brand, draft.servingLabel].filter(Boolean).join(' · '),
+                title: displayName(draft.name),
+                subtitle: [displayName(draft.brand), draft.servingLabel].filter(Boolean).join(' · '),
                 onclick: () => choose({ draft, name: draft.name }),
               })
             )

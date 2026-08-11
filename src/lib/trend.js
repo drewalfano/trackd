@@ -143,10 +143,31 @@ export function computeTrend(weights, window = 7) {
  * Average change per week across the given trend points, by least squares.
  * Regression rather than (last - first) / weeks so one odd endpoint cannot
  * swing the number.
+ *
+ * **Gated on the RAW readings in these points, not on the trend values.** This
+ * was the one figure on the weight card that asked the record a question and
+ * then answered it about the window. `computeTrend` carries the last EWMA value
+ * forward flat across gaps rather than inventing a reading, which is right for
+ * drawing — but it means a window holding two real weigh-ins over an older
+ * history hands thirty non-null `trend` values to a least-squares fit. The
+ * count gate passed, the fortnight gate passed, and out came `0.0 lb / week`:
+ * a slope through a line the chart had already refused to draw, because the
+ * chart counts what is actually in the window and this did not.
+ *
+ * Same threshold as the line rather than a fifth constant, because it is the
+ * same claim. The rate IS the slope of the trend line; a window that cannot
+ * carry the line cannot carry a slope through it. One number, one sentence to
+ * the reader.
+ *
+ * The gap case is worth naming, because it is the one that matters: you track
+ * for a month, stop for six weeks, weigh in twice. That is exactly when a
+ * confident "no change" does damage.
  */
 export function ratePerWeek(points) {
   const data = points.filter((p) => p.trend != null)
   if (data.length < 2) return null
+  // See above. Carried-forward trend is not evidence of a reading.
+  if (points.filter((p) => p.kg != null).length < MIN_ENTRIES_FOR_TREND) return null
   // See MIN_RATE_DAYS. A slope is only a weekly rate once there are weeks.
   if (daysBetween(data[0].date, data[data.length - 1].date) < MIN_RATE_DAYS) return null
 

@@ -22,7 +22,7 @@ import {
   emptyState,
   notice,
 } from '../lib/ui.js'
-import { servingLabel, g, kcal, pluralize } from '../lib/format.js'
+import { servingLabel, g, kcal, pluralize, displayName } from '../lib/format.js'
 import { toast, confirm } from '../lib/toast.js'
 import { openCustomFood } from '../sheets/custom.js'
 import { openServingSheet } from '../sheets/serving.js'
@@ -96,8 +96,8 @@ export function foodsScreen() {
             ? card(
                 filtered.map((food) =>
                   listRow({
-                    title: food.name,
-                    subtitle: [food.brand, servingLabel(food), `used ${food.useCount || 0}×`]
+                    title: displayName(food.name),
+                    subtitle: [displayName(food.brand), servingLabel(food), `used ${food.useCount || 0}×`]
                       .filter(Boolean)
                       .join(' · '),
                     chevron: true,
@@ -320,8 +320,8 @@ export function foodDetailScreen(id) {
           h(
             'div',
             { class: 'min-w-0 flex-1' },
-            h('h1', { class: 'text-title font-semibold leading-tight' }, food.name),
-            food.brand ? h('p', { class: 'text-[12px] text-muted' }, food.brand) : null,
+            h('h1', { class: 'text-title font-semibold leading-tight' }, displayName(food.name)),
+            food.brand ? h('p', { class: 'text-[12px] text-muted' }, displayName(food.brand)) : null,
             h('div', { class: 'mt-[4px]' }, macroLine(computeMacros(food, 1, 'serving'), { size: 12 }))
           ),
           h(
@@ -394,7 +394,7 @@ export function foodDetailScreen(id) {
               class: 'btn-secondary',
               onclick: async () => {
                 const ok = await confirm({
-                  title: `Delete "${food.name}"?`,
+                  title: `Delete "${displayName(food.name)}"?`,
                   message: entryCount
                     ? `${pluralize(entryCount, 'entry', 'entries')} already logged from this food ` +
                       'will stay exactly as they are. The numbers were recorded at the time.'

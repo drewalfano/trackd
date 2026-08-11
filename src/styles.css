@@ -2007,25 +2007,84 @@
    * for the reason every other fade in this file does — a frame of absent
    * content reads as a fault, not as a transition.
    *
-   * **Only the log wears it.** The Quick add rail sits between the card and the
-   * log and is byte-identical on every day — `quickAddFoods` ranks over a window
-   * ending at the real today and takes no date — so fading it would be claiming
-   * a change that did not happen, which is the thing this screen keeps being
-   * cleared of. The log is a different day's entries and genuinely did change.
+   * **Only the log's CARD wears it, and the scope is the whole argument.** The
+   * Quick add rail sits between the day card and the log and is byte-identical
+   * on every day — `quickAddFoods` ranks over a window ending at the real today
+   * and takes no date — so fading it would be claiming a change that did not
+   * happen, which is the thing this screen keeps being cleared of.
+   *
+   * That test excludes more than the rail. It was on the log's whole `section`,
+   * which carries `Logged` and the `Full log` chip above the card, and those
+   * two are as fixed as the rail is: a heading that reads the same on every day
+   * of the year was being dissolved as though it had become a different day's
+   * heading. The class sits on the card now — see `logCard` — so what fades is
+   * the entries, which are the only part that genuinely changed.
    *
    * Only on a day change, too. Logging must not dissolve the list it just added
    * a row to, and the mode toggle has `.reading-swap` for its own.
    */
-  @keyframes day-swap {
+  /**
+   * The log arrives from the side the day came from, rather than dissolving in
+   * place.
+   *
+   * A plain opacity ramp says "this content was replaced", which is true and
+   * incomplete: the day moved in a DIRECTION, the deck above just travelled a
+   * page width saying so, and the list underneath was fading as though it had
+   * been swapped by something that had no direction at all. Two marks
+   * describing one event, disagreeing about its shape.
+   *
+   * This is `step-in-fwd` applied one screen over, and deliberately the same
+   * construction: a small translate on the axis of travel, an opacity floor so
+   * there is no frame where the content is absent, quad-out. Onboarding uses it
+   * because a step change has a direction the chevron and the progress bar
+   * already assert; a day change has one the deck and the header already
+   * assert. Same problem, same answer.
+   *
+   * **10px and not more, for two reasons.** It is `step-in-fwd`'s number, which
+   * was itself the 6px `view-in` used to lift by, plus the extra a horizontal
+   * axis needs. (`view-in` has since given its movement up altogether and is a
+   * fade — the 6 is where this number came from, not something still on
+   * screen.) And the
+   * card sits in a 20px gutter, so 10 of travel stays inside the page's own
+   * margin — a wider slide would push the card's edge past the viewport and
+   * grow a horizontal scroll range on a screen that only scrolls vertically,
+   * which is the trap `.step-body` documents at length.
+   *
+   * **Still no stagger, and that is not an oversight.** Rows arriving in
+   * sequence is the thing `.results-in` refuses one file over: it is a loading
+   * animation pretending to be content, and it takes longer than the change it
+   * describes. The card moves as one block because it became one day.
+   *
+   * 140ms is unchanged and still shorter than the deck's 200, so the screen has
+   * settled by the time the card it followed has. The opacity floor stays at
+   * 0.45 rather than taking `step-in-fwd`'s 0.65: this content genuinely
+   * changed, where an onboarding step is the same panel asking a new question.
+   */
+  @keyframes day-swap-fwd {
     from {
       opacity: 0.45;
+      transform: translateX(10px);
     }
     to {
       opacity: 1;
+      transform: none;
     }
   }
-  .day-swap {
-    animation: day-swap 140ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  @keyframes day-swap-back {
+    from {
+      opacity: 0.45;
+      transform: translateX(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .day-swap-fwd {
+    animation: day-swap-fwd 140ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  .day-swap-back {
+    animation: day-swap-back 140ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
   }
 
   .swipe-row[data-removing='true'] {
@@ -3256,6 +3315,67 @@
 }
 
 /**
+ * The same arrival, for the case the note above did not have: when the sheet
+ * does not resize at all.
+ *
+ * **Nothing there is being overturned.** "The sliding was the wrong idea"
+ * because it was a second movement arguing with the first, and the first was
+ * the sheet changing size — pushing from search and favourites to the Custom
+ * form is a 94px difference, and that resize is what carries the change. That
+ * argument is sound and it still holds wherever a resize happens.
+ *
+ * It just is not the common case. `.sheet-panel` is capped at
+ * `calc(100% - 64px)`, and both of those panels are taller than the cap on a
+ * phone — measured at 748px either side on a 812pt screen, with the Custom
+ * form's own content running to 979. `resizeTo` compares the two heights, finds
+ * them identical and returns without animating, so the "first movement" the
+ * fade was told not to argue with never occurs. What is left is a 0.35 opacity
+ * ramp under a layout that changed on one frame, which reads as the panel
+ * simply appearing.
+ *
+ * So the movement budget goes to whichever half is actually available: the
+ * resize when the sheet has one, the content when it does not. Never both, so
+ * the two can still never argue.
+ *
+ * 10px and the direction from `step-in-fwd`, which is the same event one flow
+ * over — a push has a forward direction the back chevron and the title already
+ * assert, and the eye tracks a sideways arrival across a shorter span than a
+ * vertical one. The opacity floor stays at `panel-in`'s 0.35 rather than
+ * onboarding's 0.65: this is a different panel, not the same panel restated.
+ *
+ * The body needs `overflow-x: clip` for this, and that is not optional — see
+ * `.step-body`, which documents the same trap: a translated child in a
+ * `overflow-y: auto` box grows a horizontal scroll range, and on iOS that is a
+ * sheet the user can drag off its own edge.
+ */
+@keyframes panel-in-fwd {
+  from {
+    opacity: 0.35;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes panel-in-back {
+  from {
+    opacity: 0.35;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.panel-in-fwd {
+  animation: panel-in-fwd 240ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.panel-in-back {
+  animation: panel-in-back 240ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/**
  * The new screen arriving after a tab switch.
  *
  * `show()` holds the outgoing screen until the incoming one has read IndexedDB,
@@ -3270,33 +3390,44 @@
  * the screen blinked rather than arrived. The argument is written out on
  * `panel-in`, which had the same three faults for the same reason.
  *
- * 200ms, 6px, and a floor of 0.65 on the opacity, on the same quad-out the
+ * That fix went 200ms, 6px of lift, and a floor of 0.65 on the quad-out the
  * sheet panels use — see `panel-in` for why that curve and not the iOS one,
- * which read as a bounce here too. Nothing goes to fully transparent, so there
- * is no frame where the page is missing, and the movement is small enough to
- * register as a settle rather than as an arrival.
+ * which read as a bounce here too.
  *
- * The 6px is kept here where the panels' slide was dropped, because these are
- * different situations: a tab switch replaces the whole page with no container
- * resizing to carry the change, so this small lift is the only thing marking it.
+ * **The lift is gone, and the fade absorbs its job.** The 6px was kept when the
+ * panels' slide was dropped, on the grounds that a tab switch has no container
+ * resize to carry the change and therefore needs the movement. That argument is
+ * about whether the swap is marked at ALL, and it does not get as far as
+ * choosing an axis — the vertical was never the point, it was just the axis
+ * that could not collide with `.screen`'s gutter.
  *
- * Deliberately NOT directional yet — `show()` is the path for pushed screens
- * (`settings/data`, `foods/:id`) as well as for the three tabs, and a left/right
- * slide would need to know which it is. Worth doing, and bigger than this.
+ * Which is the problem with it. A rise says the content arrived from below, and
+ * the three tabs are lateral siblings in a bar: nothing about moving between
+ * Today and Trends is vertical. The motion was doing a real job with a word
+ * that did not fit, and it was the part that got noticed.
  *
- * Vertical, so it cannot interact with `.screen`'s horizontal gutter. Nothing
- * inside `#view` is `position: fixed` — the tab bar, its fade, every sheet and
- * the toast host are all siblings or children of `<body>` — so the transform
- * creating a containing block here reaches nothing.
+ * Shrinking it to 3px was the obvious alternative and is worse than either end
+ * — it keeps the wrong direction and mumbles it, walking back toward the 4px
+ * this note already records as reading like a repaint fault.
+ *
+ * So: one property, no direction claimed. The floor drops from 0.65 to 0.5 to
+ * pay for the movement it replaces, which is what keeps this a settle rather
+ * than the blink the 160ms version was. It is still nowhere near transparent,
+ * so there is no frame where the page is missing. This is the same conclusion
+ * `panel-in` reached one section up, now for the same reason rather than a
+ * different one.
+ *
+ * A left/right slide WOULD fit the bar's geometry and is still not the answer
+ * here: `show()` is the path for pushed screens (`settings/data`, `foods/:id`)
+ * as well as for the three tabs, so it would have to know which it is, and it
+ * would be more motion than what is being replaced rather than less.
  */
 @keyframes view-in {
   from {
-    opacity: 0.65;
-    transform: translateY(6px);
+    opacity: 0.5;
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 /**
@@ -3719,10 +3850,11 @@
  * The step's contents arriving — and the one screen change in this app that gets
  * to be directional.
  *
- * `view-in` is vertical and `panel-in` gave up its slide entirely, both for the
- * same reason: neither of them knew which way it was going. `view-in` is the
- * path for three sibling tabs AND for pushed screens, and sheet panels push and
- * pop through one function. This one knows. The screen is literally numbered,
+ * `view-in` and `panel-in` both gave their movement up entirely, for the same
+ * reason: neither of them knew which way it was going. `view-in` is the path
+ * for three sibling tabs AND for pushed screens, and sheet panels push and pop
+ * through one function — though that one has since taken a direction back for
+ * the case where the sheet cannot resize. This one always knew. The screen is literally numbered,
  * there is a bar under the number filling left to right, and a chevron in the
  * corner whose entire job is to say which direction back is. A step that arrives
  * from the right and leaves to the left agrees with three things already on
@@ -3733,13 +3865,16 @@
  * was also *resizing* — 16px of travel laid over a 94px height snap, which no
  * easing on the contents could cover. Nothing resizes here: the body is a
  * fixed-height scroller between a fixed header and a pinned footer, so the
- * distance only has to be big enough to read as movement. `view-in` arrived at
- * 6px from the other side after 4px turned out to be a flicker rather than a
- * distance; 10 is that number plus the room a horizontal axis needs, since the
- * eye tracks sideways motion across a shorter span than it tracks vertical.
+ * distance only has to be big enough to read as movement. `view-in` had
+ * arrived at 6px from the other side after 4px turned out to be a flicker
+ * rather than a distance; 10 is that number plus the room a horizontal axis
+ * needs, since the eye tracks sideways motion across a shorter span than it
+ * tracks vertical. Both of those figures are history now that `view-in` is a
+ * fade, which does not weaken them — they are why 10 is 10.
  *
- * Opacity floors at 0.65, again from `view-in`: there is no frame where the step
- * is absent, only frames where it is arriving.
+ * Opacity floors at 0.65, which is where `view-in` floored while it still
+ * moved: there is no frame where the step is absent, only frames where it is
+ * arriving.
  *
  * Quad-out rather than the house expo-out. Expo-out read as a bounce on an
  * arriving screen in both places it was tried — see `panel-in`.

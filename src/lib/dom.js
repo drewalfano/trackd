@@ -577,6 +577,18 @@ const PAGE_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
  */
 const rubber = (d, limit) => (d * limit) / (Math.abs(d) + limit)
 
+/**
+ * How long a commit waits for the caller to repaint before it stops waiting.
+ *
+ * `onCommit` hands over to a rebuild that reads the day out of IndexedDB, so
+ * the deck is briefly still showing the day it just left. `drain` is what says
+ * the repaint landed; this is the backstop for the case where it never does,
+ * because the screen unmounted or the caller never wired `drain` at all. Long
+ * enough that it is never the thing that fires in normal use, short enough that
+ * a deck cannot sit refusing input for a noticeable time.
+ */
+const PAINT_GRACE = 400
+
 export function swipePages(deck, { track, pageWidth, reach, onCommit, duration = PAGE_MS }) {
   let startX = 0
   let startY = 0
@@ -589,6 +601,27 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
   let velocity = 0
   /** Measured once, when the gesture is claimed, rather than on every frame. */
   let pageW = 0
+  /**
+   * Between the slide ending and the new day being painted.
+   *
+   * `committing` comes off inside `finish`, which runs when the animation ends
+   * — and the day it committed to is not on screen yet, because `onCommit`
+   * starts an async rebuild. Anything that started a second slide in that gap
+   * would be sliding stale cards, and the repaint would then reset the track
+   * out from under it. So there are two flags and not one: the transition is
+   * over, the handover is not.
+   */
+  let awaitingPaint = false
+  let paintTimer = null
+  /**
+   * One step, waiting for the deck to be ready for it.
+   *
+   * Capped at one by being a single slot rather than a list: a third tap
+   * overwrites the second. That is the cap doing its job — the queue exists so
+   * a tap inside the 200ms settle is not silently dropped, not so the deck can
+   * run up a debt of animations the finger finished asking for a second ago.
+   */
+  let pending = null
 
   deck.style.touchAction = 'pan-y'
 
@@ -660,6 +693,144 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     dx = 0
     dragging = true
     decided = false
+  }
+
+  /**
+   * The bookkeeping every commit shares, whatever set it going.
+   *
+   * Split out from `finish` when the chevrons started committing too, because
+   * the handover to the caller is the one part a tap and a gesture do
+   * identically — everything above it differs (one has a finger's velocity
+   * behind it, the other a standing start) and everything below it is the
+   * caller's.
+   */
+  const handOver = (dir) => {
+    awaitingPaint = true
+    clearTimeout(paintTimer)
+    paintTimer = setTimeout(drain, PAINT_GRACE)
+    onCommit(dir)
+  }
+
+  /**
+   * Travel one page and hand over, which is what BOTH triggers do.
+   *
+   * This was the tail of `onEnd` and is now shared, so the tap cannot drift
+   * from the swipe: same easing, same `data-paging`, same compositor hint, same
+   * idempotent finish, same commit. What the caller supplies is the direction
+   * and how long it should take — the two things a tap and a flick genuinely
+   * disagree about.
+   */
+  const glide = (dir, ms, w) => {
+    committing = true
+    deck.dataset.paging = 'true'
+    hint(true)
+    setX(dir === -1 ? w : -w, ms)
+
+    /**
+     * The commit fires once, whichever way the transition ends.
+     *
+     * A `transitionend` that never arrives would leave the deck refusing
+     * gestures for the life of the screen, and it can genuinely not arrive: an
+     * unrelated data change replaces the track mid-flight, a backgrounded tab
+     * never runs the frame, or the target happens to equal where it already is.
+     * The timer is the backstop and `settled` keeps the pair idempotent.
+     */
+    let settled = false
+    const finish = () => {
+      if (settled) return
+      settled = true
+      clearTimeout(fallback)
+      track.removeEventListener('transitionend', done)
+      hint(false)
+      /**
+       * The gesture packs up after itself rather than being thrown away.
+       *
+       * `committing` and `data-paging` used to be cleared by the caller
+       * rebuilding the deck — discarding this whole closure and the element both
+       * flags were written on. That worked only for as long as a day change
+       * meant a new deck, and it is the first thing to break when the deck keeps
+       * its nodes: `committing` gates `onStart`, so it would refuse every
+       * gesture after the first committed swipe, and `data-paging` suppresses
+       * the day card's press dip, so that would stay suppressed for good.
+       *
+       * Clearing them here is not merely a repair for that: this is where they
+       * were always finished. `finish` runs when the settle animation has ended,
+       * which is the moment the gesture is genuinely over — the rebuild happened
+       * to arrive shortly afterwards and got the credit. The post-gesture click
+       * guard is unaffected; it reads `decided`, which is still standing and is
+       * consumed by `onClickCapture` as before.
+       */
+      committing = false
+      delete deck.dataset.paging
+      handOver(dir)
+    }
+    const done = (e) => {
+      if (e.target !== track) return
+      finish()
+    }
+    track.addEventListener('transitionend', done)
+    const fallback = setTimeout(finish, ms + 80)
+  }
+
+  /**
+   * Page from something that is not a finger. Returns whether it took.
+   *
+   * **One motion model, two triggers.** The chevrons above this deck used to
+   * call the caller's day setter directly, so the swipe slid a card a page width
+   * and the tap swapped the numbers where they stood — and the card's own value
+   * animations are suppressed on a day change precisely BECAUSE "the deck has
+   * already slid to say what happened". That was true of one trigger and not the
+   * other, so the tap paid for motion it never got.
+   *
+   * The duration is not a second set of numbers. `settleMs` takes the finger's
+   * speed and the remaining distance and returns whichever implies less time; a
+   * tap has no speed, so with `velocity` zeroed it falls through to the distance
+   * term, and a full page at the full-page rate is `duration` exactly. The tap
+   * inherits the swipe's timing by arithmetic rather than by copying a constant,
+   * which is what stops the two drifting later.
+   *
+   * `false` and never a throw when a direction does not exist. Asking for
+   * tomorrow on today is an ordinary thing for a caller to do — the forward
+   * chevron is disabled, but that is markup, and the rule belongs here.
+   */
+  const page = (dir) => {
+    if (!reach(dir)) return false
+    // A finger already owns the track. A queued step would land after a gesture
+    // the user is still in the middle of, which is not what they asked for.
+    if (decided) return false
+    if (committing || awaitingPaint) {
+      pending = dir
+      return true
+    }
+    if (reduceMotion()) {
+      handOver(dir)
+      return true
+    }
+    const w = pageWidth() || 1
+    pageW = w
+    // Read by `settleMs`. A tap arrives from rest, and any velocity still
+    // standing here belongs to a gesture that finished a while ago.
+    velocity = 0
+    glide(dir, settleMs(w, w), w)
+    return true
+  }
+
+  /**
+   * The caller has repainted; the deck is ready for another step.
+   *
+   * Called from wherever the caller restores the track after a commit — for the
+   * day deck that is `paintDeck`, whose job already IS putting the track back
+   * where a freshly built deck sits. That is why this is a hook rather than a
+   * new coupling: the function that has to run for the gesture to keep working
+   * is the one that now says so out loud.
+   */
+  function drain() {
+    clearTimeout(paintTimer)
+    awaitingPaint = false
+    if (pending == null || committing) return
+    const dir = pending
+    pending = null
+    page(dir)
   }
 
   const onMove = (e) => {
@@ -746,55 +917,7 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       return
     }
 
-    const target = dir === -1 ? w : -w
-    const ms = settleMs(Math.abs(target - dx), w)
-    committing = true
-    setX(target, ms)
-
-    /**
-     * The commit fires once, whichever way the transition ends.
-     *
-     * A `transitionend` that never arrives would leave the deck refusing
-     * gestures for the life of the screen, and it can genuinely not arrive: an
-     * unrelated data change replaces the track mid-flight, a backgrounded tab
-     * never runs the frame, or the target happens to equal where it already is.
-     * The timer is the backstop and `settled` keeps the pair idempotent.
-     */
-    let settled = false
-    const finish = () => {
-      if (settled) return
-      settled = true
-      clearTimeout(fallback)
-      track.removeEventListener('transitionend', done)
-      hint(false)
-      /**
-       * The gesture packs up after itself rather than being thrown away.
-       *
-       * `committing` and `data-paging` used to be cleared by the caller
-       * rebuilding the deck — discarding this whole closure and the element both
-       * flags were written on. That worked only for as long as a day change
-       * meant a new deck, and it is the first thing to break when the deck keeps
-       * its nodes: `committing` gates `onStart`, so it would refuse every
-       * gesture after the first committed swipe, and `data-paging` suppresses
-       * the day card's press dip, so that would stay suppressed for good.
-       *
-       * Clearing them here is not merely a repair for that: this is where they
-       * were always finished. `finish` runs when the settle animation has ended,
-       * which is the moment the gesture is genuinely over — the rebuild happened
-       * to arrive shortly afterwards and got the credit. The post-gesture click
-       * guard is unaffected; it reads `decided`, which is still standing and is
-       * consumed by `onClickCapture` as before.
-       */
-      committing = false
-      delete deck.dataset.paging
-      onCommit(dir)
-    }
-    const done = (e) => {
-      if (e.target !== track) return
-      finish()
-    }
-    track.addEventListener('transitionend', done)
-    const fallback = setTimeout(finish, ms + 80)
+    glide(dir, settleMs(Math.abs((dir === -1 ? w : -w) - dx), w), w)
   }
 
   /**
@@ -824,12 +947,25 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
   deck.addEventListener('touchcancel', onEnd)
   deck.addEventListener('click', onClickCapture, true)
 
-  return () => {
-    deck.removeEventListener('touchstart', onStart)
-    deck.removeEventListener('touchmove', onMove)
-    deck.removeEventListener('touchend', onEnd)
-    deck.removeEventListener('touchcancel', onEnd)
-    deck.removeEventListener('click', onClickCapture, true)
+  /**
+   * An object rather than the bare teardown this used to return.
+   *
+   * `page` and `drain` are the two halves of the same addition — one starts a
+   * step from a control instead of a finger, the other is how the caller says
+   * its repaint has landed — and neither has anywhere sensible to live except
+   * beside the state they read.
+   */
+  return {
+    page,
+    drain,
+    destroy: () => {
+      clearTimeout(paintTimer)
+      deck.removeEventListener('touchstart', onStart)
+      deck.removeEventListener('touchmove', onMove)
+      deck.removeEventListener('touchend', onEnd)
+      deck.removeEventListener('touchcancel', onEnd)
+      deck.removeEventListener('click', onClickCapture, true)
+    },
   }
 }
 

@@ -4,6 +4,7 @@ import { toast } from './toast.js'
 import { presentSheet } from './sheet.js'
 import { blockSelector, segmented, macroLine } from './ui.js'
 import { addDays, formatDayLabel, todayStr } from './dates.js'
+import { displayName } from './format.js'
 
 /**
  * Delete, then offer it back. The undo restores the original record verbatim,
@@ -11,7 +12,7 @@ import { addDays, formatDayLabel, todayStr } from './dates.js'
  */
 export async function deleteEntryWithUndo(entry) {
   await deleteEntry(entry.id)
-  toast(`Removed ${entry.foodName || 'entry'}`, {
+  toast(`Removed ${displayName(entry.foodName) || 'entry'}`, {
     action: 'Undo',
     onAction: () => putEntry(entry),
   })
@@ -103,7 +104,7 @@ export async function openDuplicateSheet(entry, host) {
         h(
           'div',
           { class: 'panel flex flex-col gap-[10px] px-[20px] py-[20px]' },
-          h('div', { class: 'text-[16px] font-semibold leading-tight' }, entry.foodName),
+          h('div', { class: 'text-[16px] font-semibold leading-tight' }, displayName(entry.foodName)),
           macroLine(entry.computed, { size: 14 })
         ),
         h(

@@ -91,6 +91,35 @@ export function settingsScreen() {
           targets.kcal = Math.round(derived)
           kcalField.input.value = targets.kcal
         }
+
+        /**
+         * The chip appears only when pressing it would change the number.
+         *
+         * **Its condition used to be `kcalOverridden` alone, which is set to
+         * `true` on every load and never consulted the calorie target at all.**
+         * So a target of 2368 with macros working out to 2368 still carried a
+         * button offering to write 2368 over 2368: a control whose entire
+         * effect was to confirm that nothing needed doing.
+         *
+         * The test is the outcome rather than a tolerance. `Use that` writes
+         * `Math.round(derived)`, so rounding both sides and comparing asks
+         * exactly the question the button is for — would this change the stored
+         * value — and absorbs sub-1-cal float noise on the way past, since
+         * 2367.9999 and 2368 both round to 2368.
+         *
+         * Deliberately not a wider band. At ±10 the chip would hide while
+         * still having an effect, and someone whose macros say 2363 against a
+         * 2368 target would have no way left to reconcile them. A control that
+         * is hidden while it still does something is the worse bug.
+         *
+         * Zero is the same reasoning from the other end: with the macro fields
+         * empty the sentence reads `0 cal`, and offering to make that the
+         * calorie target is a no-op that happens to be destructive. `quickAdd`
+         * has always guarded this and this screen never did.
+         */
+        const rounded = Math.round(derived)
+        const wouldChange = rounded > 0 && rounded !== Math.round(targets.kcal)
+
         derivedHint.replaceChildren(
           h(
             'div',
@@ -103,38 +132,64 @@ export function settingsScreen() {
             h(
               'span',
               { class: 'min-w-0 flex-1' },
-              `Protein, fat and carbs work out to ${Math.round(derived)} cal.`,
+              `Protein, fat and carbs work out to ${rounded} cal.`,
               kcalOverridden ? '' : ' Calories now follow the macros.'
             ),
-            kcalOverridden
-              ? h(
-                  'button',
-                  {
-                    /**
-                     * `self-end`, so the group has ONE bottom edge.
-                     *
-                     * The chip is 30 and the sentence beside it wraps to two
-                     * 18px lines, so centred it floated 3px clear of the text's
-                     * own bottom — which put the 20 under the last line of type
-                     * and 23 under the chip. The section gap was right the whole
-                     * time; what was ragged was this row's lower edge.
-                     *
-                     * It costs nothing when the sentence fits on one line: the
-                     * chip is the taller of the two then, so the row is its
-                     * height and bottom-aligning it changes nothing. The text
-                     * stays centred either way — it is `flex-1` and fills the
-                     * row, so `items-center` above still governs it.
-                     */
-                    class: 'chip-sm self-end',
-                    onclick: () => {
-                      kcalOverridden = false
-                      syncDerived()
-                      queueSave()
-                    },
-                  },
-                  'Use that'
-                )
-              : null
+            /**
+             * Nothing takes the chip's place when the two figures agree, and
+             * the sentence is not rewritten to announce it.
+             *
+             * The confirmation is already on screen: this line states the
+             * derived total and the Calories field two rows above states the
+             * target, and they are the same number. A clause saying "which
+             * matches your target" narrates something the reader can see, and
+             * it is not free — every version of that sentence wraps to a second
+             * line and grows this row by another 6px.
+             *
+             * **`invisible` rather than not building it, and that is the whole
+             * no-shift mechanism.** A `min-height` was tried first and was only
+             * right at one screen width. The chip takes 86.6px out of the line,
+             * so at 375pt the sentence beside it wraps to two lines and without
+             * it fits on one: dropping the element changed the row from 36 to
+             * 30 and moved everything below by 6px, at 390pt it happened to fit
+             * either way, and a fix that holds at one width and not the next is
+             * not a fix. Reserving the box keeps the wrap identical in both
+             * states, so the two layouts are the same layout rather than two
+             * layouts that agree at one size.
+             *
+             * `visibility: hidden` and not `opacity: 0` or `disabled`: it is out
+             * of the tab order and out of the accessibility tree, so nothing
+             * reads or reaches a button that is not offering anything. A
+             * disabled chip would still say there is an action here you may not
+             * take, when the truth is there is no action at all.
+             */
+            h(
+              'button',
+              {
+                /**
+                 * `self-end`, so the group has ONE bottom edge.
+                 *
+                 * The chip is 30 and the sentence beside it wraps to two 18px
+                 * lines, so centred it floated 3px clear of the text's own
+                 * bottom — which put the 20 under the last line of type and 23
+                 * under the chip. The section gap was right the whole time;
+                 * what was ragged was this row's lower edge.
+                 *
+                 * It costs nothing when the sentence fits on one line: the chip
+                 * is the taller of the two then, so the row is its height and
+                 * bottom-aligning it changes nothing. The text stays centred
+                 * either way — it is `flex-1` and fills the row, so
+                 * `items-center` above still governs it.
+                 */
+                class: `chip-sm self-end${kcalOverridden && wouldChange ? '' : ' invisible'}`,
+                onclick: () => {
+                  kcalOverridden = false
+                  syncDerived()
+                  queueSave()
+                },
+              },
+              'Use that'
+            )
           )
         )
       }

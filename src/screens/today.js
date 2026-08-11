@@ -12,7 +12,7 @@ import { sumEntries, progress, computeMacros, MACRO_META } from '../lib/compute.
 import { macroRing } from '../lib/ring.js'
 import { tnum, card, emptyRow, macroTextColor, pageHeader, slot } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
-import { kcal, qty, servingLabel, unitLabel } from '../lib/format.js'
+import { kcal, qty, servingLabel, unitLabel, displayName } from '../lib/format.js'
 import { formatDayHeader, isToday, addDays, blockForTime } from '../lib/dates.js'
 import { entryRow } from '../lib/entryRow.js'
 import { deleteEntryWithUndo, openDuplicateSheet } from '../lib/entryActions.js'
@@ -622,7 +622,7 @@ function deckCards() {
   return slots
 }
 
-function paintDeck(deck, track, slots, { current, prev, next, dayChanged = false }) {
+function paintDeck(deck, track, slots, pager, { current, prev, next, dayChanged = false }) {
   slots.prev.paint({ ...prev, dayChanged })
   slots.current.paint({ ...current, dayChanged })
   // Painted even when it is not shown, so the card behind the forward edge is
@@ -683,6 +683,21 @@ function paintDeck(deck, track, slots, { current, prev, next, dayChanged = false
   // elements they bind to now outlive every one of these repaints, and binding
   // per render would stack a fresh listener on each.
   void live
+
+  /**
+   * Last, and it has to be last.
+   *
+   * This is the deck telling the pager that the day it committed to is now the
+   * day on screen — which is exactly what the block above just finished making
+   * true, and the reason `drain` is a hook here rather than a new coupling. A
+   * chevron tapped during a slide is parked until this line, because a step
+   * started any earlier would be sliding the cards this function is in the
+   * middle of replacing, and the reset above would cut it off mid-flight.
+   *
+   * After the reset and after `repaint`, so a queued step measures and moves a
+   * track that is settled at zero and holding the right three cards.
+   */
+  pager.drain()
 }
 
 /* ----------------------------------------------------------------- the log */
@@ -706,9 +721,29 @@ const LOG_PREVIEW_MAX = 8
  * screen lives in the same place as the thing on screen. A discarded render
  * cannot desynchronise them, because a discarded render never mounts.
  */
-function logCard(date, children) {
+function logCard(date, children, { dayStep = 0 } = {}) {
   const el = card(children)
   el.dataset.todayLog = date
+  /**
+   * The arrival belongs to the CARD, not to the section around it.
+   *
+   * It was on the section, which also holds `Logged` and the `Full log` chip —
+   * and those two read the same on every day of the year. Moving them claimed a
+   * change that had not happened, which is the exact test `.day-swap` already
+   * applies to the Quick add rail one group up: the rail is byte-identical
+   * across days, so it does not wear this. A heading is no different from a
+   * rail in that respect, and it sat inside the element wearing it only because
+   * the section was the convenient node to put a class on.
+   *
+   * What is left underneath is the part that genuinely became a different day's
+   * content, which is the whole claim this animation is allowed to make.
+   *
+   * The direction comes from which way the date moved, so the list arrives from
+   * the same side the deck above just travelled from — see the keyframes. A
+   * jump from the date picker has a direction too: a day in April is behind
+   * you, whatever route you took to it.
+   */
+  if (dayStep) el.classList.add(dayStep > 0 ? 'day-swap-fwd' : 'day-swap-back')
   return el
 }
 
@@ -800,6 +835,11 @@ function quickAddTile(food, { date, block }) {
       ? `${qty(quantity)} × ${servingLabel(food)}`
       : `${qty(quantity)} ${unitLabel(unit, quantity)}`
 
+  // The tile cases its own visible name; these labels and the toast are strings
+  // built here, so they case the name themselves or the spoken and written
+  // versions of the same food drift apart.
+  const name = displayName(food.name)
+
   return foodTile({
     title: food.name,
     subtitle: serving,
@@ -808,15 +848,15 @@ function quickAddTile(food, { date, block }) {
     // Spelled out rather than shortened, because the two targets are a sentence
     // apart and a screen reader gets no help from the shapes. Nothing about a
     // card and a circle says one asks and one commits, so the labels have to.
-    bodyLabel: `Change the amount of ${food.name}`,
+    bodyLabel: `Change the amount of ${name}`,
     onAction: async () => {
       const entry = await quickLogFood(food, { date, block })
-      toast(`Logged ${food.name}`, {
+      toast(`Logged ${name}`, {
         action: 'Undo',
         onAction: () => deleteEntry(entry.id),
       })
     },
-    actionLabel: `Log ${food.name}, ${serving}`,
+    actionLabel: `Log ${name}, ${serving}`,
   })
 }
 
@@ -936,7 +976,7 @@ export function todayScreen() {
    * not. It reads the track instead, which is the same measurement taken from
    * the only thing that is still guaranteed to be there.
    */
-  swipePages(deck, {
+  const pager = swipePages(deck, {
     track,
     // Measured, not computed from the gap token, so the two cannot drift. Both
     // cards sit on the same track, so the distance holds mid-drag.
@@ -1014,7 +1054,20 @@ export function todayScreen() {
       // resolves. `was` is null on first paint, which is not a day change: the
       // card has nowhere to have come from and should fill in normally.
       const was = paintedDate()
-      const dayChanged = was != null && was !== state.date
+      /**
+       * Which way the day moved, not merely whether it did.
+       *
+       * `dayChanged` still says whether, and is what holds the card's hero, bar
+       * and arcs still — that decision does not care about direction. The log
+       * does: it arrives from the side the deck travelled from, so the sign has
+       * to survive down to `logCard`.
+       *
+       * String comparison rather than a date diff. These are `YYYY-MM-DD`, so
+       * they sort lexically in calendar order, which is the property the whole
+       * app already leans on for ranges and cutoffs.
+       */
+      const dayStep = was == null || was === state.date ? 0 : state.date > was ? 1 : -1
+      const dayChanged = dayStep !== 0
       const freshRows = freshEntryIds(state.date, entries)
 
       /**
@@ -1030,8 +1083,27 @@ export function todayScreen() {
       repaint(
         headerSlot,
         pageHeader(formatDayHeader(state.date), {
-          onPrev: () => setDate(-1),
-          onNext: () => setDate(1),
+          /**
+           * The chevrons page the deck rather than setting the date, and the
+           * deck sets the date when it gets there.
+           *
+           * They called `setDate` directly, so the two ways of changing the day
+           * disagreed about whether anything moved: a swipe slid a card a full
+           * page width, a tap swapped the numbers where they stood. The card's
+           * hero, bar and arcs are all held still on a day change on the stated
+           * grounds that "the deck has already slid to say what happened" —
+           * true of the gesture, and never true of these until now. So the tap
+           * was getting the suppression without the motion it was traded for.
+           *
+           * Same `dir` either function would have taken, which is what keeps
+           * the mapping honest: `-1` is the previous day and slides the track
+           * right, exactly as dragging right does. `page` returns false where
+           * there is nothing that way and the return is ignored, because the
+           * forward chevron is already disabled on today — the check inside
+           * `page` is the mechanism's own, not this caller's.
+           */
+          onPrev: () => pager.page(-1),
+          onNext: () => pager.page(1),
           nextDisabled: isToday(state.date),
           /**
            * The date is a control as well as a label.
@@ -1050,11 +1122,33 @@ export function todayScreen() {
         })
       )
 
+      /**
+       * The date does NOT animate, and this was tried both ways.
+       *
+       * `.reading-swap` fits it on the merits: a stepper is an instrument, the
+       * date is its reading, and the chevrons either side deliberately hold
+       * still — so a 3px rise says the right thing where the log's horizontal
+       * travel would say the wrong one. It was built, and then removed for a
+       * reason that has nothing to do with whether it was the right word.
+       *
+       * **Three animations for one event is one too many.** A day change
+       * already moves the deck for 200ms and brings the log in over 140. Adding
+       * 180 in the header means three separate durations resolving at three
+       * separate moments, all describing a single tap — and the screen stops
+       * reading as one thing happening and starts reading as several things
+       * reacting.
+       *
+       * Two marks cover it completely: the surface that travelled, and the
+       * content that became a different day. The date is the caption on that
+       * change, and a caption that holds still while the thing it names moves
+       * is doing its job.
+       */
+
       // Targets are `settings.targets` for every card in the deck, including
       // the neighbours. That is what Today already did for the day you step
       // to with a chevron, so the deck is not inventing a second rule —
       // per-day targets are History's job, and this is not History.
-      paintDeck(deck, track, slots, {
+      paintDeck(deck, track, slots, pager, {
         current: { totals, targets: t },
         prev: { totals: sumEntries(prevEntries), targets: t },
         next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
@@ -1115,12 +1209,11 @@ export function todayScreen() {
         logSlot,
         h(
           'section',
-            // `day-swap` dissolves this with the rail when the DAY moved, so the
-            // screen changes as one thing rather than the card travelling and
-            // everything under it cutting. Not applied on a log or an edit —
-            // those change this list, and a list that fades when you add a row
-            // to it argues with the row arriving.
-            { class: `flex flex-col gap-[10px]${dayChanged ? ' day-swap' : ''}` },
+            // The dissolve is on the card below rather than here — see
+            // `logCard`. The heading and its chip are the same on every day, so
+            // the section is the wrong scope for a mark that means "this became
+            // a different day".
+            { class: 'flex flex-col gap-[10px]' },
             h(
               'div',
               { class: 'section-head' },
@@ -1151,7 +1244,8 @@ export function todayScreen() {
                         onDuplicate: openDuplicateSheet,
                         isNew: freshRows.has(entry.id),
                       })
-                    )
+                    ),
+                  { dayStep }
                 )
               : // One line, in the same card every list on this screen sits in,
                 // so an empty day has the same edges as a full one. "Nothing
@@ -1161,7 +1255,7 @@ export function todayScreen() {
                 //
                 // No route into the sheet needed down here: `Full log` sits in the
                 // head above and renders at every count, including this one.
-                logCard(state.date, emptyRow('Nothing logged yet'))
+                logCard(state.date, emptyRow('Nothing logged yet'), { dayStep })
         )
       )
 

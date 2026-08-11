@@ -18,7 +18,7 @@ import { quickLogFood, logMeal, logPlate, defaultServing } from '../lib/logging.
 import { plateBar, pushPlate, resolvePlate, plateLoggedToast } from './plate.js'
 import { card, emptyRow, listRow, slot, foodRowBody } from '../lib/ui.js'
 import { foodTile } from '../lib/foodTile.js'
-import { servingLabel, qty, unitLabel, pluralize } from '../lib/format.js'
+import { servingLabel, qty, unitLabel, pluralize, displayName } from '../lib/format.js'
 import { blockForTime, formatDayLabel, todayStr } from '../lib/dates.js'
 import { adoptDraft, isOnline, searchProducts } from '../lib/off.js'
 import { searchNewStaples, adoptStaple, stapleDraft, stapleName } from '../lib/staples.js'
@@ -85,6 +85,10 @@ function pickRow({ title, subtitle, totals, onLog, onOpen }) {
     foodRowBody({ name: title, sub: subtitle, totals })
   )
 
+  // `foodRowBody` cases the name it draws. This label is a string built here,
+  // so it has to case its own or the row reads one way and speaks another.
+  const spoken = displayName(title)
+
   return h(
     'div',
     { class: 'flex items-center' },
@@ -93,7 +97,7 @@ function pickRow({ title, subtitle, totals, onLog, onOpen }) {
       'button',
       {
         class: 'icon-btn icon-btn-sm mr-[20px] bg-canvas',
-        'aria-label': subtitle ? `Log ${title}, ${subtitle}` : `Log ${title}`,
+        'aria-label': subtitle ? `Log ${spoken}, ${subtitle}` : `Log ${spoken}`,
         onclick: onLog,
       },
       icon('plus', { size: 18, stroke: 2.25 })
@@ -114,14 +118,16 @@ function pickRow({ title, subtitle, totals, onLog, onOpen }) {
  * glyph with two consequences, one of them a write you cannot see happen.
  */
 function favCard({ title, subtitle, totals, onLog, onOpen }) {
+  // The tile cases the name it shows; these two labels are built here.
+  const name = displayName(title)
   return foodTile({
     title,
     subtitle,
     totals,
     onBody: onOpen,
-    bodyLabel: `Change the amount of ${title}`,
+    bodyLabel: `Change the amount of ${name}`,
     onAction: onLog,
-    actionLabel: subtitle ? `Log ${title}, ${subtitle}` : `Log ${title}`,
+    actionLabel: subtitle ? `Log ${name}, ${subtitle}` : `Log ${name}`,
   })
 }
 
@@ -376,7 +382,7 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
         const plate = await getPlate()
         if (!plate.items.length) ctx.close()
         const list = Array.isArray(entries) ? entries : [entries]
-        toast(`Logged ${label}`, {
+        toast(`Logged ${displayName(label)}`, {
           action: 'Undo',
           onAction: () => Promise.all(list.map((e) => deleteEntry(e.id))),
         })
@@ -400,7 +406,7 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
         await paintPlate()
         // Describe opens the plate on top of the toast that would announce it,
         // so the toast would be reporting a screen already in front of you.
-        if (!silent) toast(`${label} added to your plate`)
+        if (!silent) toast(`${displayName(label)} added to your plate`)
       }
 
       const commitPlate = async () => {
@@ -549,8 +555,8 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
        */
       const remoteRow = (draft) => {
         const row = listRow({
-          title: draft.name,
-          subtitle: [draft.brand, draft.servingLabel].filter(Boolean).join(' · '),
+          title: displayName(draft.name),
+          subtitle: [displayName(draft.brand), draft.servingLabel].filter(Boolean).join(' · '),
           chevron: true,
           onclick: async () => {
             const food = await adoptDraft(draft)

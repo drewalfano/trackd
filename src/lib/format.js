@@ -75,6 +75,94 @@ export const signed = (n, dp = 1) => {
   return v > 0 ? `+${s}` : s
 }
 
+/* ------------------------------------------------------------------ names */
+
+/**
+ * Acronyms that read as a mistake in lowercase, and only ever consulted on the
+ * shouting branch below.
+ *
+ * Short deliberately. Every entry here is a guess about a word, and the whole
+ * point of the rule below is that it does not guess — so the list earns its
+ * place only for tokens that are genuinely never words: `UHT semi skimmed` is
+ * right and `uht semi skimmed` is wrong, with nothing in between to argue
+ * about. Anything debatable belongs out of it.
+ */
+const KEEP_UPPER = new Set(['UHT', 'BBQ', 'IPA', 'RTD', 'MCT', 'DHA', 'EPA', 'GF', 'XL'])
+
+/** Units that are conventionally lowercase when they follow a digit. */
+const DIGIT_UNITS = /(\d)(KCAL|MG|KG|ML|OZ|LB|G)\b/g
+
+/**
+ * Capitalise the name's first letter, but only when nothing but punctuation
+ * comes before it.
+ *
+ * `"organic granola"` should open with a capital inside its quote; `500g oats`
+ * should not acquire one in the middle at `oats`. So the search stops at the
+ * first letter OR digit, and only acts if it found a letter.
+ */
+const upperFirst = (s) => s.replace(/^[^\p{L}\p{N}]*\p{L}/u, (m) => m.toUpperCase())
+
+/**
+ * A food name as it should appear on screen. **Display only — the record keeps
+ * what the source said, and nothing here is ever written back.**
+ *
+ * Open Food Facts is crowdsourced, so `FRUIT & NUT` sits next to `organic
+ * granola bites chocolate banana` in the same list and the mismatch is louder
+ * than either name. Gemini's described foods arrive lowercase for the same
+ * reason from a different direction.
+ *
+ * **Sentence case, not title case, and the reason is the exception list.**
+ * Title case has to decide whether each word is a brand, a unit or a joiner,
+ * so it needs `and`, `with`, `of`, `in`, `the` and a brand dictionary it can
+ * never finish — and it still mangles `fish and chips`. Sentence case makes
+ * exactly one claim, that a name starts with a capital, and that claim is
+ * always true. The joiner list is EMPTY because nothing is ever capitalised
+ * mid-name to begin with.
+ *
+ * Two branches:
+ *
+ * 1. Any lowercase letter present means the source had a casing intention.
+ *    Capitalise the first letter, change nothing else. `Kellogg's Corn Flakes`
+ *    and internal capitals survive untouched.
+ * 2. Nothing but capitals means shouting, and shouting carries no intention to
+ *    preserve. Downcase, then branch 1.
+ *
+ * Branch 2 is the destructive one, so it is fenced:
+ *
+ * - A single token of four letters or fewer is left alone, which is what saves
+ *   a food actually called `PB` or `XL` from becoming `Pb`. It also means the
+ *   acronym list only has to cover acronyms buried inside longer names.
+ * - A token containing a digit keeps its shape, except a trailing unit: `500G`
+ *   becomes `500g`, and `2L` stays `2L` because a lowercase `l` reads as a one.
+ *
+ * What branch 2 cannot do is recover brand capitals: `KELLOGG'S CORN FLAKES`
+ * comes out `Kellogg's corn flakes`. There is no brand dictionary here and
+ * inventing capitals would be the guessing this rule exists to avoid. The
+ * stored record still has the original.
+ *
+ * Whitespace is preserved rather than collapsed — the replace runs per token
+ * so the string that comes back differs from the source only in case.
+ */
+export function displayName(raw) {
+  const s = String(raw ?? '').trim()
+  if (!s) return s
+
+  const shouting = !/\p{Ll}/u.test(s) && /\p{Lu}/u.test(s)
+  if (!shouting) return upperFirst(s)
+
+  // A deliberate short acronym as the whole name: `PB`, `XL`, `UHT`.
+  const letters = s.replace(/[^\p{L}]/gu, '')
+  if (!/\s/.test(s) && letters.length <= 4) return s
+
+  const lowered = s.replace(/\S+/g, (token) => {
+    if (KEEP_UPPER.has(token.replace(/[^\p{L}]/gu, ''))) return token
+    if (/\d/.test(token)) return token.replace(DIGIT_UNITS, (m, d, u) => d + u.toLowerCase())
+    return token.toLowerCase()
+  })
+
+  return upperFirst(lowered)
+}
+
 /** Serving units the app understands. 'item' covers eggs, bars, scoops. */
 export const UNITS = ['g', 'ml', 'item']
 

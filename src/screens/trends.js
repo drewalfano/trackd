@@ -38,7 +38,15 @@ import {
   macroUnit,
   rowChevron,
 } from '../lib/ui.js'
-import { kgToUnit, unitToKg, weight as fmtWeight, signed, kcal, g } from '../lib/format.js'
+import {
+  kgToUnit,
+  unitToKg,
+  weight as fmtWeight,
+  signed,
+  kcal,
+  g,
+  pluralize,
+} from '../lib/format.js'
 import { formatDayLabel, formatDayAge, todayStr, addDays, daysBetween } from '../lib/dates.js'
 import { toast } from '../lib/toast.js'
 import { openWeighInSheet } from '../sheets/weighIn.js'
@@ -124,6 +132,41 @@ function chartPlaceholder() {
 }
 
 /**
+ * Why the line is not there, said once, in the only place that says it.
+ *
+ * **This used to be built from the record and never changed.** It was gated on
+ * `weights.length`, so a long history with a quiet fortnight in view showed a
+ * chart with no line, a withheld rate, and nothing at all accounting for
+ * either. The card went quiet in three places at once and explained itself in
+ * none of them. It reads off the window now, in the same breath as the chart
+ * and the rate, because it is the sentence those two absences share.
+ *
+ * Two forms, and the pivot between them is whether the count in view is the
+ * count you have. `5 more to go` is a true and useful thing to tell someone
+ * starting out; told to someone with forty readings and a gap it is nonsense,
+ * because they are not short of weigh-ins, they are short of recent ones.
+ *
+ * Neither form asserts recency. `windowPoints` clips the last 30 days OF THE
+ * RECORD, which ends at the last weigh-in rather than at today, so a range
+ * ending three months ago is an ordinary state here. `This range holds` is true
+ * whenever it is shown; `in the last 30 days` would not be.
+ */
+function trendNotice(inWindow, total) {
+  if (inWindow === total) {
+    return notice(
+      `The trend line starts at ${MIN_ENTRIES_FOR_TREND} weigh-ins, with ` +
+        `${MIN_ENTRIES_FOR_TREND - total} more to go. ` +
+        'Fewer than that and the line is just tracing water weight.',
+    )
+  }
+  return notice(
+    `This range holds ${pluralize(inWindow, 'weigh-in')}. ` +
+      `The trend line starts at ${MIN_ENTRIES_FOR_TREND}, and fewer than that ` +
+      'is just tracing water weight.',
+  )
+}
+
+/**
  * The chart draws what the data supports and no more.
  *
  * Two rules do that, and both are about the difference between what is on the
@@ -143,8 +186,19 @@ function chartPlaceholder() {
  * where the drawing happens, against the points being drawn.
  */
 function chart(points, unit) {
+  /**
+   * Two READINGS, not two points carrying a value.
+   *
+   * This counted `kg != null || trend != null`, and the second half of that is
+   * carried-forward trend — so one weigh-in landing on top of an older history
+   * produced thirty qualifying points and drew a full chart of one dot and a
+   * line the gate below then refused to draw. The placeholder is for "there is
+   * nothing to draw yet", and one reading is that, whatever the record holds.
+   */
+  const readings = points.filter((p) => p.kg != null).length
+  if (readings < 2) return null
+
   const drawn = points.filter((p) => p.kg != null || p.trend != null)
-  if (drawn.length < 2) return null
 
   const values = []
   for (const p of drawn) {
@@ -159,7 +213,7 @@ function chart(points, unit) {
   const y = (v) => PAD.top + innerH - ((v - min) / (max - min || 1)) * innerH
 
   const trendPath = []
-  if (points.filter((p) => p.kg != null).length >= MIN_ENTRIES_FOR_TREND) {
+  if (readings >= MIN_ENTRIES_FOR_TREND) {
     points.forEach((p, i) => {
       if (p.trend == null) return
       const px = x(i)
@@ -200,7 +254,18 @@ function chart(points, unit) {
       'aria-label': 'Weight trend chart',
     },
     gridlines,
-    // Raw daily readings sit behind and stay muted.
+    /**
+     * Raw daily readings sit behind the line and stay muted — but only while
+     * there is a line for them to sit behind.
+     *
+     * 0.55 is a weight chosen against ink at full strength: it puts the scatter
+     * far enough back that the smoothed line reads as the subject. With the
+     * line gated off there is no subject, and the same 0.55 leaves the only
+     * marks on the card looking like a rendering fault rather than like the two
+     * weigh-ins they are. Full opacity in that state, same hue and same radius
+     * — this is the mark taking the foreground it now has to itself, not a new
+     * one.
+     */
     points.map((p, i) =>
       p.kg == null
         ? null
@@ -209,7 +274,7 @@ function chart(points, unit) {
             cy: y(kgToUnit(p.kg, unit)).toFixed(1),
             r: '2',
             fill: 'var(--color-muted)',
-            opacity: '0.55',
+            opacity: trendPath.length > 1 ? '0.55' : '1',
           }),
     ),
     trendPath.length > 1
@@ -630,11 +695,30 @@ export function trendsScreen() {
        */
       const rateEl = h('span', { class: 'text-[12px] text-muted' })
       const chartSlot = h('div', { class: 'chart-slot' })
+      /**
+       * `contents`, so the wrapper is not in the layout when it is empty.
+       *
+       * The notice is a child of a `gap-[20px]` column, and an empty div still
+       * counts as a child: a plain wrapper would hold 20px of air between the
+       * chart card and the entry block in the ordinary state where there is no
+       * notice to show. `display: contents` takes the box out of the flow
+       * entirely and lets whatever it holds sit in the column directly, so the
+       * gap appears with the notice and leaves with it.
+       */
+      const noticeSlot = h('div', { class: 'contents' })
       let swapTimer = null
 
       const drawRange = (animate) => {
         const points = windowPoints(allPoints, range)
         const rate = ratePerWeek(points)
+        const readings = points.filter((p) => p.kg != null).length
+
+        // Same window, same breath. The chart, the rate and the sentence
+        // explaining them are three views of one count.
+        repaint(
+          noticeSlot,
+          readings < MIN_ENTRIES_FOR_TREND ? trendNotice(readings, weights.length) : null,
+        )
 
         rateEl.textContent =
           rate == null ? ' ' : `${signed(kgToUnit(rate, unit))} ${unit} / week`
@@ -796,7 +880,10 @@ export function trendsScreen() {
                 h('div', { class: 'section-title' }, 'Weight'),
                 emptyState(
                   'No weigh-ins yet',
-                  'Add today’s weight below. The trend line appears after a week of readings.',
+                  // `after a week of readings` named the wrong unit: the gate is
+                  // 7 weigh-ins, not 7 days, and those are different promises to
+                  // anyone who does not weigh in daily.
+                  `Add today’s weight below. The trend line appears after ${MIN_ENTRIES_FOR_TREND} weigh-ins.`,
                 ),
               ),
               entryBlock,
@@ -972,26 +1059,21 @@ export function trendsScreen() {
             ),
 
             /**
-             * The same shape of sentence the History card makes about averages:
-             * where the threshold is, how far off it is, and what would be wrong
-             * with drawing it now.
+             * Built and filled by `drawRange`, alongside the chart and the rate
+             * — see `trendNotice` for what it says and why it reads off the
+             * window rather than the record.
              *
-             * It read `The trend line needs 7 weigh-ins before it means
-             * anything. You have 2.` — which states the rule and the count but
-             * leaves "means anything" to be taken on trust.
-             *
-             * The closing clause states the reason instead, and states it as a
-             * principle rather than against the current count — the way
-             * `An average of one day is just that day` does. It has to hold at
-             * two weigh-ins and at six, so it cannot name a number.
+             * The sentence itself is the same shape the History card makes
+             * about averages: where the threshold is, how far off it is, and
+             * what would be wrong with drawing it now. It read `The trend line
+             * needs 7 weigh-ins before it means anything. You have 2.`, which
+             * states the rule and the count but leaves "means anything" to be
+             * taken on trust. The closing clause states the reason instead, and
+             * states it as a principle rather than against the current count —
+             * the way `An average of one day is just that day` does. It has to
+             * hold at two weigh-ins and at six, so it cannot name a number.
              */
-            weights.length < MIN_ENTRIES_FOR_TREND
-              ? notice(
-                  `The trend line starts at ${MIN_ENTRIES_FOR_TREND} weigh-ins, with ` +
-                    `${MIN_ENTRIES_FOR_TREND - weights.length} more to go. ` +
-                    'Fewer than that and the line is just tracing water weight.',
-                )
-              : null,
+            noticeSlot,
 
             entryBlock,
           ),

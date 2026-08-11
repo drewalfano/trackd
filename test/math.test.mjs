@@ -107,6 +107,63 @@ eq('eight days cannot state a weekly rate', T.ratePerWeek(short), null)
 eq('a fortnight can', T.ratePerWeek(T.computeTrend(mk(15, i => 80 - i * 0.05), 7)) !== null, true)
 eq('one day short cannot', T.ratePerWeek(T.computeTrend(mk(14, i => 80 - i * 0.05), 7)), null)
 
+/**
+ * The gap case. `computeTrend` carries the last value forward flat across a
+ * gap, so a window holding two real weigh-ins over an older history hands 30
+ * non-null trend values to the fit — enough points, enough elapsed days, and a
+ * confident `0.0 / week` through a line the chart had already declined to draw.
+ * The rate counts readings now, at the same threshold as the line.
+ */
+const gapped = [
+  ...mk(10, i => 80 - i * 0.1),                                    // a month of tracking
+  { date: D.addDays('2026-01-01', 100), kg: 78.0 },                // then a long quiet
+  { date: D.addDays('2026-01-01', 118), kg: 77.8 },                // then two weigh-ins
+]
+const gappedWindow = T.windowPoints(T.computeTrend(gapped, 7), 30)
+eq('the gap window carries a full trend', gappedWindow.filter(p => p.trend !== null).length, 30)
+eq('but holds two real readings', gappedWindow.filter(p => p.kg != null).length, 2)
+eq('so it states no weekly rate', T.ratePerWeek(gappedWindow), null)
+// The same record, seen whole, still has plenty to say.
+eq('the record itself still can', T.ratePerWeek(T.computeTrend(gapped, 7)) !== null, true)
+
+/**
+ * --- food names are cased for display and never for storage
+ *
+ * The rule is sentence case with two branches, and most of these cases are
+ * here to pin what it must NOT do: no joiner list, no brand guessing, no
+ * touching a name whose source already had a casing intention.
+ */
+const dn = F.displayName
+// Branch 1: a lowercase letter anywhere means the source meant something.
+eq('a lowercase name gets one capital', dn('organic granola bites chocolate banana'), 'Organic granola bites chocolate banana')
+eq('internal capitals survive', dn("Kellogg's Corn Flakes"), "Kellogg's Corn Flakes")
+eq('an already-correct name is untouched', dn('Apple'), 'Apple')
+eq('a described food is only capitalised', dn('habanero crispy chicken wrap'), 'Habanero crispy chicken wrap')
+// The joiner list is empty because nothing is capitalised mid-name.
+eq('title case would have broken this one', dn('fish and chips'), 'Fish and chips')
+eq('and this one', dn('yoghurt with honey'), 'Yoghurt with honey')
+// Branch 2: shouting carries no intention worth keeping.
+eq('a shouted name is de-shouted', dn('FRUIT & NUT'), 'Fruit & nut')
+eq('the ampersand needs no special case', dn('PEANUT BUTTER & JELLY'), 'Peanut butter & jelly')
+eq('shouted brand capitals are lost, not invented', dn("KELLOGG'S CORN FLAKES"), "Kellogg's corn flakes")
+// The fences on branch 2.
+eq('a short standalone acronym is left alone', dn('PB'), 'PB')
+eq('so is XL', dn('XL'), 'XL')
+eq('an acronym inside a longer name is kept upper', dn('UHT SEMI SKIMMED MILK'), 'UHT semi skimmed milk')
+eq('a digit token keeps its shape, unit aside', dn('500G ROLLED OATS'), '500g rolled oats')
+eq('litres stay upper, because lowercase l reads as one', dn('2L WHOLE MILK'), '2L whole milk')
+// Shape preservation: this is a casing function and nothing else.
+eq('whitespace is not collapsed', dn('FRUIT  &  NUT'), 'Fruit  &  nut')
+eq('commas survive, which describeResolve depends on', dn('ALMOND MILK, UNSWEETENED'), 'Almond milk, unsweetened')
+eq('a leading quote does not eat the capital', dn('"organic" granola'), '"Organic" granola')
+eq('a name opening with digits gains no mid-string capital', dn('500g oats'), '500g oats')
+eq('nothing is invented from nothing', dn(''), '')
+eq('a nullish name does not throw', dn(null), '')
+// Case-insensitive matching must be unaffected: these are the keys the app
+// dedupes and searches on, and they lowercase both sides.
+eq('the rule changes no lowercased key', dn('FRUIT & NUT').toLowerCase(), 'FRUIT & NUT'.toLowerCase())
+eq('nor for a described name', dn('habanero wrap').toLowerCase(), 'habanero wrap'.toLowerCase())
+
 // --- a stale reading reports its age, not its date
 const ago = n => D.formatDayAge(D.addDays(D.todayStr(), -n))
 eq('today is still today', ago(0), 'Today')

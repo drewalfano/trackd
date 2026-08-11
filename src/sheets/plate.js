@@ -21,7 +21,7 @@ import {
   textInput,
   notice,
 } from '../lib/ui.js'
-import { qty, servingLabel, unitLabel, pluralize, round } from '../lib/format.js'
+import { qty, servingLabel, unitLabel, pluralize, round, displayName } from '../lib/format.js'
 import { addDays, formatDayLabel, todayStr } from '../lib/dates.js'
 
 /**
@@ -124,7 +124,9 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
        * line, which now has a state to say as well as an amount.
        */
       function plateRow({ item, food, macros, state, index: i }) {
-        const name = food?.name || item.name || 'Deleted food'
+        // `foodRowBody` cases what it draws; the two aria labels below are
+        // built here, so this is the cased copy they share.
+        const name = displayName(food?.name || item.name) || 'Deleted food'
         const sub = [amountLabel(item, food), STATE_LABEL[state]].filter(Boolean).join(' · ')
 
         const action =
@@ -567,7 +569,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
        */
       function openEstimateAmount(index, item) {
         ctx.push({
-          title: item.name || 'Estimate',
+          title: displayName(item.name) || 'Estimate',
           render: (c) => {
             const base = { ...item.computed }
             const from = Number(item.quantity) || 1
@@ -639,7 +641,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
         }
 
         ctx.push({
-          title: food.name,
+          title: displayName(food.name),
           render: (c) => {
             const previewEl = h('div')
             const field = numberInput({
