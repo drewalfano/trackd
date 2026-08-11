@@ -3460,6 +3460,41 @@
 }
 
 /**
+ * The weight chart crossing to a new range — gaps item 12.
+ *
+ * The two charts overlap rather than one following the other. A fade-out
+ * followed by a fade-in is 360ms of two events; overlapped it is 180ms of one,
+ * and the box is never empty in the middle, which is what stops the card
+ * flickering hollow on the swap.
+ *
+ * **`linear` on both halves, not the house ease-out.** A cross-fade is the one
+ * place where the two curves have to sum, and two eased curves do not: at the
+ * midpoint both sit near 0.7 rather than 0.5, so the overlap reads as a bright
+ * pulse through the middle of the swap. Linear is the only pairing that holds
+ * total opacity flat.
+ *
+ * The outgoing chart is taken out of flow so the incoming one can occupy the
+ * same box. It can, exactly, because `chartPlaceholder` and the chart itself are
+ * the same aspect ratio at every width — see the note there. Nothing needs
+ * pinning; the box was already stable.
+ *
+ * Why a fade rather than the chart morphing to its new axis is argued at
+ * `CHART_SWAP_MS` in screens/trends.js, and is not a matter of taste.
+ */
+.chart-slot {
+  position: relative;
+}
+.chart-slot > [data-leaving='true'] {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: scrim-out 180ms linear forwards;
+}
+.chart-in {
+  animation: scrim-in 180ms linear;
+}
+
+/**
  * Remote search results arriving — gaps item 11.
  *
  * "Searching Open Food Facts…" is one row, and what replaces it is up to

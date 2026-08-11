@@ -1,4 +1,4 @@
-import { h, s } from '../lib/dom.js'
+import { h, s, repaint, reduceMotion } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listWeights,
@@ -70,6 +70,58 @@ let range = 30 // module-level so the toggle survives a re-render
 const CHART_W = 340
 const CHART_H = 150
 const PAD = { top: 10, right: 6, bottom: 8, left: 6 }
+
+/**
+ * How long a range switch takes to cross-fade — and why it is a cross-fade
+ * rather than the chart morphing to its new axis.
+ *
+ * **This decision should not be re-litigated, so here is what it rests on.** The
+ * y-scale is not a property the chart carries; it is `axisBounds(values, unit)`
+ * baked into every coordinate at construction — `y1`/`y2` on each gridline, `y`
+ * on each label, and the whole `d` string on the trend path. SVG geometry
+ * attributes are not animatable properties, so there is nothing to transition
+ * even in principle. `d` alone can interpolate, and only between paths whose
+ * segment structure matches.
+ *
+ * It does not match, and that is the deeper reason. A range switch changes
+ * `windowPoints(allPoints, range)`, so thirty days and ninety days hold a
+ * different NUMBER of points. It is not one line rescaled onto a new axis; it is
+ * a different line. Morphing between them would have to invent intermediate
+ * shapes that were never anybody's weight, which is a chart asserting data it
+ * does not have — the same standard the honesty rules hold the rest of this
+ * screen to.
+ *
+ * So the fade says the true thing: same instrument, different window. A morph
+ * would say the line moved, and it did not.
+ *
+ * 180ms rather than the 160 the note that asked for this proposed, because the
+ * `± / week` line changes in the same breath and takes `.reading-swap`'s 180.
+ * One event, one clock — the mistake this pass has been unpicking everywhere
+ * else.
+ */
+const CHART_SWAP_MS = 180
+
+/**
+ * The chart's box, held when there is no chart to put in it.
+ *
+ * `aspect-ratio` off the chart's own constants rather than a measured height,
+ * because the svg is `w-full` on a fixed viewBox — its rendered height is always
+ * width × 150/340, so a fixed number would only be right at one screen width.
+ * The two boxes are therefore the same box at every width, which is what lets
+ * the cross-fade swap one for the other without the card changing height. It
+ * was `py-[30px]` once, 96px against the chart's 130 at 375pt, and the card
+ * jumped 34px the moment a second weigh-in landed.
+ */
+function chartPlaceholder() {
+  return h(
+    'div',
+    {
+      class: 'flex items-center justify-center text-center text-[12px] text-muted',
+      style: { aspectRatio: `${CHART_W} / ${CHART_H}` },
+    },
+    'Two readings are needed before there is anything to draw.'
+  )
+}
 
 /**
  * The chart draws what the data supports and no more.
@@ -503,7 +555,7 @@ async function loadDays(span) {
 
 export function trendsScreen() {
   return createScreen(
-    async ({ rerender }) => {
+    async () => {
       const [weights, settings, first] = await Promise.all([
         listWeights(),
         getSettings(),
@@ -553,10 +605,73 @@ export function trendsScreen() {
       )
 
       const allPoints = computeTrend(weights, settings.trendWindow)
-      const points = windowPoints(allPoints, range)
       const latest = weights[weights.length - 1] || null
       const latestTrend = [...allPoints].reverse().find((p) => p.trend != null)?.trend ?? null
-      const rate = ratePerWeek(points)
+
+      /**
+       * The range switch stops rebuilding the screen and repaints its own two
+       * marks instead.
+       *
+       * `range` changes exactly two things — the chart, and the `± / week` line
+       * that reads off the same window. Everything else in this card is the
+       * latest weigh-in and the trend figure, which do not know the range
+       * exists. Routing the toggle through `rerender()` threw all of it away to
+       * redraw two of them, and the visible cost was gaps item 12: the header,
+       * the card, the control you just pressed and the chart were all replaced
+       * on one frame, so the 30-day line and the 90-day line read as two
+       * unrelated charts that happened to appear in the same box.
+       *
+       * This is the shape onboarding already uses one screen over: a shell that
+       * is built once and holds still, and a payload handed a freshly built
+       * subtree. The only rule that matters is the one that makes it safe —
+       * `repaint` is never given a node the container is already holding, so
+       * nothing on screen is ever detached and reattached, and anything mid-
+       * transition keeps running.
+       */
+      const rateEl = h('span', { class: 'text-[12px] text-muted' })
+      const chartSlot = h('div', { class: 'chart-slot' })
+      let swapTimer = null
+
+      const drawRange = (animate) => {
+        const points = windowPoints(allPoints, range)
+        const rate = ratePerWeek(points)
+
+        rateEl.textContent =
+          rate == null ? ' ' : `${signed(kgToUnit(rate, unit))} ${unit} / week`
+        if (rate == null) rateEl.setAttribute('aria-hidden', 'true')
+        else rateEl.removeAttribute('aria-hidden')
+
+        const next = chart(points, unit) || chartPlaceholder()
+
+        if (!animate || reduceMotion()) {
+          clearTimeout(swapTimer)
+          repaint(chartSlot, next)
+          return
+        }
+
+        /**
+         * The reading changed and the instrument did not, which is the sentence
+         * `.reading-swap` was written for. Restarting it needs the class off,
+         * a forced reflow, then on — the long form of why a `requestAnimationFrame`
+         * is not a substitute is at `replay` in screens/onboarding.js.
+         */
+        rateEl.classList.remove('reading-swap')
+        void rateEl.offsetWidth
+        rateEl.classList.add('reading-swap')
+
+        clearTimeout(swapTimer)
+        // A second switch while the first is still fading finishes the first
+        // outright rather than leaving three charts stacked in one box.
+        chartSlot.querySelectorAll('[data-leaving="true"]').forEach((node) => node.remove())
+        const outgoing = chartSlot.firstElementChild
+        if (outgoing) outgoing.dataset.leaving = 'true'
+        next.classList.add('chart-in')
+        chartSlot.appendChild(next)
+        swapTimer = setTimeout(() => {
+          outgoing?.remove()
+          next.classList.remove('chart-in')
+        }, CHART_SWAP_MS)
+      }
 
       /* ----------------------------------------------------------- input */
 
@@ -700,13 +815,18 @@ export function trendsScreen() {
           { value: null, label: 'All' },
         ],
         value: range,
+        // Repaints its own two marks rather than rebuilding the screen. The
+        // control moves its own pill, so nothing here has to redraw it.
         onChange: (v) => {
           range = v
-          rerender()
+          drawRange(true)
         },
       })
 
-      const chartNode = chart(points, unit)
+      // The first paint fills the slot without animating: there is nothing for
+      // the chart to have crossed from, and a screen that fades in on arrival is
+      // a screen that looks like it is loading.
+      drawRange(false)
 
       return h(
         'div',
@@ -835,42 +955,17 @@ export function trendsScreen() {
                      * real text would occupy, so it stays correct if the type
                      * size ever changes.
                      */
-                    h(
-                      'span',
-                      { class: 'text-[12px] text-muted', 'aria-hidden': rate == null ? 'true' : null },
-                      rate == null ? ' ' : `${signed(kgToUnit(rate, unit))} ${unit} / week`,
-                    ),
+                    // Built above and filled by `drawRange`: this line reads off
+                    // the same window the chart does, so it has to change in the
+                    // same breath rather than a frame later.
+                    rateEl,
                   ),
                 ),
 
-                /**
-                 * The placeholder holds the chart's BOX, not a padding.
-                 *
-                 * It was `py-[30px]`, which made it 96px tall against the 130
-                 * the chart occupies at 375pt — so the card jumped 34px the
-                 * moment a second weigh-in landed and the chart appeared. A
-                 * card that reshuffles as data crosses a threshold is the same
-                 * fault the Trend column above it already guards against with
-                 * its held empty line box; this is that argument applied to the
-                 * larger of the two holes.
-                 *
-                 * `aspect-ratio` off the chart's own constants rather than a
-                 * measured height, because the svg is `w-full` on a fixed
-                 * viewBox — its rendered height is always width × 150/340, so a
-                 * fixed number would only be right at one screen width. This
-                 * way the two boxes are the same box everywhere, and the number
-                 * cannot drift from the chart it is standing in for.
-                 */
-                chartNode ||
-                  h(
-                    'div',
-                    {
-                      class:
-                        'flex items-center justify-center text-center text-[12px] text-muted',
-                      style: { aspectRatio: `${CHART_W} / ${CHART_H}` },
-                    },
-                    'Two readings are needed before there is anything to draw.',
-                  ),
+                // The chart's own box, filled and swapped by `drawRange`. The
+                // held-height argument that used to live here moved to
+                // `chartPlaceholder`, which is the thing that holds it.
+                chartSlot,
 
                 rangeRow,
               ),
