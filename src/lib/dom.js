@@ -867,7 +867,7 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
   const onMove = (e) => {
     if (!dragging) return
     const p = e.touches[0]
-    const deltaY = p.clientY - startY
+    let deltaY = p.clientY - startY
     const deltaX = p.clientX - startX
 
     if (!decided) {
@@ -914,6 +914,25 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
        * it — so a sheet caught halfway in keeps rising to `0` if the drag is
        * abandoned, and carries on down if it is not.
        */
+      /**
+       * Give back the threshold, the way the row and the deck already do.
+       *
+       * The 12px above is evidence that the gesture is a downward pull, not
+       * travel the finger meant to spend — and charging it to the sheet made the
+       * panel jump 12px the instant it was claimed. The row swipe calls fixing
+       * this "the single biggest thing that made this feel like a mechanism
+       * rather than a surface", and the deck got the same treatment after; the
+       * sheet was the last of the three gestures still paying it.
+       *
+       * Only downward, because that is the only direction that reaches here —
+       * `deltaY <= 0` bailed out above. And `deltaY` is re-derived rather than
+       * left to the next frame: this handler falls through to draw the panel on
+       * the deciding frame, so an unadjusted value would spend the jump before
+       * the correction could take effect.
+       */
+      startY += SWIPE_AXIS_THRESHOLD
+      deltaY = p.clientY - startY
+
       baseY = paintedTranslate(panel).y
       panel.dataset.dragging = 'true'
       if (scrim) scrim.dataset.dragging = 'true'
