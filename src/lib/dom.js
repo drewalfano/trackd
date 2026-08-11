@@ -797,7 +797,27 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     if (!reach(dir)) return false
     // A finger already owns the track. A queued step would land after a gesture
     // the user is still in the middle of, which is not what they asked for.
-    if (decided) return false
+    /**
+     * A finger is on the track RIGHT NOW — which is `dragging`, not `decided`.
+     *
+     * **This was `decided`, and it left the chevrons dead after every swipe.**
+     * `decided` does not mean a gesture is in progress; it means the last one
+     * was claimed as horizontal and its trailing click has not been swallowed
+     * yet. It is cleared in exactly two places: `onClickCapture`, and the next
+     * `touchstart`. A swipe on a phone frequently produces no click at all, and
+     * the guard is bound to the DECK — so after paging by finger the flag stays
+     * standing, and the chevrons, which live in the header outside the deck,
+     * refused every tap until something happened to touch the card again.
+     *
+     * Reported as the buttons being disabled for a few seconds. It was not a
+     * duration: it lasted until the next touch on the deck, which is what
+     * eventually cleared it.
+     *
+     * `dragging` is the flag that means what this needs, and it is false the
+     * moment the finger lifts. `decided` still does its own job for the click
+     * guard, untouched.
+     */
+    if (dragging) return false
     if (committing || awaitingPaint) {
       pending = dir
       return true
