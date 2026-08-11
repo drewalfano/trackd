@@ -1,6 +1,5 @@
 import { h, clear, swipeToDismiss, reduceMotion } from './dom.js'
 import { icon } from './icons.js'
-import { fadeLayers, FADE_RAMP } from './fade.js'
 import { setScrimmed } from './statusBar.js'
 import { captureViewportState } from './viewportProbe.js'
 
@@ -264,19 +263,26 @@ export function openSheet({ title, render, footer = null, action = null }) {
 
   const header = h(
     'header',
-    { class: 'flex items-center gap-[10px] px-[20px] pb-[20px] pt-[20px]' },
+    {
+      class:
+        'flex items-center gap-[10px] px-[var(--sheet-gutter)] pb-[var(--sheet-gutter)] pt-[var(--sheet-gutter)]',
+    },
     backBtn,
     titleEl,
     actionSlot,
     closeBtn
   )
   /**
-   * The body owns every edge inset a panel gets: 20 on all four sides, the
-   * same gutter the sheet's header and footer hold. Panels used to add a
-   * further 10 of their own, which put their last element at 30 from the
-   * bottom while sitting at 20 from the sides — and 30 from a footer button
+   * The body owns every edge inset a panel gets: one `--sheet-gutter` on all
+   * four sides, the same gutter the sheet's header and footer hold. Panels used
+   * to add a further 10 of their own, which put their last element at 30 from
+   * the bottom while sitting at 20 from the sides — and 30 from a footer button
    * that already has its own 20. Panels lay out their content; the chrome
    * decides where the content stops.
+   *
+   * That sentence used to be a claim about six literals agreeing. It is now a
+   * token, declared on `.sheet-panel` — see the note there for why it is not
+   * `--nav-inset`, which is also 20 and is a different argument.
    */
   /**
    * `isolate` matters now that the footer floats over this.
@@ -303,61 +309,68 @@ export function openSheet({ title, render, footer = null, action = null }) {
      * documents it at length, including that `clip` computes to `hidden` here
      * because one axis cannot clip while the other scrolls.
      */
-    class: 'isolate min-h-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain px-[20px]',
+    class:
+      'isolate min-h-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain px-[var(--sheet-gutter)]',
   })
 
   /**
    * The footer FLOATS over the scroller; it is not a slab below it.
    *
    * This is the whole difference between the sheet's bottom edge and the tab
-   * bar's, and it took three attempts at the gradient to notice that the
-   * gradient was never the problem. The tab bar works because the page scrolls
-   * UNDER it — `.screen` reserves the bar's height as bottom padding, so a card
-   * runs on behind the bar and you see live, softened content around it. The
-   * footer was a flex sibling, which meant the scroller ENDED at its top edge:
-   * the card stopped dead there, and below it was bare canvas. No band above a
-   * hard edge like that can look like content receding, because there is no
-   * content down there to recede.
+   * bar's, and it took three attempts at a gradient to notice that the gradient
+   * was never the problem. The tab bar works because the page scrolls UNDER it —
+   * `.screen` reserves the bar's height as bottom padding, so a card runs on
+   * behind the bar rather than stopping at it. The footer was a flex sibling,
+   * which meant the scroller ENDED at its top edge: the card stopped dead there,
+   * and below it was bare canvas. No band above a hard edge like that can look
+   * like content receding, because there is no content down there to recede.
    *
    * So the footer is taken out of flow and the scroller is padded by its height
    * instead.
    *
-   * A flat 20 from the bottom, with no safe-area inset added — the same call the
-   * tab bar makes and for the same reason, written up on `--nav-inset`: the
-   * 34pt inset is sized for content running edge to edge, and adding it under a
-   * floating control pushes it visibly high. A pill only has to clear the home
-   * indicator, which is about 13pt. Footerless sheets still get the full inset,
-   * in the body's own padding below.
+   * The gradient that rode along with that fix was the tab bar's, scaled, and
+   * it has since been cut down to the footer's own box — it reached 51px above
+   * it and dimmed the last field at rest. `.sheet-fade` in styles.css carries
+   * the measurement and the sizing rule. The reservation below is what the band
+   * is now sized against.
    */
   const footerEl = h('div', {
-    // `pt-[20px]`, not 10. The body reserves this whole box as its bottom
-    // padding, so the footer's own top inset IS the gap between the last of the
-    // content and the button — and 20 is what that gap is everywhere else.
-    class: 'sheet-footer absolute inset-x-0 bottom-0 px-[20px] pb-[20px] pt-[20px] empty:hidden',
+    // One gutter on the top too, not the half-gutter. The body reserves this
+    // whole box as its bottom padding, so the footer's own top inset IS the gap
+    // between the last of the content and the button — and one gutter is what
+    // that gap is everywhere else.
+    //
+    // The bottom is that same gutter, flat, with no safe-area inset added: the
+    // sheet's bottom edge IS the screen's, so this is the tab bar's situation
+    // exactly and it takes the tab bar's answer. `--nav-inset` makes the whole
+    // argument — the 34pt inset is sized for content running edge to edge, and
+    // adding it under a floating pill lifts it visibly high. The pill only has
+    // to clear the home indicator, about 13pt. Adding it here would also put
+    // this pill and the tab bar's at two different heights while both are on
+    // screen a tap apart, which is the tell. Footerless sheets still get the
+    // full inset, in the body's own padding below — different case, content
+    // running to the edge rather than a control floating off it.
+    class:
+      'sheet-footer absolute inset-x-0 bottom-0 px-[var(--sheet-gutter)] pb-[var(--sheet-gutter)] pt-[var(--sheet-gutter)] empty:hidden',
   })
 
   /**
-   * The same progressive blur the tab bar uses, at the sheet's own anchor.
+   * The band behind the button. One element and no children — the geometry and
+   * the ramp are entirely `.sheet-fade`'s in styles.css, which is where the
+   * argument for both is written.
    *
-   * This was a flat 24px gradient and nothing else, which put a hard-edged band
-   * of canvas directly under the footer while the tab bar — the other floating
-   * control in the app, often on screen at the same moment — faded over 159px
-   * with three layers of blur behind it. Two pieces of chrome doing the same job
-   * on the same page, and content arrived at one of them sharp and at the other
-   * softened.
+   * Added and removed WITH the footer's content in `syncHeader`, so
+   * `empty:hidden` still works. A permanent child would make every footerless
+   * sheet render an empty slab.
    *
-   * Built as a real element rather than `::before` because three backdrop
-   * filters need three boxes and a pseudo-element gives you two. It is added and
-   * removed WITH the footer's content in `syncHeader`, so `empty:hidden` still
-   * works — a permanent child would make every footerless sheet render an empty
-   * slab.
+   * **No `data-active` flag, unlike the tab bar's.** That flag exists to stop a
+   * band washing a panel that never scrolls, and it needed a ResizeObserver to
+   * answer "does this overflow" on content that arrives late. It buys nothing
+   * here: the band is the footer's box, so on a short panel it lies over the
+   * sheet's own ground and paints `--color-sheet` onto `--color-sheet`. There is
+   * nothing to hide, so there is nothing to switch off.
    */
-  const footerFade = h(
-    'div',
-    { class: 'sheet-fade', 'aria-hidden': 'true' },
-    fadeLayers(FADE_RAMP),
-    h('span', { class: 'sheet-fade-veil' })
-  )
+  const footerFade = h('div', { class: 'sheet-fade', 'aria-hidden': 'true' })
 
   const panel = h(
     'div',
@@ -423,8 +436,25 @@ export function openSheet({ title, render, footer = null, action = null }) {
     /**
      * Reserve the floating footer's height at the foot of the scroller, so the
      * last row can be scrolled clear of the button rather than parking under it
-     * permanently. Measured rather than assumed, because a footer is one button
-     * on most sheets and two on the weigh-in editor.
+     * permanently.
+     *
+     * **The BAND is measured, not the footer.** The footer's box would be the
+     * obvious thing to reserve, and it is the wrong one by exactly the height
+     * of the fade's rise: `.sheet-fade` stands above the footer so its ramp has
+     * room to be soft, and a field parked at the footer's top edge would sit
+     * under the top of that ramp. That is the bug this whole area started with,
+     * at a third of the size.
+     *
+     * Reserving the band instead makes the two edges the same edge by
+     * construction. The band is bottom-anchored to the footer and contains it,
+     * so this is still "button height + button bottom margin + one gap" with
+     * the fade's rise added, and it is still right for the weigh-in editor,
+     * whose footer is two stacked buttons rather than one. A literal would
+     * under-pad that one and put its last row under the lower button.
+     *
+     * Measured rather than assumed for that reason, and because the sum would
+     * have to be kept in step with `.btn-primary`'s min-height and the fade's
+     * rise, in two other files.
      *
      * **Synchronously, and that matters now.** This used to run in a
      * `requestAnimationFrame`, on the reasoning that the height is only knowable
@@ -437,50 +467,9 @@ export function openSheet({ title, render, footer = null, action = null }) {
      * later anyway.
      */
     body.style.paddingBottom = hasFooter
-      ? `${footerEl.offsetHeight}px`
-      : 'calc(20px + env(safe-area-inset-bottom, 0px))'
-    syncFooterFade()
+      ? `${footerFade.offsetHeight}px`
+      : 'calc(var(--sheet-gutter) + env(safe-area-inset-bottom, 0px))'
   }
-
-  /**
-   * The fade only exists for content passing under the button.
-   *
-   * On a panel short enough not to scroll, nothing ever does — and what is left
-   * is a wash of canvas over the bottom of a grid that was never going to move.
-   * The date picker is the clear case: seven columns that fit exactly, with its
-   * last row dimmed for no reason.
-   *
-   * This is the rule `syncFade` already applies to the tab bar, and it is
-   * applied the same way for the same reason: `display: none` rather than
-   * opacity, so the backdrop-filter layers stop compositing as well as stop
-   * showing. That cost is paid every frame while the band exists.
-   */
-  /**
-   * Frozen while the sheet is changing size.
-   *
-   * The test is "does the content overflow the scroller", and during a resize
-   * the scroller's height is a moving number — so this ran on every frame the
-   * ResizeObserver saw and flipped the band on and off partway through. A
-   * `display: none` toggle on three backdrop-filter layers, several times inside
-   * 240ms, is the flicker that reads as the sheet glitching.
-   *
-   * The answer is only meaningful at the end state, so it is taken there.
-   */
-  let resizing = false
-
-  function syncFooterFade() {
-    if (resizing) return
-    footerFade.dataset.active = String(body.scrollHeight > body.clientHeight + 1)
-  }
-
-  /**
-   * A panel's height is not known when it is appended — the log reads IndexedDB
-   * and paints into its body afterwards, and the picker re-renders a new month
-   * in place. Watching the mounted node catches both, where a single check after
-   * `showTop` would only ever see the first frame.
-   */
-  const contentObserver =
-    typeof ResizeObserver === 'function' ? new ResizeObserver(syncFooterFade) : null
 
   /**
    * `dir` says whether this is a navigation at all. It no longer says which
@@ -521,8 +510,6 @@ export function openSheet({ title, render, footer = null, action = null }) {
     }
     syncHeader()
     body.scrollTop = top?.scrollTop ?? 0
-    contentObserver?.disconnect()
-    if (top?.node) contentObserver?.observe(top.node)
     if (fromHeight != null) resizeTo(fromHeight, top?.node, dir)
   }
 
@@ -581,10 +568,8 @@ export function openSheet({ title, render, footer = null, action = null }) {
         node.classList.remove('panel-in')
         node.classList.add(dir === 'pop' ? 'panel-in-back' : 'panel-in-fwd')
       }
-      syncFooterFade()
       return
     }
-    resizing = true
     panel.style.height = `${fromHeight}px`
     void panel.offsetHeight
     panel.style.transition = `height ${PANEL_MS}ms ${PANEL_EASE}`
@@ -593,8 +578,6 @@ export function openSheet({ title, render, footer = null, action = null }) {
     resizeTimer = setTimeout(() => {
       panel.style.height = ''
       panel.style.transition = ''
-      resizing = false
-      syncFooterFade()
     }, PANEL_MS + 20)
   }
 
@@ -683,7 +666,6 @@ export function openSheet({ title, render, footer = null, action = null }) {
      * back, and yanking it to the opener would be the sheet interrupting
      * whatever came after it.
      */
-    contentObserver?.disconnect()
     const heldFocus = scrim.contains(document.activeElement)
     scrim.remove()
     lockScroll(false)

@@ -3476,27 +3476,9 @@
 }
 
 /**
- * The pinned footer, given the tab bar's treatment.
- *
- * The footer is a flex sibling of the scroller rather than something laid over
- * it, so nothing was ever passing behind the buttons — but the scroller's
- * bottom edge is a hard clip, and a row of segments caught halfway through it
- * reads exactly as if it were. "Morning" sliced through the middle of its own
- * letters by a grey slab is the version of this that looks broken.
- *
- * `.tabbar-fade` solved the same problem on the page: opaque canvas where the
- * controls sit, then a ramp long enough that the band does not end on a visible
- * line. This is that, at the height a sheet needs — the fade is drawn upward
- * from the footer's top edge, over the last of the scroll, and the footer comes
- * after the scroller in the DOM so it paints above it without a z-index.
- *
- * One colour throughout, canvas, for the reason the tab bar gives: a second hue
- * in the ramp goes muddy against whatever is scrolling under it.
- */
-/**
- * Transparent, like the tab bar's `nav`. The opaque part is the band behind it —
- * see `.sheet-fade`, which is what lets content recede under the button instead
- * of being cut off by a slab.
+ * Transparent, like the tab bar's `nav`. The opaque part is `.sheet-fade`
+ * behind it, which is what lets content recede under the button instead of
+ * being cut off by a slab.
  *
  * **No `position` here.** It used to declare `relative`, and that quietly beat
  * the `absolute` utility the element now carries: this rule is unlayered, and
@@ -3510,61 +3492,83 @@
 }
 
 /**
- * The tab bar's band, on the sheet's footer.
+ * The band behind the footer, sized to the footer and nothing more.
  *
- * **What was blocking a straight copy was not the geometry — it was the footer
- * being an opaque slab.** The two controls are the same object: a rounded
- * control 20px off the bottom edge with 20px gutters, 56px tall against the
- * bar's 68. But `nav` is transparent and lets `.tabbar-fade` do all the
- * covering, while this footer painted flat canvas across its whole box. That
- * slab is what cut rows off dead and left a grey strip above the button, and no
- * amount of tuning the band above it could fix a hard edge below it.
+ * **It was the tab bar's, and that was the bug.** `.sheet-fade` used to be
+ * `.tabbar-fade` uniformly scaled — 147px against the bar's 159, because the
+ * control is 56px against the bar's 68 — sharing `FADE_RAMP` verbatim. The
+ * scale is honest about the CONTROL and silent about the box: the footer is
+ * 96px, so 51px of ramp stood above it, over live content. At full scroll the
+ * last field parks at the footer's top edge, so those 51px dimmed a row that
+ * had nowhere further to go, and the sheet read as clipping its own last field.
  *
- * So the footer goes transparent and the band moves down to cover it, anchored
- * at `bottom: 0` rather than above — which is exactly how the tab bar is built.
+ * The tab bar can reach above itself because a page under it has no end to
+ * park at — there is always more below, and saying so is true. A form is
+ * finite. Past its last field the claim is false, and a fade that makes it
+ * reads as a bug rather than as depth.
  *
- * 147px, not 159, because the control is 56px rather than 68. That is a uniform
- * scale of the whole arrangement, so every percentage below is the tab bar's
- * unchanged, and `FADE_RAMP` is shared verbatim.
+ * So the band is sized from the footer rather than from the control, and the
+ * scroller reserves THE BAND rather than the footer (`syncHeader` in
+ * lib/sheet.js measures this element, not its parent). Its top edge and the
+ * resting line of the content are then the same edge by construction: at rest
+ * it covers nothing, whatever it is sized to.
+ *
+ * That is what makes `--sheet-fade-rise` a free choice rather than a
+ * compromise. It is how far the band stands above the footer, and every pixel
+ * of it is a pixel the scroller also reserves — so lengthening the ramp buys
+ * softness without ever buying back the dimming. It was zero for one build,
+ * with the ramp squeezed into the one gutter above the button, and a 20px ramp
+ * through a 26px word cut it in half rather than fading it. Two gutters of rise
+ * makes the ramp three, which is 60px against the tab bar's 58px-equivalent for
+ * a control this size — the same softness, arrived at from the other end.
+ *
+ * **The ramp is in px off `--sheet-gutter`, never in percent, and that is what
+ * keeps the band self-sizing.** A percentage would tie it to the box's height
+ * and break on the weigh-in editor, whose footer is two stacked buttons: the
+ * gap above the top button is still one gutter there, so the ramp must still be
+ * `rise + gutter`, while a percentage would stretch it half as far again and
+ * start dimming content the reservation had already cleared.
+ *
+ * The stops are `.fade-veil`'s, renormalised. That veil is measured over the
+ * tab bar's whole 159px band, of which the bottom 33% is flat canvas and only
+ * the top 107px ramps; taken as fractions of the RAMP alone, its four stops
+ * land at 30/55/83/100%, which is the curve below. Same shape, different
+ * length — the eased approach is most of why the tab bar's band has no visible
+ * start, and a straight linear alpha does.
+ *
+ * A plain gradient, with none of `fade.js`'s progressive blur. Three
+ * `backdrop-filter` layers is three compositor snapshots per frame, and they
+ * earn that over a tab bar with a whole page moving under them; here the band
+ * reaches full canvas by the button's top edge, so there is nothing behind the
+ * deep end to see into and nothing for a blur to do that the veil does not.
  */
 .sheet-fade {
+  /* How far the band stands above the footer box. The scroller reserves the
+     band, so this is also the extra clearance the last field gets. */
+  --sheet-fade-rise: calc(2 * var(--sheet-gutter));
+  /* Top of the band down to the button's top edge — the rise plus the footer's
+     own top padding. Full canvas by the end of it, so the button never has
+     part-faded content against its edge. */
+  --sheet-fade-ramp: calc(var(--sheet-fade-rise) + var(--sheet-gutter));
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  height: 147px;
+  top: calc(-1 * var(--sheet-fade-rise));
   pointer-events: none;
-}
-
-/* Nothing scrolls under the button on this panel, so there is nothing for the
-   band to do but dim the bottom of it. `syncFooterFade` in lib/sheet.js sets the
-   flag — the same rule, and the same `display: none`, as `.tabbar-fade`. */
-.sheet-fade[data-active='false'] {
-  display: none;
-}
-
-.sheet-fade > span {
-  position: absolute;
-  inset: 0;
-  display: block;
-}
-
-/* The tab bar's veil, stop for stop. See `.fade-veil`. */
-.sheet-fade > .sheet-fade-veil {
   background: linear-gradient(
-    to top,
-    var(--color-canvas) 0%,
-    var(--color-canvas) 33%,
-    color-mix(in srgb, var(--color-canvas) 86%, transparent) 44%,
-    color-mix(in srgb, var(--color-canvas) 54%, transparent) 63%,
-    color-mix(in srgb, var(--color-canvas) 22%, transparent) 80%,
-    transparent 100%
+    to bottom,
+    transparent 0,
+    color-mix(in srgb, var(--color-sheet) 22%, transparent) calc(0.3 * var(--sheet-fade-ramp)),
+    color-mix(in srgb, var(--color-sheet) 54%, transparent) calc(0.55 * var(--sheet-fade-ramp)),
+    color-mix(in srgb, var(--color-sheet) 86%, transparent) calc(0.83 * var(--sheet-fade-ramp)),
+    var(--color-sheet) var(--sheet-fade-ramp)
   );
 }
 
 /**
- * The band is absolutely positioned, so it would otherwise paint over the button
- * it exists to sit behind. Positioning the footer's real content puts it back on
- * top without a z-index fight.
+ * The band is absolutely positioned, so it would otherwise paint over the
+ * button it exists to sit behind. Positioning the footer's real content puts it
+ * back on top without a z-index fight.
  */
 .sheet-footer > *:not(.sheet-fade) {
   position: relative;
@@ -3579,6 +3583,27 @@
  * bottom of a sheet is the bottom of the screen.
  */
 .sheet-panel {
+  /**
+   * The one inset the sheet's chrome owns, in one place.
+   *
+   * lib/sheet.js has asserted this in prose for a while — "the body owns every
+   * edge inset a panel gets: 20 on all four sides, the same gutter the sheet's
+   * header and footer hold" — while spelling it as six separate `[20px]`
+   * literals across three elements. That made the footer button's bottom margin
+   * matching its side margins a coincidence rather than a fact, and the pill
+   * only reads as floating while the four numbers agree.
+   *
+   * Not `--nav-inset`, though that is also 20 and also a floating control's
+   * distance from an edge. Its whole documented point is that it is measured
+   * from the SCREEN's bottom and deliberately excludes the safe-area inset;
+   * this is measured from the sheet's own edges and is a gutter. Two different
+   * arguments that happen to land on the same number should not share a name.
+   *
+   * The app has no general spacing scale — every other gutter in it is a
+   * literal in an arbitrary Tailwind value — so this is scoped to the sheet
+   * rather than promoted to `:root`, where it would read as the start of one.
+   */
+  --sheet-gutter: 20px;
   border-top-left-radius: var(--radius-sheet);
   border-top-right-radius: var(--radius-sheet);
   background: var(--color-sheet);
