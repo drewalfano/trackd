@@ -1,8 +1,9 @@
 import { h } from '../lib/dom.js'
 import { getFood, getSettings } from '../lib/db.js'
-import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
+import { emptyTotals, addTotals } from '../lib/compute.js'
+import { itemMacros } from '../lib/describeResolve.js'
 import { blockSelector, card, macroLine, macroUnit, notice } from '../lib/ui.js'
-import { qty, servingLabel, unitLabel, pluralize, displayName } from '../lib/format.js'
+import { qty, quantityLabel, servingLabel, unitLabel, pluralize, displayName } from '../lib/format.js'
 import { formatDayLabel, todayStr } from '../lib/dates.js'
 
 /**
@@ -18,7 +19,15 @@ import { formatDayLabel, todayStr } from '../lib/dates.js'
  * adds up to, and which block it is going into — then logs the lot.
  */
 
-/** Resolve a meal's items against the library, keeping the ones that are gone. */
+/**
+ * Resolve a meal's items against the library, keeping the ones that are gone.
+ *
+ * An item with no food is not automatically a hole: a quick add or an estimate
+ * saved into a meal carries its own name and its own numbers, and logs
+ * perfectly well without a food to compute from. `macros` is what separates the
+ * two — a row that has them is a row this meal can still log, whatever it is
+ * standing on — so it is the one thing the panel below branches on.
+ */
 async function resolveItems(meal) {
   const rows = []
   for (const item of meal.items) {
@@ -26,16 +35,24 @@ async function resolveItems(meal) {
     rows.push({
       item,
       food,
-      macros: food ? computeMacros(food, item.quantity, item.unit) : null,
+      name: food?.name || item.name || null,
+      macros: itemMacros(item, food),
     })
   }
   return rows
 }
 
-const amountLabel = (food, { quantity, unit }) =>
-  unit === 'serving'
-    ? `${qty(quantity)} × ${servingLabel(food)}`
-    : `${qty(quantity)} ${unitLabel(unit, quantity)}`
+/**
+ * With no food there is no serving to multiply against, so "1 × 55 g" has
+ * nothing to put after the ×. `quantityLabel` is the phrasing the log already
+ * uses for exactly these rows.
+ */
+const amountLabel = (food, item) =>
+  !food
+    ? quantityLabel(item)
+    : item.unit === 'serving'
+      ? `${qty(item.quantity)} × ${servingLabel(food)}`
+      : `${qty(item.quantity)} ${unitLabel(item.unit, item.quantity)}`
 
 /**
  * `onStage` mirrors the serving sheet's: the plate's way in, now that the `+`
@@ -57,7 +74,7 @@ export function mealPanel({
     render: (ctx) => {
       let block = initialBlock
 
-      const available = rows.filter((r) => r.food)
+      const available = rows.filter((r) => r.macros)
       const missing = rows.length - available.length
       const totals = available.reduce((acc, r) => addTotals(acc, r.macros), emptyTotals())
 
@@ -136,7 +153,7 @@ export function mealPanel({
           { class: 'flex flex-col gap-[10px]' },
           h('div', { class: 'section-title' }, pluralize(rows.length, 'item')),
           card(
-            rows.map(({ item, food, macros }) =>
+            rows.map(({ item, food, name, macros }) =>
               h(
                 'div',
                 { class: 'row' },
@@ -148,14 +165,14 @@ export function mealPanel({
                     {
                       class:
                         'truncate text-[14px] font-semibold leading-tight' +
-                        (food ? '' : ' text-muted line-through'),
+                        (macros ? '' : ' text-muted line-through'),
                     },
-                    displayName(food?.name) || 'Deleted food'
+                    displayName(name) || (macros ? 'Unnamed' : 'Deleted food')
                   ),
                   h(
                     'div',
                     { class: 'mt-[2px] truncate text-[12px] text-muted' },
-                    food ? amountLabel(food, item) : 'No longer in your library'
+                    macros ? amountLabel(food, item) : 'No longer in your library'
                   )
                 ),
                 macros

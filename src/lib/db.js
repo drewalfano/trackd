@@ -346,7 +346,18 @@ export async function listFoods() {
   return (await db()).getAll('foods')
 }
 
+/**
+ * `null` is a legitimate `foodId` — a quick add and a described estimate are
+ * both entries with no food behind them, and a meal built out of those carries
+ * items shaped the same way. IndexedDB does not accept null as a key: it throws
+ * DataError rather than returning nothing, so a single such item anywhere in a
+ * list rejected the whole walk over it and blanked whatever was being painted.
+ *
+ * The guard lives here rather than at each call site because every walk over a
+ * list of items has the same hole, and the next one written would have it too.
+ */
 export async function getFood(id) {
+  if (id == null) return undefined
   return (await db()).get('foods', id)
 }
 

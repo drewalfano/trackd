@@ -3,7 +3,7 @@ import { icon } from '../lib/icons.js'
 import { toast, confirm } from '../lib/toast.js'
 import { getFood, getSettings, savePlate, clearPlate, deleteEntry } from '../lib/db.js'
 import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
-import { logPlate, saveDraftAsMeal, defaultServing } from '../lib/logging.js'
+import { logPlate, saveDraftAsMeal, mealDraftSkips, defaultServing } from '../lib/logging.js'
 import { classifyItem, itemMacros, leftoversPayload, resolveModelItems } from '../lib/describeResolve.js'
 import { describeLeftovers } from '../lib/describeModel.js'
 import { hasAiKey } from '../lib/aiKey.js'
@@ -720,6 +720,11 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
           title: 'Save as a meal',
           render: (c) => {
             let name = ''
+            // Logging is blocked while a row is unfinished; saving is not, and
+            // an unfinished row has nothing in it to save. Said here rather
+            // than in the toast afterwards, so the count is a warning instead
+            // of a receipt.
+            const skipped = mealDraftSkips(currentItems)
             const save = h(
               'button',
               {
@@ -749,7 +754,16 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                     save.disabled = !v.trim()
                   },
                 }),
-              })
+              }),
+              skipped
+                ? notice(
+                    `${pluralize(skipped, 'row')} on this plate still ${
+                      skipped === 1 ? 'needs' : 'need'
+                    } a match or an amount and will not be saved. ` +
+                      'The rest of the plate becomes the meal.',
+                    { iconName: 'alert' }
+                  )
+                : null
             )
           },
         })

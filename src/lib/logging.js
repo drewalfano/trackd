@@ -88,10 +88,45 @@ export async function quickLogFood(food, { date, block }) {
   return logFood({ food, quantity, unit, date, block })
 }
 
+/**
+ * A row whose numbers are the whole of it, written straight to the log.
+ *
+ * A quick add and a described estimate both produce one of these: no food, a
+ * name, and a `computed` block that came from somewhere other than a food
+ * record. `source` rides along because it is the only durable record of where
+ * — the log draws a sparkle from it — and it is read off the item rather than
+ * fixed here so a quick add saved into a meal does not come back claiming to be
+ * an estimate. A plate's estimates carry no source of their own and are handed
+ * one by `logPlate`, which is the only thing that knows they are estimates.
+ */
+const putFixedEntry = (item, { date, block }) =>
+  putEntry({
+    date,
+    block,
+    foodId: null,
+    source: item.source || null,
+    foodName: item.name || 'Unnamed',
+    quantity: Number(item.quantity) || 1,
+    unit: item.unit || 'serving',
+    computed: {
+      kcal: round(item.computed.kcal, 1),
+      protein: round(item.computed.protein, 1),
+      fat: round(item.computed.fat, 1),
+      carbs: round(item.computed.carbs, 1),
+    },
+  })
+
+/** Whether a meal item stands on its own numbers rather than on a food. */
+const isFixedItem = (item) => !item.foodId && !!item.computed
+
 /** Logs every item in a saved meal into the same block. */
 export async function logMeal(meal, { date, block }) {
   const entries = []
   for (const item of meal.items) {
+    if (isFixedItem(item)) {
+      entries.push(await putFixedEntry(item, { date, block }))
+      continue
+    }
     const food = await getFood(item.foodId)
     if (!food) continue // the food was deleted; skip rather than fail the meal
     entries.push(await logFood({ food, quantity: item.quantity, unit: item.unit, date, block }))
@@ -101,11 +136,31 @@ export async function logMeal(meal, { date, block }) {
   return entries
 }
 
-/** Turn a set of entries into a reusable saved meal. */
+/**
+ * Turn a set of entries into a reusable saved meal.
+ *
+ * An entry with no food keeps its name and its macro snapshot rather than being
+ * reduced to `foodId: null` and nothing else. A day's block is frequently part
+ * quick add and part described dinner, and a meal that dropped those on the way
+ * in was a meal that logged three of its five items while its card went on
+ * saying five — the count came from the list and the totals came from the walk,
+ * and only one of them noticed.
+ */
 export async function saveEntriesAsMeal(name, entries) {
   return putMeal({
     name,
-    items: entries.map((e) => ({ foodId: e.foodId, quantity: e.quantity, unit: e.unit })),
+    items: entries.map((e) =>
+      e.foodId
+        ? { foodId: e.foodId, quantity: e.quantity, unit: e.unit }
+        : {
+            foodId: null,
+            name: e.foodName,
+            quantity: e.quantity,
+            unit: e.unit,
+            computed: { ...e.computed },
+            source: e.source || null,
+          }
+    ),
   })
 }
 
@@ -135,21 +190,10 @@ export async function logPlate(plate) {
      */
     if (kind === 'estimated') {
       entries.push(
-        await putEntry({
-          date: plate.date,
-          block: plate.block,
-          foodId: null,
-          source: DESCRIBE_SOURCE,
-          foodName: item.name || 'Unnamed',
-          quantity: Number(item.quantity) || 1,
-          unit: item.unit || 'serving',
-          computed: {
-            kcal: round(item.computed.kcal, 1),
-            protein: round(item.computed.protein, 1),
-            fat: round(item.computed.fat, 1),
-            carbs: round(item.computed.carbs, 1),
-          },
-        })
+        await putFixedEntry(
+          { ...item, source: DESCRIBE_SOURCE },
+          { date: plate.date, block: plate.block }
+        )
       )
       continue
     }
@@ -211,10 +255,43 @@ async function adoptForLog(draft) {
  * Until this existed a meal could only be born by logging its items first and
  * saving the block afterwards, so building a template for something you were
  * not eating right now meant logging it and then deleting four entries.
+ *
+ * The walk is `logPlate`'s, one step short of writing entries. A staple or an
+ * Open Food Facts product is adopted here for the same reason it is adopted at
+ * commit — a meal has to keep pointing at something, and a draft only lives on
+ * the plate it was assembled on. An estimate keeps its own numbers. A row that
+ * is still unmatched or still has no amount has nothing to save and is left
+ * out; `mealDraftSkips` is what the sheet counts to say so beforehand.
  */
 export async function saveDraftAsMeal(name, items) {
-  return putMeal({
-    name,
-    items: items.map(({ foodId, quantity, unit }) => ({ foodId, quantity, unit })),
-  })
+  const saved = []
+  for (const item of items) {
+    const kind = classifyItem(item)
+
+    if (kind === 'estimated') {
+      saved.push({
+        foodId: null,
+        name: item.name || 'Unnamed',
+        quantity: Number(item.quantity) || 1,
+        unit: item.unit || 'serving',
+        computed: { ...item.computed },
+        source: DESCRIBE_SOURCE,
+      })
+      continue
+    }
+
+    if (kind !== 'matched') continue
+
+    const food = item.foodId ? await getFood(item.foodId) : await adoptForLog(item.draft)
+    if (!food) continue
+    saved.push({ foodId: food.id, quantity: item.quantity, unit: item.unit })
+  }
+  return putMeal({ name, items: saved })
 }
+
+/** How many plate rows a save would leave behind, for the sheet to say first. */
+export const mealDraftSkips = (items) =>
+  items.filter((item) => {
+    const kind = classifyItem(item)
+    return kind !== 'matched' && kind !== 'estimated'
+  }).length

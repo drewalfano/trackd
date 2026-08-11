@@ -14,6 +14,7 @@ import {
   clearPlate,
 } from '../lib/db.js'
 import { computeMacros, emptyTotals, addTotals } from '../lib/compute.js'
+import { itemMacros } from '../lib/describeResolve.js'
 import { quickLogFood, logMeal, logPlate, defaultServing } from '../lib/logging.js'
 import { plateBar, pushPlate, resolvePlate, plateLoggedToast } from './plate.js'
 import { card, emptyRow, listRow, slot, foodRowBody } from '../lib/ui.js'
@@ -471,10 +472,15 @@ export async function openAddFood({ date = state.date, block } = {}, host) {
           } else {
             const meal = await getMeal(fav.id)
             if (!meal) continue
+            // `itemMacros` rather than a food lookup and `computeMacros`: a meal
+            // item may stand on its own numbers — a quick add or an estimate
+            // saved into it — and those count towards the card's total exactly
+            // like the rest. Reading them only off foods made the card quote a
+            // figure lower than the meal logs.
             let totals = emptyTotals()
             for (const item of meal.items) {
-              const food = await getFood(item.foodId)
-              if (food) totals = addTotals(totals, computeMacros(food, item.quantity, item.unit))
+              const macros = itemMacros(item, await getFood(item.foodId))
+              if (macros) totals = addTotals(totals, macros)
             }
             favNodes.push(
               favCard({
