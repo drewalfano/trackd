@@ -1,5 +1,5 @@
 import { h, countTo, setTabularText, fitText, pressable } from './dom.js'
-import { icon } from './icons.js'
+import { icon, sparkleHalf } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
 import { g, kcal, round, cmToFtIn, ftInToCm } from './format.js'
 
@@ -1125,15 +1125,70 @@ export function notice(text, { iconName = 'info', action, onAction } = {}) {
       'div',
       { class: 'flex-1 text-[14px] leading-snug' },
       text,
+      /**
+       * The chip goes in a block of its own, and it has to.
+       *
+       * `chip-sm` is `inline-flex`, so as a direct sibling of a text node it
+       * joins the paragraph and lays out as the last word of the sentence — on
+       * its own line only while the text happened to fill the last one. The
+       * first notice long enough to wrap tightly landed the chip mid-line
+       * beside "without Gemini.", with the `mt-[10px]` pushing the whole line
+       * box down and opening a gap through the middle of the sentence.
+       *
+       * A wrapper makes the margin do what it was always written to do: put
+       * the action under the words rather than after them.
+       */
       action
         ? h(
-            'button',
-            { class: 'chip-sm mt-[10px]', onclick: onAction },
-            action
+            'div',
+            { class: 'mt-[10px]' },
+            h('button', { class: 'chip-sm', onclick: onAction }, action)
           )
         : null
     )
   )
+}
+
+/**
+ * What a button says while the thing it started is still happening.
+ *
+ * **The wait belongs to the control that began it.** This was a panel above the
+ * field for one afternoon, and that was wrong: it left a dead greyed button
+ * sitting underneath a box describing what the button was doing. The button
+ * already claims the work, it is already about to grey out, and a stage
+ * somewhere else is a second object saying the same thing in a worse place.
+ *
+ * There is no second line naming what is in flight, and there does not need to
+ * be. Both callers have it on screen already — Describe has the sentence in the
+ * field directly above, the plate has the rows the button counts.
+ *
+ * The mark INHERITS its colour rather than taking `text-muted` the way
+ * `estimateBadge` does. There it is a note about where numbers came from and
+ * belongs a step behind the words; here it is inside a control, and a glyph in
+ * a different ink from the label beside it reads as something dropped in from
+ * elsewhere.
+ *
+ * **The label is exposed rather than passed in on every change.** A long wait
+ * rewrites it twice, and rebuilding this would restart both animations from
+ * zero each time — a mark that resets its cycle at the six second mark is the
+ * app announcing something that did not happen. Built once, edited in place.
+ */
+export function busyLabel(text) {
+  const label = h('span', {}, text)
+  const el = h(
+    'span',
+    {
+      class: 'flex items-center justify-center gap-[10px]',
+      // The copy changing is the only thing that happens during a long wait, so
+      // it is what gets announced. `polite`, because nothing here interrupts.
+      role: 'status',
+      'aria-live': 'polite',
+    },
+    h('span', { class: 'sparkle-wait shrink-0' }, sparkleHalf('big'), sparkleHalf('small')),
+    label
+  )
+  el.label = label
+  return el
 }
 
 /* `spinner()` was removed in v1.2.3. It had no callers and never had — the app

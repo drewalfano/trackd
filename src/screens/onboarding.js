@@ -1,4 +1,4 @@
-import { h, repaint, mount, countTo } from '../lib/dom.js'
+import { h, repaint, mount, countTo, replay } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { toast } from '../lib/toast.js'
 import { getSettings, saveSettings, putWeight, listWeights } from '../lib/db.js'
@@ -54,21 +54,11 @@ const HISTORY_KEY = 'mt-onboarding'
 
 /* ------------------------------------------------------------------ motion */
 
-/**
- * Restart a one-shot animation on an element that is already on screen.
- *
- * Adding a class the element already carries does nothing, and every mark in
- * this flow fires repeatedly on the same node — the step label swaps five times
- * on one journey through. The forced reflow between the two writes is what makes
- * the browser treat it as a new animation rather than a no-op; `main.js` uses
- * the same trick in the opposite direction, to suppress the tab pill's first
- * placement.
- */
-function replay(el, cls) {
-  el.classList.remove(cls)
-  void el.offsetWidth
-  el.classList.add(cls)
-}
+/* `replay` moved to `lib/dom.js` when the Describe wait became its second
+   caller. Every mark in this flow fires repeatedly on the same node — the step
+   label swaps five times on one journey through — which is what it is for.
+   `main.js` uses the same trick in the opposite direction, to suppress the tab
+   pill's first placement. */
 
 /**
  * The horizontal scale an element is actually painted at, mid-transition

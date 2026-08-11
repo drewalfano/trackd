@@ -64,6 +64,23 @@ export const FILLED = {
   gearFilled: gearPath(),
 }
 
+/**
+ * The sparkle, named in halves.
+ *
+ * `sparkle` below is these two concatenated and is what every ordinary caller
+ * uses. They are separate constants because the waiting mark draws them as two
+ * elements on two different clocks — see `sparkleHalf` and the `sparkle-big` /
+ * `sparkle-small` keyframes in styles.css.
+ *
+ * They are separate CONSTANTS rather than duplicated path data because there is
+ * exactly one definition of this glyph in the app and it stays that way. An
+ * edit to the star's geometry lands in both places by construction.
+ */
+const SPARKLE_BIG =
+  '<path d="M11 3.5l1.6 4.4a2 2 0 001.2 1.2l4.4 1.6-4.4 1.6a2 2 0 00-1.2 1.2L11 17.9l-1.6-4.4a2 2 0 00-1.2-1.2L3.8 10.7l4.4-1.6a2 2 0 001.2-1.2z"/>'
+const SPARKLE_SMALL =
+  '<path d="M17.8 15.2l.6 1.6a1 1 0 00.6.6l1.6.6-1.6.6a1 1 0 00-.6.6l-.6 1.6-.6-1.6a1 1 0 00-.6-.6l-1.6-.6 1.6-.6a1 1 0 00.6-.6z"/>'
+
 const P = {
   /**
    * The four chevrons, centred in the 24 box. Two of them were not.
@@ -117,9 +134,7 @@ const P = {
    * Concave curves rather than straight-sided points: at 24px a star drawn with
    * straight edges reads as a plus sign with the corners knocked off.
    */
-  sparkle:
-    '<path d="M11 3.5l1.6 4.4a2 2 0 001.2 1.2l4.4 1.6-4.4 1.6a2 2 0 00-1.2 1.2L11 17.9l-1.6-4.4a2 2 0 00-1.2-1.2L3.8 10.7l4.4-1.6a2 2 0 001.2-1.2z"/>' +
-    '<path d="M17.8 15.2l.6 1.6a1 1 0 00.6.6l1.6.6-1.6.6a1 1 0 00-.6.6l-.6 1.6-.6-1.6a1 1 0 00-.6-.6l-1.6-.6 1.6-.6a1 1 0 00.6-.6z"/>',
+  sparkle: SPARKLE_BIG + SPARKLE_SMALL,
   barcode: '<path d="M4 6v12M8 6v12M11.5 6v12M15 6v12M20 6v12"/>',
   camera:
     '<path d="M3 8.5A2.5 2.5 0 015.5 6h1.7a1 1 0 00.83-.45l.94-1.4A1 1 0 019.8 3.7h4.4a1 1 0 01.83.45l.94 1.4A1 1 0 0016.8 6h1.7A2.5 2.5 0 0121 8.5v9a2.5 2.5 0 01-2.5 2.5h-13A2.5 2.5 0 013 17.5z"/><circle cx="12" cy="13" r="3.5"/>',
@@ -173,6 +188,39 @@ export function icon(name, opts = {}) {
   el.setAttribute('aria-hidden', 'true')
   if (opts.class) el.setAttribute('class', opts.class)
   el.innerHTML = inner
+  return el
+}
+
+/**
+ * One star of the sparkle, on its own, for the waiting mark to animate.
+ *
+ * Filled with the stroke off, which is the same treatment `estimateBadge` gives
+ * the whole glyph and for the same reason: at this size an outline star is
+ * mostly stroke and the concave points close up into a blob.
+ *
+ * The two halves come back as two SEPARATE `<svg>` elements rather than as two
+ * paths in one, and that is the whole point of this function. A `transform` on
+ * a path INSIDE an svg is not reliably promoted to the compositor in WebKit, so
+ * animating the halves that way would repaint the glyph every frame on the one
+ * platform this ships to. A whole svg element transforms like any other box.
+ *
+ * Both are the full 24 viewBox with one star in it, so each sits where it sits
+ * in the complete mark and the pair stacks into the same glyph. Which means the
+ * scale origin has to be written per star — see the keyframes.
+ *
+ * @param {'big'|'small'} which
+ */
+export function sparkleHalf(which, opts = {}) {
+  const { size = 20 } = opts
+  const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  el.setAttribute('viewBox', '0 0 24 24')
+  el.setAttribute('width', size)
+  el.setAttribute('height', size)
+  el.setAttribute('fill', 'currentColor')
+  el.setAttribute('stroke', 'none')
+  el.setAttribute('aria-hidden', 'true')
+  if (opts.class) el.setAttribute('class', opts.class)
+  el.innerHTML = which === 'small' ? SPARKLE_SMALL : SPARKLE_BIG
   return el
 }
 

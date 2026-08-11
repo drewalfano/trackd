@@ -87,6 +87,24 @@ export function repaint(el, ...children) {
 }
 
 /**
+ * Run a one-shot animation class again on an element that is staying put.
+ *
+ * A CSS animation fires when the class lands, so re-adding a class the element
+ * already carries does nothing at all. The forced reflow between the remove and
+ * the add is what makes the browser commit the style change so the second add
+ * counts as new.
+ *
+ * For anything that animates a CHANGE to a permanent element rather than its
+ * arrival: the mode toggle's readings, and the wait heading when a call runs
+ * long. Was defined privately in `onboarding.js` until the second caller.
+ */
+export function replay(el, cls) {
+  el.classList.remove(cls)
+  void el.offsetWidth
+  el.classList.add(cls)
+}
+
+/**
  * Shrink an element's text just enough to stop it truncating.
  *
  * For one line in the app: the day header, which sits in 227px between two

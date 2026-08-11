@@ -1,10 +1,10 @@
-import { h, repaint } from '../lib/dom.js'
+import { h, repaint, replay } from '../lib/dom.js'
 import { toast } from '../lib/toast.js'
 import { parseDescription } from '../lib/describeRules.js'
 import { resolveParsed, resolveModelItems } from '../lib/describeResolve.js'
 import { describeLeftovers } from '../lib/describeModel.js'
 import { hasAiKey } from '../lib/aiKey.js'
-import { notice, slot } from '../lib/ui.js'
+import { notice, slot, busyLabel } from '../lib/ui.js'
 
 /**
  * Describing a meal in words.
@@ -75,6 +75,32 @@ function describeField({ value, placeholder, onInput }) {
 }
 
 /**
+ * The three points at which a wait stops being a wait.
+ *
+ * **6s: the copy changes.** A normal Flash round trip on this payload is a
+ * couple of seconds, and `describeModel` will spend another 700ms plus a second
+ * attempt on a dropped connection before it gives up. Six is roughly double
+ * that, so this fires when something is genuinely slow rather than merely
+ * unlucky. Only the words change; the mark keeps its cycle, because nothing has
+ * actually happened yet and restarting it would say otherwise.
+ *
+ * **15s: an escape appears.** Past the point where anyone still believes it is
+ * coming. A loop with no way out is worse than no animation at all, and until
+ * now the only way to stop this was to close the sheet.
+ *
+ * **30s: it is over.** There is no timeout anywhere in `describeModel` — the
+ * fetch has none, so a connection that opens and then goes nowhere hangs for as
+ * long as the platform allows, which on cellular is a long way past any of
+ * these. This is the ceiling, and it lands in the ordinary failure path.
+ *
+ * All three are reasoned starting points rather than measurements. The honest
+ * way to set them is to watch real round trips on a real phone for a while.
+ */
+const WAIT_LONG_MS = 6000
+const WAIT_ESCAPE_MS = 15000
+const WAIT_CEILING_MS = 30000
+
+/**
  * @param {object} ctx
  * @param {(items: object[]) => Promise<void>} onItems  what to do with the result
  */
@@ -85,8 +111,20 @@ export function pushDescribe(ctx, { onItems }) {
       let text = ''
       let working = false
       let controller = null
+      let waitTimers = []
+      // Set only once a wait has run long enough to earn an escape, which is
+      // also what turns the busy button back into a control — see `send`.
+      let onStop = null
       const status = slot()
-      c.onDispose(() => controller?.abort())
+
+      const clearWaitTimers = () => {
+        waitTimers.forEach(clearTimeout)
+        waitTimers = []
+      }
+      c.onDispose(() => {
+        controller?.abort()
+        clearWaitTimers()
+      })
 
       const field = describeField({
         value: '',
@@ -180,62 +218,179 @@ export function pushDescribe(ctx, { onItems }) {
         {
           class: 'btn-secondary',
           disabled: true,
-          onclick: async () => {
-            if (working) return
-            const input = text.trim()
-            if (!input) return
-
-            working = true
-            setBusy('send')
-            repaint(status)
-
-            controller?.abort()
-            controller = new AbortController()
-
-            try {
-              const returned = await describeLeftovers({
-                spans: [input],
-                unresolved: [],
-                signal: controller.signal,
-              })
-              const items = await resolveModelItems(returned, { signal: controller.signal })
-              if (!items.length) {
-                repaint(
-                  status,
-                  notice('Gemini did not find a food in that.', { iconName: 'alert' })
-                )
-                return
-              }
-              await onItems(items)
-            } catch (err) {
-              if (err.name === 'AbortError') return
-              /**
-               * The same standing offer the parse path makes, which this half
-               * was missing: a toast says what went wrong and then takes it
-               * away, so a failure here left the screen looking untouched and
-               * the words looking unsent. The notice stays until the next
-               * attempt clears it, beside the text it is about.
-               */
-              repaint(
-                status,
-                notice(
-                  'Gemini could not be reached. Your words are still here. Try again, or ' +
-                    'make a plate without it.',
-                  { iconName: 'alert' }
-                )
-              )
-              toast(err.message || 'Could not reach Gemini')
-            } finally {
-              working = false
-              setBusy(null)
-            }
-          },
+          /**
+           * One control, three jobs, and which one it is doing is whatever its
+           * label currently says.
+           *
+           * While a call is in flight this button IS the wait, so pressing it
+           * can only mean the one thing the wait offers — and it offers nothing
+           * until 15 seconds have passed, which is exactly when `onStop` gets
+           * set and the button comes back off disabled.
+           */
+          onclick: () => (working ? onStop?.() : send()),
         },
         'Send it all to Gemini'
       )
 
       /**
-       * One place that knows what the two buttons say and when they are off.
+       * The wait, and the three ways out of it.
+       *
+       * A function rather than the button's handler inline, because the failure
+       * notice offers "Try again" and that is this same call from the top.
+       */
+      async function send() {
+        if (working) return
+        const input = text.trim()
+        if (!input) return
+
+        working = true
+        setBusy('send')
+
+        /**
+         * **The wait happens inside the button that started it.**
+         *
+         * There was a panel above the field for this, and it was a worse idea:
+         * pressing send greyed the button out and then described what the
+         * greyed button was doing, in a box somewhere else. The control is
+         * already the thing that claims the work. It changes what it says, the
+         * mark starts moving in it, and nothing else on the screen moves at all.
+         *
+         * Painted BEFORE the first `await`, so it lands in the tap's own task
+         * and the mark is breathing on the very next frame. After an await it
+         * would start a round trip late, which is the exact fault this replaces:
+         * a screen sitting still while something is happening to it.
+         */
+        const busy = busyLabel('Sending to Gemini')
+        repaint(sendAllBtn, busy)
+        // Last attempt's reason goes with it. Leaving it would put "Gemini did
+        // not answer in time" above a button saying it is sending, which is the
+        // screen contradicting itself about the same call.
+        repaint(status)
+
+        controller?.abort()
+        controller = new AbortController()
+        const live = controller
+
+        // Which of the three exits was taken, since two of them arrive at the
+        // catch as the same `AbortError` and mean opposite things.
+        let stopped = false
+        let timedOut = false
+
+        clearWaitTimers()
+        waitTimers = [
+          setTimeout(() => {
+            // The app's mark for "this reading was rewritten", which is what
+            // this is. Only the words change; the mark keeps its cycle, because
+            // nothing has actually happened — see `busyLabel`.
+            busy.label.textContent = 'Still waiting on Gemini'
+            replay(busy.label, 'reading-swap')
+          }, WAIT_LONG_MS),
+          /**
+           * The escape lands on the same button, which is the whole reason it
+           * is worth having there: the control you pressed to start this is the
+           * control that stops it, and no new object arrives to offer it.
+           *
+           * The label goes back to naming an action rather than a state, and
+           * the mark keeps breathing beside it — the words say what pressing it
+           * does, the mark says the call is still out.
+           */
+          setTimeout(() => {
+            busy.label.textContent = 'Stop waiting'
+            replay(busy.label, 'reading-swap')
+            onStop = () => {
+              stopped = true
+              live.abort()
+            }
+            sendAllBtn.disabled = false
+          }, WAIT_ESCAPE_MS),
+          setTimeout(() => {
+            timedOut = true
+            live.abort()
+          }, WAIT_CEILING_MS),
+        ]
+
+        try {
+          const returned = await describeLeftovers({
+            spans: [input],
+            unresolved: [],
+            signal: live.signal,
+          })
+          const items = await resolveModelItems(returned, { signal: live.signal })
+          if (!items.length) {
+            settle('Gemini did not find a food in that.', { iconName: 'alert' })
+            return
+          }
+          /**
+           * No exit animation, on purpose. `onItems` pushes the plate in this
+           * same tick, and the sheet's own resize plus `panel-in` carry the
+           * whole footer away with the panel while the plate's rows arrive on
+           * `row-in`. Settling the button back to its label first would put a
+           * frame of "Send it all to Gemini" between the wait and the result.
+           */
+          await onItems(items)
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            if (stopped) {
+              settle('Stopped. Your words are still here, or make a plate without Gemini.', {
+                iconName: 'info',
+                action: 'Try again',
+                onAction: () => send(),
+              })
+              return
+            }
+            // Not stopped and not timed out means something else aborted this
+            // call and owns the screen now. Leave whatever it put there.
+            if (!timedOut) return
+          }
+          /**
+           * **The diagnosis goes in the notice, not the toast.** This used to
+           * be both: a notice carrying standing advice and a toast carrying
+           * `err.message`, which is the half that actually says what went
+           * wrong. "That key was refused. Check it in Settings" is not
+           * something to show for two seconds and then take away.
+           *
+           * So the specific reason leads, the standing offer follows, and
+           * "Try again" is a control rather than an instruction.
+           */
+          const reason = timedOut
+            ? 'Gemini did not answer in time.'
+            : err.message || 'Gemini could not be reached.'
+          settle(`${reason} Your words are still here, or make a plate without Gemini.`, {
+            iconName: 'alert',
+            action: 'Try again',
+            onAction: () => send(),
+          })
+        } finally {
+          clearWaitTimers()
+          onStop = null
+          working = false
+          // Puts the button's own label back, which is what unwinds the busy
+          // contents and stops both animations. See `setBusy`.
+          setBusy(null)
+        }
+      }
+
+      /**
+       * The wait ending in words instead of a plate.
+       *
+       * It lands above the field, in the slot the parse path's failures already
+       * use, rather than in the button — a button says what pressing it does,
+       * and "That key was refused. Check it in Settings" is not that. The button
+       * goes back to offering the send, and the reason sits beside the words it
+       * is about.
+       *
+       * `panel-in` is the app's fade for a panel whose contents changed, which
+       * is what this is: the slot was empty or held the previous attempt's
+       * notice, and the sheet's height animation carries the difference.
+       */
+      function settle(message, opts) {
+        const n = notice(message, opts)
+        n.classList.add('panel-in')
+        repaint(status, n)
+      }
+
+      /**
+       * One place that knows what the buttons say and when they are off.
        *
        * **Only the button you pressed says anything about being busy.** Both go
        * disabled — one call is in flight and a second would race it — but the
@@ -247,13 +402,24 @@ export function pushDescribe(ctx, { onItems }) {
        * loading at once with no way to tell which was actually doing the work.
        * The busy label is the thing that claims the work, so exactly one button
        * may ever carry it.
+       *
+       * **Send's busy label is no longer a label**, it is `busyLabel` — the
+       * same claim with the sparkle moving in it, painted by `send` rather than
+       * here, because only `send` knows which of the three things it currently
+       * says. What this owns is putting the plain label BACK, which is also
+       * what stops the animations: the busy contents are replaced by a text
+       * node and both `<svg>` elements go with them.
+       *
+       * Make a plate keeps an ordinary busy label. Its work is local and
+       * instant, there is nothing to wait on, and a mark that says "a model is
+       * thinking" would be a lie about a parse that never leaves the device.
        */
       function setBusy(which) {
         const empty = !text.trim()
         readBtn.disabled = empty || working
         sendAllBtn.disabled = empty || working
         readBtn.textContent = which === 'read' ? 'Making your plate…' : 'Make a plate'
-        sendAllBtn.textContent = which === 'send' ? 'Sending…' : 'Send it all to Gemini'
+        if (which !== 'send') sendAllBtn.textContent = 'Send it all to Gemini'
       }
 
       c.setFooter(

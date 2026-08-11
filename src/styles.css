@@ -2940,6 +2940,88 @@
       animation: none;
     }
   }
+
+  /* -------------------------------------------------- the waiting sparkle */
+
+  /**
+   * The mark that says a model is being waited on.
+   *
+   * It is the app's own provenance sparkle rather than a spinner, because the
+   * thing being waited on is the thing the sparkle already means. A generic
+   * spinner would be a second vocabulary for one idea, and this way the mark
+   * you watch during the wait is the mark that ends up on the rows it produces.
+   *
+   * **Opacity and scale only, and nothing that could be read as progress.** No
+   * rotation, no sweep, no arc filling up. We have no idea how far along the
+   * call is, and a shape that travels a fixed path implies we do. Something
+   * breathing in place says "working" and claims nothing else.
+   *
+   * The two stars are two elements on two DIFFERENT PERIODS, not one shape
+   * pulsing and not the same period phase-offset. A shared period reads as an
+   * alternator, a two-stroke pulse with an obvious beat. 1600 and 1250 have a
+   * common multiple of 40s, so the pair does not visibly repeat inside any wait
+   * anyone will sit through, and the two occasionally dim together — which is
+   * the overlap that makes it read as twinkling rather than as taking turns.
+   *
+   * The negative delay starts the small star mid-cycle rather than at rest
+   * alongside the big one. 580 is a little under half of 1250 on purpose; at
+   * exactly half the total ink would be constant, which is its own kind of
+   * static.
+   *
+   * **Bright at 0% and 100%, dim in the middle, and that is load-bearing.** The
+   * blanket rule at the foot of this file forces `duration: 0.01ms` and
+   * `iteration-count: 1` under reduced motion with no `forwards`, so an element
+   * ends on its BASE style. Written this way round the base is the resting
+   * state and reduced motion parks both halves at full strength on its own,
+   * with no rule of their own. Written the other way round it would park at 40%
+   * opacity and look like a rendering fault.
+   *
+   * The origins are each star's own centre in viewBox terms, so each pulses
+   * where it sits. At 50% 50% the small star would be pulled diagonally toward
+   * the middle as it shrank, which reads as drift rather than as a pulse.
+   */
+  @keyframes sparkle-big {
+    0%,
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+    50% {
+      opacity: 0.4;
+      transform: scale(0.86) translateY(1px);
+    }
+  }
+  @keyframes sparkle-small {
+    0%,
+    100% {
+      opacity: 1;
+      transform: none;
+    }
+    50% {
+      opacity: 0.3;
+      transform: scale(0.78) translateY(1px);
+    }
+  }
+
+  /* The box the two halves stack in. 20px to match the icon in `notice`, which
+     is the panel this one swaps places with. */
+  .sparkle-wait {
+    position: relative;
+    width: 20px;
+    height: 20px;
+  }
+  .sparkle-wait > svg {
+    position: absolute;
+    inset: 0;
+  }
+  .sparkle-wait > svg:first-child {
+    transform-origin: 46% 45%;
+    animation: sparkle-big 1600ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .sparkle-wait > svg:last-child {
+    transform-origin: 75% 75%;
+    animation: sparkle-small 1250ms cubic-bezier(0.4, 0, 0.6, 1) -580ms infinite;
+  }
 }
 
 @layer utilities {
