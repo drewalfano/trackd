@@ -135,7 +135,10 @@ export function haptic(pattern = 8) {
   }
 }
 
-const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches
+// Exported because the status strip has to branch on it too, and a second copy
+// of the query string in another file is a place for the two to drift apart.
+export const reduceMotion = () =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
  * Where an element is actually PAINTED right now, mid-animation included.

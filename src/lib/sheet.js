@@ -1,4 +1,4 @@
-import { h, clear, swipeToDismiss } from './dom.js'
+import { h, clear, swipeToDismiss, reduceMotion } from './dom.js'
 import { icon } from './icons.js'
 import { fadeLayers, FADE_RAMP } from './fade.js'
 import { setScrimmed } from './statusBar.js'
@@ -173,6 +173,59 @@ export function openSheet({ title, render, footer = null }) {
   const panels = []
   let closing = false
   let destroyed = false
+
+  /**
+   * The status strip, moved off both ends of the sheet's life — gaps item 10.
+   *
+   * On an installed iOS PWA the band behind the clock is painted by the browser
+   * from `theme-color`. No CSS reaches it and nothing about it can be
+   * transitioned, so the only thing available is WHEN the value is published.
+   * Both ends used to be published at the wrong moment: the scrimmed colour
+   * landed on the frame the scrim was appended, so the strip snapped to its
+   * darkest while the scrim below it had 260ms still to fade, and the canvas
+   * colour landed inside `destroy()` at the 200ms mark, so the strip stayed dark
+   * for the whole exit and then snapped back after the scrim had already gone.
+   * A quarter second of the app looking like two layers composited separately,
+   * at both ends, which is the exact artefact `statusBar.js` exists to close.
+   *
+   * Going in, it is published at the midpoint of `scrim-in` instead of at its
+   * start — where the scrim is closest to matching it. Coming out, at the START
+   * of the exit rather than its end, for the same reason.
+   *
+   * The pair is balanced by `scrimHeld` rather than by trusting the two call
+   * sites to fire once each. `destroy()` is the guaranteed teardown and runs
+   * directly when a new sheet replaces a live one, bypassing the animated close
+   * entirely — so the decrement has to be idempotent and has to be skipped
+   * outright when the sheet closed before the delay had even elapsed. The count
+   * in `statusBar` is shared across sheets and a single unbalanced call leaves
+   * the strip dark for the life of the app.
+   */
+  const SCRIM_TINT_DELAY = 130
+  let scrimTimer = null
+  let scrimHeld = false
+  const holdScrim = () => {
+    // Under reduce there is no fade to meet in the middle: the scrim is opaque
+    // on the first frame, so waiting would show a bright strip over a dark page.
+    if (reduceMotion()) {
+      scrimHeld = true
+      setScrimmed(true)
+      return
+    }
+    scrimTimer = setTimeout(() => {
+      scrimTimer = null
+      scrimHeld = true
+      setScrimmed(true)
+    }, SCRIM_TINT_DELAY)
+  }
+  const releaseScrim = () => {
+    if (scrimTimer) {
+      clearTimeout(scrimTimer)
+      scrimTimer = null
+    }
+    if (!scrimHeld) return
+    scrimHeld = false
+    setScrimmed(false)
+  }
   /** Distinguishes this sheet's history entries from a previous sheet's. */
   const id = Math.random().toString(36).slice(2)
 
@@ -553,7 +606,10 @@ export function openSheet({ title, render, footer = null }) {
        sheet's own teardown timer still fires afterwards. */
     if (destroyed) return
     destroyed = true
-    setScrimmed(false)
+    // Idempotent, and the guaranteed one: the animated close has usually
+    // released this already, but a sheet destroyed outright never went through
+    // it. See `releaseScrim`.
+    releaseScrim()
     for (const entry of panels) runDisposers(entry)
     window.removeEventListener('popstate', onPop)
     document.removeEventListener('keydown', onKey)
@@ -581,6 +637,10 @@ export function openSheet({ title, render, footer = null }) {
     closing = true
     scrim.dataset.closing = 'true'
     panel.dataset.closing = 'true'
+    // At the start of the exit, not in `destroy()` at the end of it, so the
+    // strip clears while the scrim is clearing rather than a frame after it has
+    // gone. See `releaseScrim`.
+    releaseScrim()
     setTimeout(destroy, 200)
     resolveResult(value)
   }
@@ -701,7 +761,7 @@ export function openSheet({ title, render, footer = null }) {
   window.addEventListener('popstate', onPop)
   document.addEventListener('keydown', onKey)
   document.body.appendChild(scrim)
-  setScrimmed(true)
+  holdScrim()
   lockScroll(true)
 
   active = { scrim, destroy, closeAll }
