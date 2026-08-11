@@ -22,6 +22,7 @@ import {
   textInput,
   labelledField,
   notice,
+  rowChevron,
 } from '../lib/ui.js'
 import { round } from '../lib/format.js'
 import { todayStr } from '../lib/dates.js'
@@ -72,7 +73,7 @@ export function prefRow(label, control) {
   return h(
     'div',
     { class: 'row pref-row flex-col items-stretch gap-[10px]' },
-    h('span', { class: 'text-[13px] font-medium' }, label),
+    h('span', { class: 'text-[16px] font-semibold' }, label),
     control
   )
 }
@@ -377,7 +378,7 @@ function openImportSheet(data) {
           h(
             'div',
             { class: 'row' },
-            h('div', { class: 'flex-1 text-[13px] font-medium capitalize' }, store),
+            h('div', { class: 'flex-1 text-[14px] font-semibold capitalize' }, store),
             h(
               'div',
               { class: 'text-right text-[12px] leading-tight text-muted' },
@@ -576,8 +577,8 @@ export function aboutScreen() {
           h(
             'a',
             { class: 'row', href: REPO_URL, target: '_blank', rel: 'noreferrer noopener' },
-            h('span', { class: 'flex-1 text-[13px] font-medium' }, 'Source code'),
-            icon('chevronRight', { size: 18, class: 'text-muted shrink-0' })
+            h('span', { class: 'flex-1 text-[16px] font-semibold' }, 'Source code'),
+            rowChevron()
           )
         ),
 

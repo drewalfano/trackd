@@ -932,16 +932,34 @@
    * the row's relationship to the divider above it does not move. Only the edge
    * facing the card grows. A card holding a single `.row-single` matches both
    * rules and comes out 20 all round, which is what a one-row card should be.
+   *
+   * **Written as a shared base plus two single-property overrides, and the
+   * obvious form was wrong.** It used to be two complete rules — first-child
+   * setting 20/12 and last-child setting 12/20 — on the assumption that a lone
+   * row matching both would take the 20 from each. Rules do not merge like that.
+   * The two selectors have identical specificity, so source order decides and
+   * `:last-child` replaced BOTH of the other's declarations: the one-row card
+   * came out 12 top and 20 bottom, 56px tall, with its label sitting 4px above
+   * the centreline. The sentence above claimed 20 all round for the whole time
+   * it did not.
+   *
+   * Splitting it so each rule owns one edge is what makes the claim true. The
+   * pair below it are correct by the same construction and always were —
+   * `.card > :first-child .row:not(.row-single)` sets only `padding-top`, so it
+   * merges with its `:last-child` partner the way this now does.
    */
-  .card > .row-single:first-child {
-    height: auto;
-    padding-top: 20px;
-    padding-bottom: 12px;
-  }
-
+  .card > .row-single:first-child,
   .card > .row-single:last-child {
     height: auto;
     padding-top: 12px;
+    padding-bottom: 12px;
+  }
+
+  .card > .row-single:first-child {
+    padding-top: 20px;
+  }
+
+  .card > .row-single:last-child {
     padding-bottom: 20px;
   }
 
@@ -970,8 +988,8 @@
    * A stacked label-and-control row, whose two sides of a divider are not the
    * same kind of edge.
    *
-   * BELOW a divider sits a 13px label in a 19.5px line box: 10px of padding,
-   * then 3.25px of half-leading, then the glyphs. The gap reads as 14.
+   * BELOW a divider sits a 16px label in a 24px line box: 10px of padding,
+   * then 4px of half-leading, then the glyphs. The gap reads as 14.
    *
    * ABOVE it sits a filled segmented track, which puts real ink exactly where
    * its box ends. The same 10px of padding reads as 10.
@@ -979,6 +997,12 @@
    * So a metrically perfect 10/10 looks like 10 above and 14 below, and the
    * only way to make them match is to stop matching the numbers. Four pixels
    * back, and the grid keeps its 10 everywhere the eye can actually check it.
+   *
+   * The label was 13px when this was written and the half-leading was 3.25, so
+   * the 14 was a rounding of 13.25. At the 16 it now carries — see `prefRow`,
+   * which was brought onto `valueRow`'s step so the two kinds of label in one
+   * Settings card stop disagreeing — the arithmetic comes out at exactly 14.
+   * The number did not need to change, which is the good kind of surprise.
    *
    * Loses to the card's own last-child inset by specificity, on purpose — a
    * `.pref-row` at the bottom of a card still takes the full 20.
@@ -1251,9 +1275,23 @@
    * on the right end of the bar and the track's rounded cap clips it — which is
    * why it needs no radius of its own.
    *
-   * The type and padding are `.chip-over`'s exactly — 11px semibold, 7px each
+   * The type and padding are `.chip-over`'s exactly — 12px semibold, 7px each
    * side — because it is the same statement about the same number, and the bar
    * was made 18px tall precisely so it could hold it at that size.
+   *
+   * **All three overage marks are now one size, and until v1.2.2 they were not.**
+   * The claim above has been in this file since the mark was built, and it was
+   * only ever two thirds true: `.chip-over` and `.kbar-over` were 11px while
+   * `.bar-over` — the same white-on-edge statement, drawn inside the Log sheet's
+   * fat bars — was 12. `+283` was therefore one size beside a thin bar and on the
+   * calorie bar, and another size inside a fat one, which is the exact thing this
+   * comment claimed it was not.
+   *
+   * 11px was also the app's most-collided size, shipping at three different
+   * weights across four files. Moving these two to 12 settles both: the mark
+   * means one thing at one size wherever it is drawn, and 11 leaves the system.
+   * 12 in an 18px pill at `line-height: 1` clears 3px either side, so the height
+   * the bar was built to hold did not have to move.
    *
    * **Rounded on the leading edge only.** The trailing edge needs no radius —
    * the track's own cap and `overflow: hidden` shape it — but the leading edge
@@ -1271,7 +1309,7 @@
     border-radius: 999px 0 0 999px;
     background: var(--color-kcal-edge);
     color: #fff;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     line-height: 1;
   }
@@ -1303,7 +1341,7 @@
     height: 30px;
     padding: 0 14px;
     border-radius: 999px;
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 600;
     background: transparent;
     border: 1px solid var(--color-ink);
@@ -1437,6 +1475,10 @@
    * for exactly this — `npm test` asserts 4.5:1 on all four edges. Deliberately
    * the same white-on-edge as `.bar-over`, so "past the target" reads as one
    * idea whether it is drawn inside a fat bar or beside a thin one.
+   *
+   * 12px, which is `.bar-over`'s size and no longer a size of its own — see the
+   * note on `.kbar-over` for why the three overage marks were three sizes while
+   * claiming to be one, and what moving off 11 settled.
    */
   .chip-over {
     display: inline-flex;
@@ -1446,7 +1488,7 @@
     padding: 0 7px;
     border-radius: 999px;
     color: #fff;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     line-height: 1;
   }
@@ -1536,7 +1578,7 @@
     max-width: 44px;
     margin-inline: auto;
     border-radius: 999px;
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 500;
     color: var(--color-ink);
     transition:
@@ -1557,7 +1599,7 @@
   .cal-day[aria-pressed='true'] {
     background: var(--color-ink);
     color: var(--color-canvas);
-    font-weight: 700;
+    font-weight: 600;
   }
 
   /* Same 0.3 the icon buttons and the primary button use, so "unavailable"
@@ -1779,10 +1821,16 @@
    * Numbers left, `+` right, both bottom.
    *
    * `flex-end`, not `center`. Centring lines up the two boxes' middles, and the
-   * two boxes are 15px and 32px tall — so the number floated above the button's
+   * two boxes are 18px and 32px tall — so the number floated above the button's
    * midline with nothing under it to explain why. Sitting them on a shared
    * bottom edge gives the row one line to be read along, which is the line the
    * card's bottom padding already draws.
+   *
+   * **That shared edge is the BOXES, and the ink needed 5px of help to reach
+   * it.** A figure has no descenders, so its baseline sits 5px above the bottom
+   * of an 18px line box and the number hung clear of a circle it was meant to
+   * sit beside. The correction is on the number in `foodTile.js`, where the
+   * measurement is written down; this rule is what it corrects against.
    *
    * 32 rather than the 38 a `.icon-btn-sm` draws elsewhere: this one sits
    * beside an 11px number on a 150px card rather than beside 16px type on a
@@ -2233,7 +2281,7 @@
     min-height: 48px;
     width: auto;
     padding-inline: 22px;
-    font-size: 15px;
+    font-size: 16px;
   }
 
   /* Single-line input row: 48px tall, 24px radius, so it reads as a pill. */
@@ -2673,6 +2721,27 @@
   }
 
   /**
+   * The one string in the app that is a name rather than type.
+   *
+   * **800, where everything else is 400, 500 or 600.** It is a deliberate
+   * exception and it is a class rather than a `font-extrabold` utility for
+   * exactly that reason: an exception that has a name can be counted, and a
+   * loose utility on one element is indistinguishable from a mistake.
+   *
+   * The rule it breaks was worth breaking once. The wordmark appears on one
+   * screen, once, at the display step, with nothing else on the screen to
+   * compete with — and at 600 it is character-for-character the class list the
+   * calorie hero on Today already wears, so the app's name and a number would
+   * be set identically. The weight is the only thing separating them.
+   *
+   * Nothing else may use this. If a second caller ever appears, the honest move
+   * is to promote 800 into the scale rather than to spread the exception.
+   */
+  .wordmark {
+    font-weight: 800;
+  }
+
+  /**
    * The welcome screen's bubble field.
    *
    * The first screen was a title and two paragraphs on an empty ground, and it
@@ -2780,7 +2849,7 @@
     margin-right: 8px;
     flex: none;
     border-radius: 999px;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 600;
     white-space: nowrap;
     background: var(--color-kcal);
@@ -2856,6 +2925,71 @@
     inset-inline: 0;
     top: 0;
     height: var(--screen-h);
+  }
+
+  /**
+   * A 44pt touch target on a control that is drawn smaller.
+   *
+   * `.icon-btn-sm` invented this — a 38px circle with a 44px pseudo-element over
+   * it — and the argument there is the general one: the drawn size and the
+   * touched size are answering different questions. How big it should LOOK is a
+   * composition decision against the type beside it. 44 is a fact about thumbs.
+   * Collapsing the two means one of the questions gets the other's answer.
+   *
+   * Generalised here because `.icon-btn-sm` is not the only control under 44,
+   * and hardcoding a second 44 next to a second fixed diameter would be the same
+   * mistake written twice.
+   *
+   * `max(100%, 44px)` rather than a flat 44, so this is safe to put on anything.
+   * On a control already bigger than 44 the pseudo matches the element and
+   * changes nothing; on a smaller one it grows to 44 around the same centre.
+   * A flat 44 would have SHRUNK the reachable area of a wide control — the full-
+   * width button on a toast is 295px across, and a 44px box in the middle of it
+   * would be a worse target than the button itself.
+   *
+   * Absolutely positioned, so nothing in the layout moves. The element needs a
+   * containing block, which is what `position: relative` here provides.
+   *
+   * The caller still has to check the expansion does not overlap a neighbour —
+   * two of these 6px apart would have targets that meet in the middle, and the
+   * tap would go to whichever paints last rather than to whichever was meant.
+   *
+   * **The three component classes take it by selector rather than by class list.**
+   * `.chip-sm` alone has eighteen call sites, and putting `tap-44` on every one
+   * would spread a decision that belongs to the control across the files that
+   * happen to use it. Joining the selector keeps one definition and one place to
+   * change it. The plate's two bar buttons are inline Tailwind with no class of
+   * their own, so those DO wear it in their class list — that is the exception
+   * and it is why the utility still exists separately.
+   *
+   * What each one gains, measured at 375pt: `.chip-sm` 30 → 44 tall, `.segment`
+   * 40 → 44, `.switch` 31 → 44. None of them grows horizontally, because all
+   * three are already wider than 44 and `max(100%, 44px)` leaves that axis alone
+   * — which is the whole reason this is safe to apply so broadly. Every
+   * adjacency in this app is horizontal: segments sit 4px apart, the plate's two
+   * buttons 10px, the label-photo chips 10px. None of those gaps is touched.
+   *
+   * It was written for the toast's dismiss circle, which has since gone to 44
+   * drawn and no longer needs it. That is the better outcome where the drawn size
+   * can afford to be 44; this is for the controls where it cannot.
+   */
+  .tap-44,
+  .chip-sm,
+  .segment,
+  .switch {
+    position: relative;
+  }
+  .tap-44::after,
+  .chip-sm::after,
+  .segment::after,
+  .switch::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
   }
 
   .safe-b {

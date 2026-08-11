@@ -82,7 +82,7 @@ export function servingPanel({
         initial.block ?? blockForTime(new Date(), settings.blockThresholds)
       let date = initial.date ?? todayStr()
 
-      const kcalEl = h('span', { class: 'text-[30px] font-semibold leading-none' })
+      const kcalEl = h('span', { class: 'text-title font-semibold leading-none' })
       const macrosEl = h('div')
 
       const repaintPreview = () => {

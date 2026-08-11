@@ -168,13 +168,13 @@ function totalsLine(totals) {
     },
     /**
      * The wrapper is what sets the line box, not `macroLine`, which takes a
-     * size and leaves leading alone. 20 rather than the 22.5 a 15px line would
+     * size and leaves leading alone. 20 rather than the 21 a 14px line would
      * default to, so the pinned slot is 10 + 20 + 10 = the 40 it is meant to
      * cost — and `tnum` here rather than on the row below it, because this
      * number is re-rendered under the eye every time an entry lands and a
      * proportional `1` would shuffle the whole line sideways.
      */
-    h('div', { class: 'tnum pb-[10px] leading-[20px]' }, macroLine(totals, { size: 15 }))
+    h('div', { class: 'tnum pb-[10px] leading-[20px]' }, macroLine(totals, { size: 14 }))
   )
 }
 

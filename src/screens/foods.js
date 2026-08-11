@@ -322,7 +322,7 @@ export function foodDetailScreen(id) {
             { class: 'min-w-0 flex-1' },
             h('h1', { class: 'text-title font-semibold leading-tight' }, food.name),
             food.brand ? h('p', { class: 'text-[12px] text-muted' }, food.brand) : null,
-            h('div', { class: 'mt-[4px]' }, macroLine(computeMacros(food, 1, 'serving'), { size: 13 }))
+            h('div', { class: 'mt-[4px]' }, macroLine(computeMacros(food, 1, 'serving'), { size: 12 }))
           ),
           h(
             'button',

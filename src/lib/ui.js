@@ -540,8 +540,40 @@ export function listRow({ title, subtitle, right, onclick, chevron = false, lead
       subtitle ? h('div', { class: 'truncate text-[12px] text-muted' }, subtitle) : null
     ),
     right || null,
-    chevron ? icon('chevronRight', { size: 20, class: 'text-muted shrink-0' }) : null
+    chevron ? rowChevron() : null
   )
+}
+
+/**
+ * The disclosure chevron at the end of a row, with its optical correction.
+ *
+ * **Pulled 7px into the row's own right padding, so the INK lands on the inset
+ * rather than the box.** A chevron is 7 units wide in a 24 box, so at `size: 20`
+ * it carries about 7px of empty bearing on each flank. The svg's right edge sat
+ * exactly on `.row`'s 20px padding, which put the visible glyph 26.7px from the
+ * card against a label whose ink starts at 20 — the row read as inset further on
+ * the right than the left, which is what it was. Measured at 20.1 now.
+ *
+ * Optical, not metrical: the box deliberately overhangs the padding. Same
+ * correction `.back-btn` makes with its 14/18 padding, for the same reason — a
+ * glyph's box is not where the glyph is.
+ *
+ * **A function rather than a line inside `listRow`, because three rows in this
+ * app are hand-rolled and cannot use `listRow`.** The Source code row is an
+ * `<a href>`, History's day row carries three rings and a figure before its
+ * chevron, and the weigh-in row is a swipe target — none of them fit the
+ * component, and all three drew their own chevron without the correction. A
+ * correction that lives inside one caller is one the other three will keep not
+ * getting.
+ *
+ * No size parameter. It was 20 in three places and 16 in History's row, which is
+ * a disclosure affordance meaning the same thing at two sizes; the dense row is
+ * an argument for taking something off that row, not for shrinking the one mark
+ * that says it opens. The 4px comes out of a `min-w-0 truncate` title, so it
+ * costs a slightly earlier ellipsis and nothing else.
+ */
+export function rowChevron() {
+  return icon('chevronRight', { size: 20, class: '-mr-[7px] shrink-0 text-muted' })
 }
 
 /** Ids for label association. Monotonic, since a rebuild makes new elements. */
@@ -1053,14 +1085,34 @@ export function blockSelector({ value, onChange, blockNames }) {
 export function notice(text, { iconName = 'info', action, onAction } = {}) {
   return h(
     'div',
-    /* Same box as a `.row` — 10/20 inset, 48 minimum — so a notice sitting
-       above a card lines up with the rows inside it. The 15 it used to carry
-       hit the same height by a number the app uses nowhere else. */
-    { class: 'panel flex min-h-[48px] items-start gap-[10px] px-[20px] py-[10px]' },
+    /**
+     * 20 all round, which is the inset every other container in this app takes
+     * — the day card, a card's own top and bottom rows, the sheet gutters.
+     *
+     * It was `min-h-[48px]` with `px-20 py-10`, on the argument that a notice
+     * should be the same box as a `.row` so it lines up with the rows in the
+     * card beneath it. Two things were wrong with that. It does not line up: a
+     * notice carries an icon, so its text starts 50px from the panel edge
+     * against a row's 20, and the only thing the 48 ever matched was height.
+     * And the pair fought each other — `min-height` held a short notice open at
+     * 48 while `items-start` pinned the words to the top, so one line sat with
+     * **10 above and 18.8 below**, while three lines sat at 10 and 10 against
+     * sides of 20. The vertical inset was not merely small, it CHANGED with the
+     * length of the sentence, and was tightest exactly when the box was fullest.
+     *
+     * One number in all four directions cannot do that. `min-height` goes with
+     * it as redundant: 20 + content + 20 clears 48 on its own.
+     *
+     * A single-line notice still comes out about 1.8px deeper below than above.
+     * That is the icon — 20px plus a 1px optical nudge, against a 19.25px line
+     * box — and it is left alone on purpose. Pinning the text to the icon's
+     * height would fix one line and break every wrapped one.
+     */
+    { class: 'panel flex items-start gap-[10px] p-[20px]' },
     icon(iconName, { size: 20, class: 'mt-px shrink-0 text-muted' }),
     h(
       'div',
-      { class: 'flex-1 text-[13px] leading-snug' },
+      { class: 'flex-1 text-[14px] leading-snug' },
       text,
       action
         ? h(
@@ -1073,10 +1125,10 @@ export function notice(text, { iconName = 'info', action, onAction } = {}) {
   )
 }
 
-export function spinner(label = 'Loading') {
-  return h(
-    'div',
-    { class: 'flex items-center justify-center py-[40px] text-[14px] text-muted' },
-    label + '…'
-  )
-}
+/* `spinner()` was removed in v1.2.3. It had no callers and never had — the app
+   is local-first and the two places that do wait on something (the barcode
+   lookup, the Gemini call) draw their own stage with the thing being waited on
+   named in it, which is more use than the word "Loading". Its `py-[40px]` was
+   the only 40 in the app and the third of three different paddings for a
+   centred "nothing here" block; deleting it left `emptyState`'s 50 as the
+   single value for that job. */

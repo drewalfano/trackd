@@ -807,11 +807,10 @@ export async function createOnboarding({ preview = false, onDone } = {}) {
     return h(
       'div',
       { class: 'mx-auto flex min-h-full max-w-[430px] flex-col justify-center gap-[20px] pb-[20px]' },
-      // 800, where the whole app is 600. This is the only wordmark it has, at
-      // the only size it ever gets, on the one screen with nothing to compete
-      // with — the weight is what makes it read as a name rather than as a
-      // heading that happens to be large.
-      h('h1', { class: 'text-display font-extrabold leading-none' }, 'Trackd'),
+      // `.wordmark` rather than `font-extrabold`. Same 800, named — see the
+      // rule in styles.css for why this one string is allowed to sit outside
+      // the 400/500/600 the rest of the app is set in.
+      h('h1', { class: 'wordmark text-display leading-none' }, 'Trackd'),
       h(
         'p',
         { class: 'text-[16px] leading-snug' },

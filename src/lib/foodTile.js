@@ -70,10 +70,34 @@ export function foodTile({
     h(
       'div',
       { class: 'food-tile-action relative' },
+      /**
+       * Nudged 5px down, so the DIGITS sit on the button's bottom edge rather
+       * than their box doing.
+       *
+       * `.food-tile-action` is `align-items: flex-end`, which lines up the two
+       * boxes exactly — measured, the number's box bottom and the circle's are
+       * the same pixel. The ink is not: at 12px in an 18px line box the baseline
+       * sits 5px above the box's bottom, and a figure has no descenders to fill
+       * that space, so the number floated 5px clear of a circle it was supposed
+       * to share a line with. Both this file and the CSS claimed a shared
+       * baseline; both were describing the boxes.
+       *
+       * `align-items: baseline` was tried first and is worse — 7.5px. A flex
+       * container with no text synthesizes its baseline, and a 32px circle
+       * holding one svg does not synthesize it at its bottom edge.
+       *
+       * So it is a measured offset, like `estimateBadge`'s `top-[2px]`. It is
+       * `relative` rather than a margin because the descender space that now
+       * hangs below the card's content is empty and should not push the tile:
+       * height is unchanged at 97.
+       *
+       * The 5 is tied to `size: 12` and this line-height. Change either and
+       * re-measure — the residual is `buttonBottom - digitBaseline`.
+       */
       h(
         'div',
-        { class: 'pointer-events-none min-w-0' },
-        macroLine(totals, { size: 11, omit: ['protein', 'fat', 'carbs'] })
+        { class: 'pointer-events-none relative top-[5px] min-w-0' },
+        macroLine(totals, { size: 12, omit: ['protein', 'fat', 'carbs'] })
       ),
       h(
         'button',

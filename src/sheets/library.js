@@ -44,7 +44,7 @@ export function favouritesSheet() {
               h(
                 'div',
                 { class: 'min-w-0 flex-1' },
-                h('div', { class: 'truncate text-[13px] font-medium' }, item.name),
+                h('div', { class: 'truncate text-[14px] font-semibold' }, item.name),
                 h(
                   'div',
                   { class: 'text-[12px] text-muted' },
@@ -132,7 +132,7 @@ export function mealsSheet() {
                     h(
                       'div',
                       { class: 'min-w-0 flex-1' },
-                      h('div', { class: 'truncate text-[13px] font-medium' }, meal.name),
+                      h('div', { class: 'truncate text-[14px] font-semibold' }, meal.name),
                       h(
                         'div',
                         { class: 'text-[12px] text-muted' },

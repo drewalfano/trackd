@@ -27,10 +27,40 @@ import { notice, slot } from '../lib/ui.js'
  * you wrote, not typing it again.
  */
 
-/** A `.field`, but tall and multi-line. The only input in the app that is. */
+/**
+ * The one multi-line input in the app, and it is a PANEL with a textarea in it
+ * rather than a tall `.field`.
+ *
+ * `.field` is a capsule. That is not a description of how it looks, it is what
+ * the class is: 48px tall with a 24px radius, so the corner is exactly half the
+ * height and the box comes out a true pill. Every one of the app's other inputs
+ * is that shape. This one is a five-row textarea at **138px**, and it wore
+ * `.field` anyway — same 24px corner on a box nearly three times the height, so
+ * the radius came out 17% of it. A pill here would need a 69px corner. It was
+ * the only `.field` in the app that was not a capsule, and nothing said so.
+ *
+ * `.panel` is the same fill and the same 24px radius, so **the rendered box does
+ * not change by a pixel**. What changes is that the object is now named for what
+ * it is. A tall rounded box is a container, and 24 is the container radius — the
+ * corner is correct here for the reason it was wrong on `.field`. The control is
+ * the textarea inside it, not the box around it.
+ *
+ * The app already makes this move in the other direction: `numberInput({ bare:
+ * true })` drops the pill when the row's card is already the container, because
+ * "a `.field` inside one draws a second box around the first". Same principle,
+ * applied to the one input that outgrew the pill.
+ *
+ * The fill is load-bearing and is preserved — see the note on the render below:
+ * this is the only thing on the screen with one, which is what makes it the only
+ * thing to look at.
+ */
 function describeField({ value, placeholder, onInput }) {
   const input = h('textarea', {
-    class: 'w-full min-w-0 resize-none bg-transparent text-[16px] font-medium leading-snug',
+    // `block`, because the wrapper is no longer a flex container. A textarea is
+    // `inline-block` by default, so in a block box it sits on a line and takes
+    // the line-height's descender space under it — 7px of dead air the old
+    // `.field` was suppressing by being flex rather than by intent.
+    class: 'block w-full min-w-0 resize-none bg-transparent text-[16px] font-medium leading-snug',
     rows: '5',
     placeholder,
     autocapitalize: 'sentences',
@@ -39,7 +69,7 @@ function describeField({ value, placeholder, onInput }) {
     oninput: (e) => onInput?.(e.target.value, e),
   })
   input.value = value ?? ''
-  const wrapper = h('div', { class: 'field items-start py-[14px]' }, input)
+  const wrapper = h('div', { class: 'panel px-[20px] py-[14px]' }, input)
   wrapper.input = input
   return wrapper
 }

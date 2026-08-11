@@ -1,5 +1,4 @@
 import { h, s } from '../lib/dom.js'
-import { icon } from '../lib/icons.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listWeights,
@@ -37,6 +36,7 @@ import {
   macroColor,
   macroTextColor,
   macroUnit,
+  rowChevron,
 } from '../lib/ui.js'
 import { kgToUnit, unitToKg, weight as fmtWeight, signed, kcal, g } from '../lib/format.js'
 import { formatDayLabel, formatDayAge, todayStr, addDays, daysBetween } from '../lib/dates.js'
@@ -267,6 +267,32 @@ function macroTicks(totals, targets) {
           title: `${g(totals[macro])} / ${g(targets[macro])} ${macro}`,
         },
         miniRing(macro, totals[macro], targets[macro]),
+        /**
+         * 9px, and it is the app's one deliberate exception to the type scale.
+         *
+         * The scale is 48/26/20/16/14/12 and everything else was collapsed onto
+         * it in v1.2.2. This was looked at in the same pass and kept, so the
+         * reasoning lives here rather than being rediscovered and re-flagged
+         * every time someone greps for off-scale sizes.
+         *
+         * **It annotates a 20px ring.** At the nearest scale step the letter
+         * would be 12px against a 20px diameter — 60% of the mark it labels —
+         * so the annotation would out-measure the thing annotated. A label that
+         * large stops reading as a key to the ring and starts competing with it.
+         *
+         * **The row it sits in has no room.** Three rings, three letters, a
+         * figure, a unit and a chevron already put this row at its limit, which
+         * is why the calories bar that was tried here was removed rather than
+         * fitted. 12px would take each tick stack from 32 to 35 and add 3px to
+         * every row in the history list, to make a letter legible that is
+         * already `aria-hidden` and duplicated by the group's `title`.
+         *
+         * The letter is not load-bearing: the hue carries macro identity, which
+         * is the app's rule, and the accessible reading comes from `title`. It
+         * is a key for the eye, and a key is allowed to be smaller than what it
+         * keys. That is the whole argument for the exception — not that 12 does
+         * not fit, but that it would be worse.
+         */
         h(
           'span',
           {
@@ -454,7 +480,7 @@ function dayRow(day, targets) {
           ]
         : h('span', { class: 'text-muted' }, '—'),
     ),
-    icon('chevronRight', { size: 16, class: 'shrink-0 text-muted' }),
+    rowChevron(),
   )
 }
 
@@ -817,10 +843,32 @@ export function trendsScreen() {
                   ),
                 ),
 
+                /**
+                 * The placeholder holds the chart's BOX, not a padding.
+                 *
+                 * It was `py-[30px]`, which made it 96px tall against the 130
+                 * the chart occupies at 375pt — so the card jumped 34px the
+                 * moment a second weigh-in landed and the chart appeared. A
+                 * card that reshuffles as data crosses a threshold is the same
+                 * fault the Trend column above it already guards against with
+                 * its held empty line box; this is that argument applied to the
+                 * larger of the two holes.
+                 *
+                 * `aspect-ratio` off the chart's own constants rather than a
+                 * measured height, because the svg is `w-full` on a fixed
+                 * viewBox — its rendered height is always width × 150/340, so a
+                 * fixed number would only be right at one screen width. This
+                 * way the two boxes are the same box everywhere, and the number
+                 * cannot drift from the chart it is standing in for.
+                 */
                 chartNode ||
                   h(
                     'div',
-                    { class: 'py-[30px] text-center text-[12px] text-muted' },
+                    {
+                      class:
+                        'flex items-center justify-center text-center text-[12px] text-muted',
+                      style: { aspectRatio: `${CHART_W} / ${CHART_H}` },
+                    },
                     'Two readings are needed before there is anything to draw.',
                   ),
 

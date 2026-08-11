@@ -188,7 +188,7 @@ function tabBar() {
         },
       },
       icon(tab.iconName, { size: 22 }),
-      h('span', { class: 'text-[11px] font-bold' }, tab.label)
+      h('span', { class: 'text-[12px] font-semibold' }, tab.label)
     )
   )
 
@@ -486,16 +486,16 @@ function renderStorageBlocked() {
         },
       },
       icon('alert', { size: 28, class: 'text-muted' }),
-      h('h1', { class: 'text-[22px] font-bold' }, 'Storage is unavailable'),
+      h('h1', { class: 'text-title font-semibold' }, 'Storage is unavailable'),
       h(
         'p',
-        { class: 'text-[15px] leading-snug text-muted' },
+        { class: 'text-[14px] leading-snug text-muted' },
         'Trackd keeps everything on this device, so it needs local storage to run. ' +
           'This usually means private browsing is on, or site data is blocked for this page.'
       ),
       h(
         'p',
-        { class: 'text-[15px] leading-snug text-muted' },
+        { class: 'text-[14px] leading-snug text-muted' },
         'Open the app in a normal window, or allow site data, then reload.'
       ),
       h('button', { class: 'btn-primary mt-2', onclick: () => location.reload() }, 'Reload')

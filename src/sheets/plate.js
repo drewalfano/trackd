@@ -416,7 +416,7 @@ export function platePanel({ plate, rows, settings, onChange, onCommitted }) {
                 { class: 'flex items-baseline gap-[10px]' },
                 h(
                   'span',
-                  { class: 'tnum text-[30px] font-semibold leading-none' },
+                  { class: 'tnum text-title font-semibold leading-none' },
                   String(Math.round(totals.kcal))
                 ),
                 macroUnit('kcal', 'text-[12px] font-medium')
@@ -825,7 +825,7 @@ export function plateBar({ rows, onOpen, onLog }) {
     h(
       'button',
       {
-        class: 'min-w-0 flex-1 text-left text-[14px] font-semibold leading-tight',
+        class: 'tap-44 min-w-0 flex-1 text-left text-[14px] font-semibold leading-tight',
         onclick: onOpen,
         'aria-label': 'Open your plate',
       },
@@ -834,7 +834,8 @@ export function plateBar({ rows, onOpen, onLog }) {
     h(
       'button',
       {
-        class: 'shrink-0 rounded-[999px] bg-canvas px-[20px] py-[10px] text-[13px] font-semibold text-ink',
+        class:
+          'tap-44 shrink-0 rounded-[999px] bg-canvas px-[20px] py-[10px] text-[14px] font-semibold text-ink',
         onclick: unfinished ? onOpen : onLog,
       },
       /**

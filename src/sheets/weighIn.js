@@ -1,5 +1,4 @@
 import { h, repaint } from '../lib/dom.js'
-import { icon } from '../lib/icons.js'
 import { openSheet } from '../lib/sheet.js'
 import { toast, confirm } from '../lib/toast.js'
 import {
@@ -10,7 +9,17 @@ import {
   getSettings,
   onChange,
 } from '../lib/db.js'
-import { card, dateInput, numberInput, labelledField, notice, slot, tnum, emptyRow } from '../lib/ui.js'
+import {
+  card,
+  dateInput,
+  numberInput,
+  labelledField,
+  notice,
+  slot,
+  tnum,
+  emptyRow,
+  rowChevron,
+} from '../lib/ui.js'
 import { kgToUnit, unitToKg, weight as fmtWeight } from '../lib/format.js'
 import { dayPhrase, formatDayLabel, todayStr } from '../lib/dates.js'
 
@@ -199,7 +208,7 @@ export async function openWeighInSheet() {
                         tnum(fmtWeight(w.kg, unit)),
                         h('span', { class: 'ml-[4px] text-[12px] text-muted' }, unit)
                       ),
-                      icon('chevronRight', { size: 20, class: 'shrink-0 text-muted' })
+                      rowChevron()
                     )
                   )
               : emptyRow('No weigh-ins yet')

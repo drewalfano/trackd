@@ -125,7 +125,7 @@ export function mealPanel({
           h(
             'div',
             { class: 'flex items-baseline gap-[10px]' },
-            h('span', { class: 'text-[30px] font-semibold leading-none' }, String(Math.round(totals.kcal))),
+            h('span', { class: 'text-title font-semibold leading-none' }, String(Math.round(totals.kcal))),
             macroUnit('kcal', 'text-[12px] font-medium')
           ),
           macroLine(totals, { size: 14, omit: ['kcal'] })

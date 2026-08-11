@@ -590,8 +590,8 @@ export function macroRing({
       class: `reading${swapping ? ' reading-swap' : ''} absolute inset-0 flex flex-col items-center justify-center leading-none`,
       style: { color: empty ? 'var(--color-ink)' : colour },
     },
-    h('div', { class: 'tnum text-[15px] font-semibold' }, ...digits(big)),
-    h('div', { class: 'tnum mt-[3px] text-[11px] font-medium text-muted' }, ...digits(small))
+    h('div', { class: 'tnum text-[16px] font-semibold' }, ...digits(big)),
+    h('div', { class: 'tnum mt-[3px] text-[12px] font-medium text-muted' }, ...digits(small))
   )
 
   // Named for what it is rather than `gap`, which in this file now means the

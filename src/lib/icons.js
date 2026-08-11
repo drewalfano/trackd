@@ -65,8 +65,28 @@ export const FILLED = {
 }
 
 const P = {
-  chevronLeft: '<path d="M15 5l-7 7 7 7"/>',
-  chevronRight: '<path d="M9 5l7 7-7 7"/>',
+  /**
+   * The four chevrons, centred in the 24 box. Two of them were not.
+   *
+   * `chevronLeft` spanned x 8–15 and `chevronRight` x 9–16, so each sat half a
+   * unit off the box's own centre — and, being mirror images drawn from
+   * different start points, they were off in OPPOSITE directions. The pair at
+   * the top of Today are the visible case: two 44px circles either side of the
+   * day title, their glyphs leaning apart by a combined 0.83px at `size: 20`.
+   * Small, and exactly the kind of thing that reads as "slightly wrong" without
+   * being nameable.
+   *
+   * Both now span 8.5–15.5, centre 12. The vertical pair were already centred
+   * (5–19 about 12) and are unchanged; they are here for the symmetry of having
+   * the set written the same way.
+   *
+   * Note this does NOT close the gap between a trailing chevron's ink and a
+   * row's right inset — the glyph is 7 units wide in a 24 box, so it carries
+   * about 7px of bearing at `size: 20` whatever its position. That is handled
+   * where the chevron is placed; see `listRow` in lib/ui.js.
+   */
+  chevronLeft: '<path d="M15.5 5l-7 7 7 7"/>',
+  chevronRight: '<path d="M8.5 5l7 7-7 7"/>',
   chevronDown: '<path d="M5 9l7 7 7-7"/>',
   chevronUp: '<path d="M19 15l-7-7-7 7"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
