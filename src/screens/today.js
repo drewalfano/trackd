@@ -1,4 +1,4 @@
-import { h, repaint, countTo, haptic, swipePages, pressable } from '../lib/dom.js'
+import { h, repaint, countTo, setTabularText, haptic, swipePages, pressable } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listEntries,
@@ -177,15 +177,6 @@ function seedMode(settings) {
 }
 
 /**
- * Count up from wherever the number last was, so logging one more thing ticks
- * 2255 → 2504 rather than restarting from zero.
- *
- * This tracks what was last DRAWN rather than what was last eaten, so a toggle
- * counts across the gap too — 1105 running up to 1732 rather than appearing.
- */
-let lastKcal = 0
-
-/**
  * Which entries were not on screen a moment ago, so a new row can arrive rather
  * than appear.
  *
@@ -282,112 +273,36 @@ function freshEntryIds(date, entries) {
   return fresh
 }
 
-/**
- * Where the calorie bar was last drawn, so it resumes instead of replaying.
- *
- * The one mark on this card that had no memory. The number had `lastKcal` and
- * the rings had `lastLen`, and both go to real trouble to avoid moving when the
- * question changed rather than the data — while the bar underneath them wiped
- * from empty to full on every single repaint, including a mode toggle, a day
- * change, and any unrelated rebuild. It is the same argument `lastPct` makes for
- * `progressBar` in lib/ui.js, applied to the one bar that never got it.
- *
- * Live card only. A neighbour that wrote here would leave its own fill behind as
- * the next card's starting point, which is the mistake `lastKcal` documents.
- */
-let lastKbarPct = null
 
-function calorieBlock({
-  value,
-  target,
-  mode,
-  live = true,
-  control = null,
-  swapping = false,
-  animate = true,
-}) {
-  const { pct, over } = progress(value, target)
-  // Round the operands, then difference — same rule the rings use.
-  const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
-  const remainingMode = mode === 'remaining'
-  const shown = remainingMode ? Math.abs(diff) : value
-
+function calorieBlock({ live = true }) {
+  /**
+   * Built once, then written to. The four marks that move — the number, its
+   * qualifier, the bar and the overage chip — are the same elements for the life
+   * of the card, so each one remembers where it was last drawn and there is no
+   * module-scoped memory to keep in step with it.
+   *
+   * `lastKcal` and `lastKbarPct` are gone with this. Both existed to carry a
+   * value across a rebuild that no longer happens, and both carried a hazard
+   * with them: only the LIVE card was allowed to write, because a neighbour that
+   * did would leave its own total behind as the next card's starting point. Per
+   * element, that cannot arise — each card remembers itself.
+   *
+   * What does NOT come for free is the two suppressions those memories also
+   * carried, and they are the reason this is not simply a deletion. See `update`.
+   */
   const number = h('span', { class: 'tnum text-display font-semibold' })
-  // Only the live card writes to the shared memory. A neighbour that counted
-  // would leave its own total behind as the next card's starting point, so
-  // paging would tick from yesterday's calories rather than from what the
-  // number on screen actually said.
-  /**
-   * A mode switch does not count.
-   *
-   * The count-up was deliberately built to run across a toggle — the note above
-   * `lastKcal` says so, "1105 running up to 1732 rather than appearing" — and
-   * that was the wrong call. **Counting means the number changed.** On a toggle
-   * the number did not change; the question did. 3366 winding down to 1236
-   * asserts that a thousand calories left the day, and the eye reads a count as
-   * new data arriving, so it lands as the card glitching rather than as the
-   * card answering.
-   *
-   * Seeding `from` with the destination makes `countTo` write it outright, so
-   * the swap is a swap. It still counts for everything that IS a data change:
-   * logging, editing, deleting.
-   *
-   * **A DAY change is the same category, and was the louder bug of the two.**
-   * `lastKcal` survives the rebuild, so paging to yesterday made the hero count
-   * from today's total down to yesterday's — asserting that a thousand calories
-   * had just left a day you were not even looking at when it happened. And it
-   * arrived after the deck had already finished sliding, so the card came to
-   * rest and then kept moving. That is most of what made changing day feel long.
-   *
-   * `animate` is false whenever the day moved, so this takes the same route the
-   * toggle does and the number is simply written.
-   */
-  const instant = swapping || !animate
-  number.dataset.value = String(instant ? shown : live ? lastKcal : shown)
-  if (live) lastKcal = shown
-  countTo(number, shown, { format: (n) => kcal(n) })
-
-  /**
-   * The overage rides inside the fill, at its right end.
-   *
-   * The three rings say "over" with geometry and the Log sheet says it with a
-   * chip; this bar said it with nothing at all — past target it simply ran full
-   * and stayed full, which is the saturation problem the rings' second lap was
-   * built to fix, still unfixed on the one mark above them.
-   *
-   * `progress().over` again, which is now the single source all four surfaces
-   * read. The darker shade is `--color-kcal-edge`, the same pairing `.bar-over`
-   * uses in the Log sheet, so past-target reads as one idea wherever it is drawn.
-   */
-  /**
-   * Resumed from where it was last drawn, not replayed from empty.
-   *
-   * This was built at `width: 0%` and driven to `pct` in a frame, every time,
-   * unconditionally — on all three cards in the deck. So a mode toggle wiped it
-   * across, a day change wiped it across, and so did any rebuild caused by
-   * something else entirely. With `lastKbarPct` the common case is the one that
-   * should move: logging something grows the bar from where it already was.
-   *
-   * `?? 0` on first paint, so the card still fills in when it first appears.
-   * `animate` false — a neighbour, or a day change — starts it at its
-   * destination, which is the same thing `swapping` does for the number above
-   * and `animate` does for the rings below.
-   */
-  const from = animate ? (lastKbarPct ?? 0) : pct
-  if (live) lastKbarPct = pct
-
-  const fill = h(
+  const qualifier = tnum('', 'text-[16px] text-muted')
+  const controlSlot = h('div', { class: 'contents' })
+  const over = h('span', { class: 'kbar-over' })
+  const fill = h('div', { class: 'kbar-fill', style: { width: '0%' } })
+  const reading = h('div', { class: 'reading flex items-baseline gap-[8px]' }, number, qualifier)
+  const bar = h(
     'div',
-    { class: 'kbar-fill', style: { width: `${from}%` } },
-    over > 0 ? h('span', { class: 'kbar-over' }, `+${over}`) : null
+    { class: 'mt-[10px] kbar', role: 'progressbar', 'aria-valuemin': '0' },
+    fill
   )
-  if (from !== pct) {
-    requestAnimationFrame(() => {
-      fill.style.width = `${pct}%`
-    })
-  }
 
-  return h(
+  const el = h(
     'div',
     {},
     // The label and the switch share a top edge, and the switch — the taller of
@@ -415,31 +330,113 @@ function calorieBlock({
         },
         MACRO_META.kcal.label
       ),
-      control
+      controlSlot
     ),
-    h(
-      'div',
-      { class: `reading${swapping ? ' reading-swap' : ''} flex items-baseline gap-[8px]` },
-      number,
-      // The qualifier the rings use, in the row's own size: the target in
-      // consumed mode, the word in remaining.
-      tnum(
-        remainingMode ? (diff > 0 ? 'over' : 'left') : `/ ${kcal(target)}`,
-        'text-[16px] text-muted'
-      )
-    ),
-    h(
-      'div',
-      {
-        class: 'mt-[10px] kbar',
-        role: 'progressbar',
-        'aria-valuenow': Math.round(value),
-        'aria-valuemin': '0',
-        'aria-valuemax': Math.round(target) || 0,
-      },
-      fill
-    )
+    reading,
+    bar
   )
+
+  const update = ({ value, target, mode, control = null, swapping = false, animate = true }) => {
+    const { pct, over: overBy } = progress(value, target)
+    // Round the operands, then difference — same rule the rings use.
+    const diff = Math.round(Number(value) || 0) - Math.round(Number(target) || 0)
+    const remainingMode = mode === 'remaining'
+    const shown = remainingMode ? Math.abs(diff) : value
+
+    /**
+     * The two suppressions, re-earned rather than inherited.
+     *
+     * They used to be a side effect of the rebuild: the number was a new element
+     * every time, so it only counted from wherever `lastKcal` said, and seeding
+     * that with the destination made it write outright instead. Now the element
+     * survives and remembers on its own, which means it counts BY DEFAULT — and
+     * the two cases that must not count are exactly the two that were hardest to
+     * get right.
+     *
+     * **A mode switch does not count.** Counting means the number changed; on a
+     * toggle the number did not change, the question did. 3366 winding down to
+     * 1236 asserts that a thousand calories left the day, and the eye reads a
+     * count as new data arriving, so it lands as the card glitching rather than
+     * as the card answering.
+     *
+     * **A DAY change does not count either, and it was the louder of the two.**
+     * Paging to yesterday made the hero count from today's total down to
+     * yesterday's — asserting that a thousand calories had just left a day you
+     * were not looking at when it happened — and it landed after the deck had
+     * finished sliding, so the card came to rest and then kept moving. That is
+     * most of what made changing day feel long.
+     *
+     * Both take the same route: write the destination into the element's own
+     * memory first, so `countTo` finds `from === to` and simply sets the text.
+     */
+    const instant = swapping || !animate
+    if (instant) number.dataset.value = String(shown)
+    countTo(number, shown, { format: (n) => kcal(n) })
+
+    // The qualifier the rings use, in the row's own size: the target in
+    // consumed mode, the word in remaining.
+    setTabularText(qualifier, remainingMode ? (diff > 0 ? 'over' : 'left') : `/ ${kcal(target)}`)
+
+    /**
+     * `.reading-swap` is an animation on an element that is now permanent, so it
+     * has to be restarted rather than applied — adding a class the element
+     * already carries does nothing. The forced reflow between the two writes is
+     * what makes the browser treat it as a new run. Same helper, same argument,
+     * as `replay` in screens/onboarding.js.
+     */
+    reading.classList.remove('reading-swap')
+    if (swapping) {
+      void reading.offsetWidth
+      reading.classList.add('reading-swap')
+    }
+
+    /**
+     * The bar resumes from where it is painted, because it is the same bar. The
+     * instant case has to suppress its own transition to jump, and the forced
+     * reflow is load-bearing: style is computed once at the end of a task, so
+     * setting `transition: none` and the new width together would leave only the
+     * final pair and the bar would glide anyway.
+     */
+    if (instant) {
+      fill.style.transition = 'none'
+      fill.style.width = `${pct}%`
+      void fill.offsetWidth
+      fill.style.transition = ''
+    } else {
+      fill.style.width = `${pct}%`
+    }
+
+    /**
+     * The overage rides inside the fill, at its right end.
+     *
+     * The three rings say "over" with geometry and the Log sheet says it with a
+     * chip; this bar said it with nothing at all — past target it simply ran full
+     * and stayed full, which is the saturation problem the rings' second lap was
+     * built to fix, still unfixed on the one mark above them.
+     */
+    if (overBy > 0) {
+      over.textContent = `+${overBy}`
+      if (!over.isConnected) fill.appendChild(over)
+    } else if (over.isConnected) {
+      over.remove()
+    }
+
+    bar.setAttribute('aria-valuenow', String(Math.round(value)))
+    bar.setAttribute('aria-valuemax', String(Math.round(target) || 0))
+
+    // Drawn on the neighbours too, not just the live card. They are the real
+    // card at rest and a drag brings them fully into view — one that arrived
+    // without the indicator, or with it on the other dot, would be a lie that
+    // resolves halfway through the gesture. `inert` is what keeps them from
+    // being operable; it is not their job to look different.
+    repaint(controlSlot, control)
+  }
+
+  // `live` is read by the caller to decide what to pass; nothing here needs it
+  // now that the memory is per element rather than shared.
+  void live
+
+  return { el, update }
 }
 
 /**
@@ -456,7 +453,7 @@ function calorieBlock({
  * focus stop, and being visible to a screen reader at all. Three days of
  * numbers announced as one card would be unreadable.
  */
-function dayCard({ totals, targets, live = false, position = 'current', onMode, dayChanged = false }) {
+function dayCard({ live = false, position = 'current', onMode }) {
   const el = h('div', {
     class: live ? 'day-card day-card-toggle' : 'day-card',
     'data-day': position,
@@ -467,66 +464,74 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode, 
     ...(live ? {} : { 'aria-hidden': 'true', inert: true }),
   })
 
-  const paint = () => {
-    el.replaceChildren(
-      calorieBlock({
-        value: totals.kcal,
-        target: targets.kcal,
-        mode: cardMode,
-        live,
-        swapping: live && modeSwap,
-        /**
-         * Nothing on this card moves when the DAY moved.
-         *
-         * The deck has already slid to say what happened; a number that then
-         * counts, a bar that then fills and three arcs that then sweep are all
-         * describing a change to a day, and the day is what changed. They also
-         * all land AFTER the slide finishes, so the card arrives and then keeps
-         * going — which is what made paging feel long and unsettled.
-         *
-         * The neighbours have never had a reason to animate at all: they are
-         * drawn at rest, two thirds off screen.
-         */
-        animate: live && !dayChanged,
-        // Drawn on the neighbours too, not just the live card. They are the
-        // real card at rest and a drag brings them fully into view — one that
-        // arrived without the indicator, or with it on the other dot, would be
-        // a lie that resolves halfway through the gesture. `inert` is what
-        // keeps them from being operable; it is not their job to look
-        // different.
-        control: modeReach(cardMode, onMode),
-      }),
-      // Fixed order: protein, fat, carbs. Equal diameter, evenly distributed —
-      // comparable to each other, which is the one thing concentric rings
-      // cannot do.
-      h(
-        'div',
-        { class: 'day-rings' },
-        ...['protein', 'fat', 'carbs'].map((macro) =>
-          macroRing({
-            macro,
-            value: totals[macro],
-            target: targets[macro],
-            mode: cardMode,
-            // Arc animation is remembered per key. The live card keeps the bare
-            // macro name so its arcs carry across a re-render; the neighbours
-            // get their own, or all three cards would fight over one memory and
-            // every render would replay somebody's entrance.
-            key: live ? macro : `${macro}:${position}`,
-            // `lastLen` survives the rebuild, so on a day change the live card's
-            // arcs would sweep from yesterday's values to today's — the same
-            // error as the hero counting across days, drawn three more times.
-            // `animate: false` makes `ringSvg` seed `from` with `to`, so they
-            // are simply drawn where they belong.
-            animate: live && !dayChanged,
-            swapping: live && modeSwap,
-          })
-        )
+  const calories = calorieBlock({ live })
+  // Fixed order: protein, fat, carbs. Equal diameter, evenly distributed —
+  // comparable to each other, which is the one thing concentric rings cannot do.
+  const rings = h('div', { class: 'day-rings' })
+  el.append(calories.el, rings)
+
+  /**
+   * The card holds the last data it was given, so `setMode` can repaint all
+   * three with the new reading and no caller has to hand the numbers back.
+   */
+  let held = null
+
+  const paint = (next) => {
+    if (next) held = next
+    if (!held) return
+    const { totals, targets, dayChanged = false } = held
+
+    calories.update({
+      value: totals.kcal,
+      target: targets.kcal,
+      mode: cardMode,
+      swapping: live && modeSwap,
+      /**
+       * Nothing on this card moves when the DAY moved.
+       *
+       * The deck has already slid to say what happened; a number that then
+       * counts, a bar that then fills and three arcs that then sweep are all
+       * describing a change to a day, and the day is what changed. They also all
+       * land AFTER the slide finishes, so the card arrives and then keeps going
+       * — which is what made paging feel long and unsettled.
+       *
+       * The neighbours have never had a reason to animate at all: they are drawn
+       * at rest, two thirds off screen.
+       */
+      animate: live && !dayChanged,
+      control: modeReach(cardMode, onMode),
+    })
+
+    /**
+     * The rings are still rebuilt, and `lastLen` is still what carries them.
+     *
+     * `macroRing` builds a whole svg — two laps, a clip path with an id minted
+     * per instance, a centre — and converting it to write in place is its own
+     * piece of work rather than a rider on this one. Repainting them keeps the
+     * behaviour exactly as it was: the arcs animate from the remembered length,
+     * and `animate: false` seeds `from` with `to` so a day change draws them
+     * where they belong instead of sweeping there.
+     */
+    repaint(
+      rings,
+      ...['protein', 'fat', 'carbs'].map((macro) =>
+        macroRing({
+          macro,
+          value: totals[macro],
+          target: targets[macro],
+          mode: cardMode,
+          // Arc animation is remembered per key. The live card keeps the bare
+          // macro name so its arcs carry across a re-render; the neighbours get
+          // their own, or all three cards would fight over one memory and every
+          // render would replay somebody's entrance.
+          key: live ? macro : `${macro}:${position}`,
+          animate: live && !dayChanged,
+          swapping: live && modeSwap,
+        })
       )
     )
   }
 
-  paint()
   return { el, paint }
 }
 
@@ -550,7 +555,22 @@ function dayCard({ totals, targets, live = false, position = 'current', onMode, 
  * animation parks the incoming card precisely where a fresh deck will draw it,
  * so the rebuild has nothing to move.
  */
-function paintDeck(deck, track, { current, prev, next, dayChanged = false }) {
+function deckCards() {
+  /**
+   * Three cards, built once and written to for the life of the screen.
+   *
+   * They are POSITIONS rather than dates — the middle one is always the day you
+   * are on, and paging rewrites its numbers rather than handing the slot to a
+   * different element. That is what lets the hero and the bar remember where
+   * they were last drawn, which is the whole point of this pass.
+   *
+   * `setMode` lives here rather than in the painter because it has to outlive a
+   * render too: it is bound into every card's control at construction, and a
+   * fresh one per build would leave the controls calling into a closure whose
+   * cards are no longer the ones on screen.
+   */
+  const slots = {}
+
   /**
    * Set the reading, everywhere, and remember it.
    *
@@ -570,22 +590,47 @@ function paintDeck(deck, track, { current, prev, next, dayChanged = false }) {
     cardMode = next
     haptic()
     // Raised for the length of the repaint and lowered again on the far side.
-    // Nothing schedules in between — `paint` builds its subtree synchronously —
-    // so the flag is read by exactly the elements this switch created, and the
-    // next repaint from any other cause finds it down.
+    // Nothing schedules in between — `paint` writes its card synchronously — so
+    // the flag is read by exactly the elements this switch is repainting, and
+    // the next repaint from any other cause finds it down.
     modeSwap = true
-    for (const c of cards) c.paint()
+    for (const c of [slots.prev, slots.current, slots.next]) c.paint()
     modeSwap = false
     saveCardMode(next).catch(() => {})
   }
 
-  const cards = [
-    prev && dayCard({ ...prev, position: 'prev', onMode: setMode }),
-    dayCard({ ...current, live: true, position: 'current', onMode: setMode, dayChanged }),
-    next && dayCard({ ...next, position: 'next', onMode: setMode }),
-  ].filter(Boolean)
+  slots.prev = dayCard({ position: 'prev', onMode: setMode })
+  slots.current = dayCard({ live: true, position: 'current', onMode: setMode })
+  slots.next = dayCard({ position: 'next', onMode: setMode })
 
-  const live = cards.find((c) => c.el.dataset.day === 'current')
+  // The tap that predates the switch, kept for the hands that learned it. It
+  // goes through the same setter, so the control it did not come from still
+  // ends up marking the right segment.
+  //
+  // No guard against a swipe landing here as a tap — `swipePages` swallows that
+  // click in the capture phase before it reaches this. The switch's own clicks
+  // stop short of here on their own; see `modeReach`.
+  //
+  // Bound once, with the card it belongs to: the live card is now the same
+  // element for the life of the screen, so wiring this per render would add a
+  // second handler on every log and toggle the mode twice on the next tap.
+  slots.current.el.addEventListener('click', () => {
+    setMode(cardMode === 'consumed' ? 'remaining' : 'consumed')
+  })
+  pressable(slots.current.el)
+
+  return slots
+}
+
+function paintDeck(deck, track, slots, { current, prev, next, dayChanged = false }) {
+  slots.prev.paint({ ...prev, dayChanged })
+  slots.current.paint({ ...current, dayChanged })
+  // Painted even when it is not shown, so the card behind the forward edge is
+  // never a frame out of date if tomorrow becomes reachable.
+  slots.next.paint({ ...(next || prev), dayChanged })
+
+  const cards = [slots.prev, slots.current, next ? slots.next : null].filter(Boolean)
+  const live = slots.current
 
   /**
    * Put the track back where a freshly built deck used to sit.
@@ -616,23 +661,28 @@ function paintDeck(deck, track, { current, prev, next, dayChanged = false }) {
   track.style.transition = ''
   delete deck.dataset.paging
 
-  repaint(track, ...cards.map((c) => c.el))
+  /**
+   * The track's children are only touched when the SET of them changes, which is
+   * when tomorrow becomes reachable or stops being.
+   *
+   * Repainting unconditionally would hand the track the very cards it is already
+   * holding, and `replaceChildren` detaches and reattaches — cancelling the
+   * count-up and the bar mid-flight on every log. That is the one operation this
+   * whole pass exists to avoid, and it is easiest to reintroduce here, where the
+   * call reads like a repaint of somebody else's nodes.
+   *
+   * Same identity check `createScreen` makes for the same reason.
+   */
+  const wanted = cards.map((c) => c.el)
+  const settled =
+    wanted.length === track.children.length && wanted.every((el, i) => track.children[i] === el)
+  if (!settled) repaint(track, ...wanted)
 
-  // The tap that predates the switch, kept for the hands that learned it. It
-  // goes through the same setter, so the control it did not come from still
-  // ends up marking the right segment.
-  //
-  // No guard against a swipe landing here as a tap — `swipePages` swallows that
-  // click in the capture phase before it reaches this. The switch's own clicks
-  // stop short of here on their own; see `modeReach`.
-  live.el.addEventListener('click', () => {
-    setMode(cardMode === 'consumed' ? 'remaining' : 'consumed')
-  })
-  pressable(live.el)
-
-  // The gesture is not wired here any more. It binds once, in `todayScreen`, to
-  // a deck and a track that outlive every one of these repaints — see the note
-  // on the shell.
+  // The gesture is not wired here any more, and neither is the card's tap. Both
+  // bind once — see `deckCards` and the shell in `todayScreen` — because the
+  // elements they bind to now outlive every one of these repaints, and binding
+  // per render would stack a fresh listener on each.
+  void live
 }
 
 /* ----------------------------------------------------------------- the log */
@@ -848,6 +898,9 @@ export function todayScreen() {
    */
   const track = h('div', { class: 'day-deck-track' })
   const deck = h('div', { class: 'day-deck' }, track)
+  // The three day cards, and the mode setter bound into their controls. Both
+  // outlive every render — see `deckCards`.
+  const slots = deckCards()
   const headerSlot = slot()
   const railSlot = slot()
   const logSlot = slot()
@@ -1001,7 +1054,7 @@ export function todayScreen() {
       // the neighbours. That is what Today already did for the day you step
       // to with a chevron, so the deck is not inventing a second rule —
       // per-day targets are History's job, and this is not History.
-      paintDeck(deck, track, {
+      paintDeck(deck, track, slots, {
         current: { totals, targets: t },
         prev: { totals: sumEntries(prevEntries), targets: t },
         next: nextEntries ? { totals: sumEntries(nextEntries), targets: t } : null,
