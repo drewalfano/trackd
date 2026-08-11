@@ -580,6 +580,27 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
   }
 
   /**
+   * The compositor hint, held for the gesture rather than for the screen —
+   * audit 1, finding 11.
+   *
+   * `will-change: transform` sat in the stylesheet on `.day-deck-track`, so a
+   * layer holding three full day cards was pinned from the moment Today mounted
+   * until it unmounted, whether or not anyone ever touched the deck. The
+   * property is documented as something to set shortly before an animation and
+   * drop after it; held permanently it is just a standing cost on the busiest
+   * screen in the app.
+   *
+   * It cannot be keyed off `data-paging` in CSS, which was the obvious move and
+   * is wrong: that flag is deleted at the START of the spring-back, so the hint
+   * would come off in the frame the animation it exists for begins. So it is set
+   * when the gesture is claimed and cleared when the movement actually ends —
+   * after the spring-back has run, or as the commit hands over to the rebuild.
+   */
+  const hint = (on) => {
+    track.style.willChange = on ? 'transform' : ''
+  }
+
+  /**
    * How long the rest of the journey should take.
    *
    * A fixed duration is wrong at both ends. Released at nine tenths of the way
@@ -640,6 +661,7 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       }
       decided = true
       deck.dataset.paging = 'true'
+      hint(true)
       pageW = pageWidth() || 1
       /**
        * Give back the threshold, exactly as a row swipe does.
@@ -698,7 +720,11 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
 
     if (!enough || !reach(dir)) {
       delete deck.dataset.paging
-      setX(0, settleMs(Math.abs(dx), w))
+      const back = settleMs(Math.abs(dx), w)
+      setX(0, back)
+      // Held until the spring-back has actually finished, not until the flag
+      // that started it comes off. See `hint`.
+      setTimeout(() => hint(false), back + 80)
       return
     }
 
@@ -723,6 +749,9 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       settled = true
       clearTimeout(fallback)
       track.removeEventListener('transitionend', done)
+      // Before the rebuild, which replaces this track anyway — belt and braces
+      // for the paths where it does not.
+      hint(false)
       onCommit(dir)
     }
     const done = (e) => {

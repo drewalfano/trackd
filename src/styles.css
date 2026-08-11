@@ -1185,10 +1185,13 @@
   }
 
   /* The height comes from the live card alone — the neighbours are out of flow,
-     so a day with different content cannot change how tall the deck is. */
+     so a day with different content cannot change how tall the deck is.
+
+     `will-change` used to live here and is now set by `swipePages` for the
+     length of a gesture — see `hint` in dom.js for why a permanent one is a
+     standing cost and why the obvious CSS version of the fix is wrong. */
   .day-deck-track {
     position: relative;
-    will-change: transform;
   }
 
   .day-deck-track > [data-day='prev'],
