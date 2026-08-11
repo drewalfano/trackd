@@ -31,7 +31,7 @@ import { macroLine } from './ui.js'
  * tolerate it disagree about which one a tap belongs to.
  *
  * Calories only on the face, which is what buys the short card. Sharing the
- * bottom row with the `+` leaves 84px for numbers, and `1010 cal · 120 P` does
+ * bottom row with the `+` leaves 80px for numbers, and `1010 cal · 120 P` does
  * not fit at all — protein could only be kept by letting the line wrap, which
  * puts the height straight back. The serving comes off the face entirely and
  * lives in the label a screen reader gets; it is a constant for a given food,

@@ -1795,8 +1795,25 @@
    * avoiding. Three cards no longer fit across a 375 screen at this width; the
    * fourth peeking is better than four legible-in-theory.
    *
-   * ~96 tall, down from 141. The height came out of the `+`, which used to have
-   * a row to itself under the numbers; it now shares the bottom row with them.
+   * ~101 tall at a two-line name, 83.5 at a one-line, down from 141. The height
+   * came out of the `+`, which used to have a row to itself under the numbers;
+   * it now shares the bottom row with them.
+   *
+   * Padding is 16 on three sides and 12 at the bottom, and the `+` is pulled
+   * back out to 12 by a negative margin on the rule below. Not a uniform box,
+   * and not an oversight: the button owns the bottom-right corner and the copy
+   * owns the other three sides. At a flat 12 the name sat against an edge the
+   * 24px radius curves away from — 7px of clearance on the diagonal against 12
+   * on the straight — and read as pressed into the corner. The `+` never had
+   * that problem, because a circle is already inset from its own box. So
+   * raising the padding to free the copy would have moved the one element that
+   * was already placed correctly, and the -4 puts it back. The 4 is `16 - 12`,
+   * so the two travel together if either number changes.
+   *
+   * The copy is paid for out of the name, not out of the tile: width stays 150,
+   * so the content box goes 126 -> 118 and the longest names lose about a
+   * character. Widening to 158 would have bought it back, at 16px of the peek
+   * at 390 — see the rail's note on why that peek is load-bearing.
    *
    * The corner `+` was tried as an absolutely positioned overlay first, which
    * is what the mock draws and reaches about 80. It cannot be spaced properly:
@@ -1812,7 +1829,7 @@
     flex-direction: column;
     gap: 6px;
     width: 150px;
-    padding: 12px;
+    padding: 16px 16px 12px;
     text-align: left;
     background: var(--color-surface);
     border-radius: var(--radius-card);
@@ -1841,6 +1858,12 @@
    * beside an 11px number on a 150px card rather than beside 16px type on a
    * full-width row, and 38 there reads as the card's main event. The tap target
    * does not shrink with it — `.icon-btn-sm` keeps its 44 either way.
+   *
+   * The -4 right margin is what holds the `+` at 12 from the card's edge while
+   * the copy moved out to 16 — the reasoning is on `.food-tile` above. It is a
+   * margin rather than a smaller padding on this side because the name's right
+   * edge, where the ellipsis lands, wants the 16 as much as its left does. The
+   * 44px target moves with the circle and still clears the card by 6.
    */
   .food-tile-action {
     display: flex;
@@ -1852,6 +1875,7 @@
   .food-tile-action .icon-btn-sm {
     width: 32px;
     height: 32px;
+    margin-right: -4px;
   }
 
   /**
