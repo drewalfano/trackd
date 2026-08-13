@@ -413,8 +413,21 @@ function calorieBlock({ live = true }) {
      * chip; this bar said it with nothing at all — past target it simply ran full
      * and stayed full, which is the saturation problem the rings' second lap was
      * built to fix, still unfixed on the one mark above them.
+     *
+     * **In remaining mode there is nothing for it to fix.** The hero says
+     * `79 over` one line up, so the full bar is already accounted for and `+79`
+     * inside it is the same number twice, adjacent — the exact thing the card was
+     * rebuilt to stop doing. Consumed mode is different: `3366 / 2837` leaves the
+     * overage to be subtracted rather than stating it, so there the pill is the
+     * only place the bar admits it ran past the end.
+     *
+     * Showing calories eaten here instead was the other way out, and it fails on
+     * the card's own rule: the switch is what gets you the other reading, and a
+     * view that quietly carries both makes the switch half redundant. It also
+     * only ever appears past target, so eaten would arrive because you crossed
+     * and say nothing about the crossing.
      */
-    if (overBy > 0) {
+    if (overBy > 0 && !remainingMode) {
       over.textContent = `+${overBy}`
       if (!over.isConnected) fill.appendChild(over)
     } else if (over.isConnected) {
