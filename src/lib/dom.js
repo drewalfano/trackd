@@ -644,8 +644,21 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
    * It cannot be keyed off `data-paging` in CSS, which was the obvious move and
    * is wrong: that flag is deleted at the START of the spring-back, so the hint
    * would come off in the frame the animation it exists for begins. So it is set
-   * when the gesture is claimed and cleared when the movement actually ends —
-   * after the spring-back has run, or as the commit hands over to the rebuild.
+   * from JS, and cleared when the movement actually ends — after the spring-back
+   * has run, or as the commit hands over to the rebuild.
+   *
+   * **Raised at `touchstart`, not at the claim.** It used to go up on the line
+   * above the one that first moved the track, which is the single frame it
+   * cannot help: promoting a layer holding three full day cards, nine ring svgs
+   * among them, is work that then lands in the frame the finger is waiting on.
+   * Every swipe paid for it once, at the start, which is where a stutter reads
+   * as the gesture being slow to pick up rather than as a dropped frame.
+   *
+   * `touchstart` gives that work the twelve pixels before the claim to happen
+   * in. It costs a promotion on taps and on vertical drags that were never going
+   * to page, and that is the right side of the trade: the hint comes off the
+   * moment the axis decision goes against us, so the cost is a layer held for
+   * the length of one decision rather than for the length of a screen.
    */
   const hint = (on) => {
     track.style.willChange = on ? 'transform' : ''
@@ -693,6 +706,10 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     dx = 0
     dragging = true
     decided = false
+    // Before the axis is known, so the promotion is not charged to the frame
+    // that first moves the track. Comes back down on every path that ends
+    // without paging — see `hint`.
+    hint(true)
   }
 
   /**
@@ -866,11 +883,11 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < SWIPE_AXIS_THRESHOLD) return
       if (Math.abs(deltaX) <= Math.abs(deltaY) * SWIPE_AXIS_RATIO) {
         dragging = false
+        hint(false)
         return
       }
       decided = true
       deck.dataset.paging = 'true'
-      hint(true)
       pageW = pageWidth() || 1
       /**
        * Give back the threshold, exactly as a row swipe does.
@@ -904,7 +921,13 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
   const onEnd = () => {
     if (!dragging) return
     dragging = false
-    if (!decided) return
+    // A tap, or a drag that lifted before it travelled far enough to be judged.
+    // The hint went up at `touchstart` and nothing is going to move, so it comes
+    // straight back down rather than waiting for the next gesture to clear it.
+    if (!decided) {
+      hint(false)
+      return
+    }
     const w = pageW || pageWidth() || 1
 
     /**
