@@ -589,6 +589,31 @@ const rubber = (d, limit) => (d * limit) / (Math.abs(d) + limit)
  */
 const PAINT_GRACE = 400
 
+/**
+ * How far down the finger has to go before the deck stops waiting for it.
+ *
+ * The axis test runs from 12px and used to be final in both directions: fail the
+ * ratio once and `dragging` was cleared, which ends the gesture for the whole of
+ * that touch with no way back. A thumb arcs. Start a page turn a few degrees off
+ * vertical and the first sample can be a near-tie that the 1.5 ratio reads as
+ * vertical — and the swipe that straightened out immediately afterwards was
+ * dropped on the floor, which from the hand is indistinguishable from the app
+ * having missed the input entirely.
+ *
+ * So the ratio still decides, but failing it is only fatal once the drag has
+ * genuinely gone down the screen. Below that the gesture stays open and every
+ * later sample gets to argue for itself.
+ *
+ * Twice the claim threshold, and the size of the window is the whole trade.
+ * `touch-action: pan-y` means the page is already scrolling through these
+ * frames, so a claim made late is a claim made against a surface that has
+ * started moving underneath it — tolerable for 24px of travel, and not for the
+ * 60 or 80 that would catch every last arcing thumb. The rebase at the claim is
+ * what keeps it from showing: the track picks up from where the finger is, not
+ * from where the touch began.
+ */
+const SWIPE_AXIS_COMMIT = 24
+
 export function swipePages(deck, { track, pageWidth, reach, onCommit, duration = PAGE_MS }) {
   let startX = 0
   let startY = 0
@@ -892,24 +917,49 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       // thumb do different things depending on where it landed.
       if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < SWIPE_AXIS_THRESHOLD) return
       if (Math.abs(deltaX) <= Math.abs(deltaY) * SWIPE_AXIS_RATIO) {
-        dragging = false
-        hint(false)
+        // Not ours yet, and only permanently not ours once the finger has
+        // committed to going down the screen — see `SWIPE_AXIS_COMMIT`.
+        if (Math.abs(deltaY) > SWIPE_AXIS_COMMIT) {
+          dragging = false
+          hint(false)
+        }
         return
       }
       decided = true
       deck.dataset.paging = 'true'
       pageW = pageWidth() || 1
       /**
-       * Give back the threshold, exactly as a row swipe does.
+       * Give back everything spent getting here, not a fixed 12px.
        *
-       * The 12px above is evidence that the gesture is horizontal, not travel
-       * the finger meant to spend — and charging it to the deck made the whole
-       * card jump 12px the instant it was captured. `swipeToReveal` fixed this
-       * for rows and calls it "the single biggest thing that made this feel like
-       * a mechanism rather than a surface"; the deck never got the same
+       * The travel above the claim is evidence that the gesture is horizontal,
+       * not travel the finger meant to spend — and charging it to the deck made
+       * the whole card jump the instant it was captured. `swipeToReveal` fixed
+       * this for rows and calls it "the single biggest thing that made this feel
+       * like a mechanism rather than a surface"; the deck never got the same
        * treatment, so the two gestures started differently under one thumb.
+       *
+       * It gave back exactly `SWIPE_AXIS_THRESHOLD`, which was right for as long
+       * as the claim could only ever happen within a pixel or two of the
+       * threshold. It cannot any more: a drag that spends time under the ratio
+       * before straightening out is now still alive when it does, so it can be
+       * claimed at 40px across or more, and a fixed 12 back would leave the rest
+       * as a jump — reintroducing at the far end of the window exactly the bug
+       * this line exists to prevent. Rebasing on the current point is the same
+       * rule stated generally, and is identical to the old arithmetic in the
+       * case the old arithmetic was written for.
        */
-      startX += deltaX > 0 ? SWIPE_AXIS_THRESHOLD : -SWIPE_AXIS_THRESHOLD
+      startX = p.clientX
+      /**
+       * The velocity baseline moves with it.
+       *
+       * `lastX`/`lastT` are last written at `touchstart` and next written on the
+       * first decided frame, so the first sample spans the whole approach. That
+       * was a frame or two and now can be most of a second of a finger going
+       * somewhere else, which would hand `onEnd` a flick reading taken across
+       * travel the user did not make horizontally.
+       */
+      lastX = p.clientX
+      lastT = e.timeStamp || performance.now()
       return
     }
 
