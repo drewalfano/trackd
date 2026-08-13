@@ -625,9 +625,19 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
 
   deck.style.touchAction = 'pan-y'
 
+  /**
+   * `translate3d` and not `translateX`, for one axis that never leaves zero.
+   *
+   * The z is there to be read rather than to be used: a 3D transform is the
+   * older and more reliable of the two ways to tell WebKit this belongs on its
+   * own layer, and it applies to the value as well as to the property, which
+   * `will-change` alone does not. With `hint` now raised at `touchstart` this is
+   * belt to that braces — but they fail in different places, and the one that
+   * fails on iOS is the one that only ever said `translateX`.
+   */
   const setX = (x, ms) => {
     track.style.transition = ms ? `transform ${ms}ms ${PAGE_EASE}` : 'none'
-    track.style.transform = `translateX(${x}px)`
+    track.style.transform = `translate3d(${x}px, 0, 0)`
   }
 
   /**
