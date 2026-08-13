@@ -1,41 +1,37 @@
 /**
  * The one `<meta name="theme-color">` tag, kept in sync with two things.
  *
- * On an installed iOS PWA that strip behind the clock is painted by the browser
- * from `theme-color`, not by the page — so it stays canvas-bright while a sheet
- * dims everything below it, and the seam reads as a hard edge across the top of
- * the screen. Publishing the scrimmed colour while a sheet is open closes it.
+ * **`SCRIMMED` does nothing on the installed iOS PWA, and this file used to
+ * claim the opposite.** The claim was that iOS paints the strip behind the clock
+ * from `theme-color`, so publishing a dimmed value while a sheet is open closes
+ * the seam across the top of the screen. It was tested by shipping `#FF0000`
+ * here and opening a sheet on the phone: the strip did not change. Under
+ * `apple-mobile-web-app-status-bar-style: black-translucent` the status bar is
+ * transparent and the PAGE is what shows through it, so there is no browser-
+ * painted band for this tag to colour and no seam for it to close.
  *
- * The value is the same maths the scrim does: `bg-black/35` over canvas, which
- * is each channel at 65%. Kept as literals rather than read from the CSS var so
- * the two cannot drift apart silently — if `--color-canvas` moves, both entries
- * here move with it.
+ * Why it read as working for so long: `#9C9C9C` is exactly `bg-black/35` over
+ * `#F0F0F0` — 240 x 0.65 = 156 — which is precisely what the page under the
+ * scrim already is. A tag that lands and a tag that is ignored render the same
+ * pixel. The only value that could tell them apart was one the page could not
+ * produce.
+ *
+ * The rest of the tag is still doing real work and is not a candidate for
+ * deletion: `CANVAS` is what the app declares to every browser that DOES paint
+ * chrome from it — Android, desktop, and iOS Safari when the app is opened as a
+ * tab rather than installed. `SCRIMMED` still reaches those. What is now known
+ * to be inert is only its effect on Drew's phone, which is also the only place
+ * the seam it was written for was ever seen.
+ *
+ * `SCRIM_TINT_DELAY` in lib/sheet.js exists solely to time this publish against
+ * the scrim's fade, and inherits the same status. See the note there.
+ *
+ * Values kept as literals rather than read from the CSS var so the two cannot
+ * drift apart silently — if `--color-canvas` moves, both entries here move
+ * with it.
  */
 const CANVAS = { light: '#F0F0F0', dark: '#141414' }
-/**
- * TEMPORARY — REVERT ME. `light` is `#9C9C9C`, not this.
- *
- * A gradient appears behind the clock on the installed PWA whenever a sheet is
- * open, and nothing in the page draws it: every element and pseudo-element whose
- * box reaches the top 60px was checked with a sheet open and all of them are
- * flat. The remaining question is whether this tag reaches that strip at all
- * under `black-translucent`, which the note above asserts and which nothing has
- * ever tested.
- *
- * Red because the correct answer is invisible. `#9C9C9C` is exactly black at 35%
- * over `#F0F0F0` — 240 x 0.65 = 156 — so a working tag and a strip that ignores
- * the tag look identical. A colour that could never be produced by dimming the
- * page tells the two apart in one look.
- *
- * Red strip: the tag lands, and the grey it normally sends is being defeated by
- * something downstream of it. Grey gradient still: the tag is ignored in this
- * status bar mode, the note above is wrong, and the only lever left is not
- * dimming under the status bar.
- *
- * Light only. Drew is in light mode, and changing both would leave two things to
- * put back.
- */
-const SCRIMMED = { light: '#FF0000', dark: '#0D0D0D' }
+const SCRIMMED = { light: '#9C9C9C', dark: '#0D0D0D' }
 
 let dark = false
 /** Sheets can stack, so this counts rather than toggles. */

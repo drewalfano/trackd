@@ -198,6 +198,17 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * outright when the sheet closed before the delay had even elapsed. The count
    * in `statusBar` is shared across sheets and a single unbalanced call leaves
    * the strip dark for the life of the app.
+   *
+   * **None of the above is observable on the installed iOS PWA**, which is the
+   * only place the artefact it was written for was ever seen. `theme-color` does
+   * not paint anything under `black-translucent` — tested by shipping a red one
+   * and looking — so this timing is answering a question about a band that is
+   * not there. See the note at the top of lib/statusBar.js.
+   *
+   * Left in place rather than deleted: the tag is still live on every browser
+   * that paints chrome from it, and 130ms is the right moment to publish for
+   * those. What it is NOT is a fix for the gradient across the top of Drew's
+   * phone, and it was standing in the way of looking for the real one.
    */
   const SCRIM_TINT_DELAY = 130
   let scrimTimer = null
