@@ -639,6 +639,16 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
   let awaitingPaint = false
   let paintTimer = null
   /**
+   * The spring-back's hint teardown, held so a new gesture can cancel it.
+   *
+   * It is a timer rather than a `transitionend` because it has to outlast the
+   * transition by a margin. That was harmless while a spring-back always ran to
+   * completion; now that a finger can catch one mid-flight, an uncancelled timer
+   * would drop `will-change` from under a gesture that is still going — which is
+   * precisely the promotion `onStart` just paid for.
+   */
+  let springTimer = null
+  /**
    * One step, waiting for the deck to be ready for it.
    *
    * Capped at one by being a single slot rather than a list: a third tap
@@ -730,9 +740,36 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     return (d < 0 ? -1 : 1) * (pageW + rubber(over, pageW * 0.15))
   }
 
+  /**
+   * Where the track is RIGHT NOW, a running transition included.
+   *
+   * Computed style reports the interpolated value of a transition in flight,
+   * which is the whole reason this reads the DOM rather than trusting `dx`: `dx`
+   * is where the last gesture left the track, and the spring-back has been
+   * walking away from it ever since.
+   */
+  const currentX = () => {
+    const t = getComputedStyle(track).transform
+    if (!t || t === 'none') return 0
+    return new DOMMatrixReadOnly(t).m41
+  }
+
   const onStart = (e) => {
     if (committing || e.touches?.length > 1) return
     const p = e.touches ? e.touches[0] : e
+    /**
+     * Read first, before anything here writes to the track's style.
+     *
+     * `currentX` goes through `getComputedStyle`, so it forces a style recalc
+     * against whatever is pending. Taking it after `hint` would mean every
+     * touchstart on the deck — taps included — paid for a synchronous recalc of
+     * the `will-change` that was just written, which is the frame fix 1 went to
+     * some trouble to keep clear. Ahead of the writes the style is clean and the
+     * read is free.
+     */
+    clearTimeout(springTimer)
+    const caught = awaitingPaint ? 0 : currentX()
+
     startX = p.clientX
     startY = p.clientY
     lastX = p.clientX
@@ -745,6 +782,38 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     // that first moves the track. Comes back down on every path that ends
     // without paging — see `hint`.
     hint(true)
+
+    /**
+     * A finger landing on a moving track picks it up where it is.
+     *
+     * The gesture was already accepted mid-spring-back — nothing refuses it —
+     * but nothing reconciled it either: `startX` was taken from the new touch
+     * while the track was still somewhere out at 80 or 120px, so the first
+     * `onMove` computed a delta of a few pixels and slammed the track from there
+     * back to nearly zero. Catching your own card threw it.
+     *
+     * So the offset is read off the DOM and everything is rebased on it: the
+     * track is frozen where it stands, `startX` is set so that not moving the
+     * finger means not moving the card, and the gesture is `decided` on arrival.
+     * That last part is the point rather than a shortcut — a finger placed on a
+     * surface that is visibly travelling sideways is not an ambiguous gesture,
+     * and making it re-earn the axis test would spend the first 12px of a catch
+     * doing nothing.
+     *
+     * Not during `awaitingPaint`. The track is parked a full page over waiting
+     * for the rebuild then, which is a different situation wearing the same
+     * offset: it is not animating, and `paintDeck` is about to reset it. Picking
+     * that up would hand the finger a track that gets yanked to zero underneath
+     * it. Left as it was, which is its own open problem and not this one.
+     */
+    if (Math.abs(caught) > 1) {
+      decided = true
+      deck.dataset.paging = 'true'
+      pageW = pageWidth() || 1
+      dx = caught
+      startX = p.clientX - caught
+      setX(caught, 0)
+    }
   }
 
   /**
@@ -1015,8 +1084,9 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
       const back = settleMs(Math.abs(dx), w)
       setX(0, back)
       // Held until the spring-back has actually finished, not until the flag
-      // that started it comes off. See `hint`.
-      setTimeout(() => hint(false), back + 80)
+      // that started it comes off. See `hint`. Kept so a finger that catches
+      // this spring-back can cancel it — see `springTimer`.
+      springTimer = setTimeout(() => hint(false), back + 80)
       return
     }
 
@@ -1063,6 +1133,7 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
     drain,
     destroy: () => {
       clearTimeout(paintTimer)
+      clearTimeout(springTimer)
       deck.removeEventListener('touchstart', onStart)
       deck.removeEventListener('touchmove', onMove)
       deck.removeEventListener('touchend', onEnd)
