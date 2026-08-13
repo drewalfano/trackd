@@ -1244,7 +1244,9 @@
   }
 
   .day-deck-track > [data-day='prev'],
-  .day-deck-track > [data-day='next'] {
+  .day-deck-track > [data-day='next'],
+  .day-deck-track > [data-day='prev2'],
+  .day-deck-track > [data-day='next2'] {
     position: absolute;
     top: 0;
     width: 100%;
@@ -1254,6 +1256,31 @@
   }
   .day-deck-track > [data-day='next'] {
     left: calc(100% + var(--deck-gap));
+  }
+
+  /**
+   * One page further out again, so a committed swipe does not run off the end
+   * of the deck into bare canvas over its last few pixels. See `edgeCard`.
+   *
+   * The doubling is the same arithmetic the neighbours use, not a new number: a
+   * page is a card plus a gap, so two pages out is `200%` plus two gaps. Written
+   * that way rather than as a total so it still follows `--deck-gap` if the peek
+   * is ever retuned — the gap and the gutter are each other's remainder, and
+   * this must not be the one place that forgets it.
+   *
+   * These sit entirely outside the clip at rest and only ever show their outer
+   * 10px, at the very end of a page turn.
+   */
+  .day-deck-track > [data-day='prev2'] {
+    right: calc(200% + 2 * var(--deck-gap));
+  }
+  .day-deck-track > [data-day='next2'] {
+    left: calc(200% + 2 * var(--deck-gap));
+  }
+  /* An empty card is its padding and nothing else. The track carries the live
+     card's height, so this is how the strip gets to be full height. */
+  .day-card-edge {
+    height: 100%;
   }
 
   /**

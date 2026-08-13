@@ -536,6 +536,41 @@ function dayCard({ live = false, position = 'current', onMode }) {
 }
 
 /**
+ * The strip of surface past the neighbour, for the length of a page turn.
+ *
+ * A committed swipe travels a full page, and over the last 19px of that the
+ * neighbour it is bringing in clears the far gutter — so where a card edge
+ * should be peeking there is 20px of page tint instead, and it stays there
+ * until the rebuild lands and the track resets. Measured at 390 and at 375:
+ * 58ms on this machine, of which 45 is the tail of the animation and the rest
+ * is the repaint, and the repaint is the half that grows on a phone.
+ *
+ * **It carries no data, and that is a measurement rather than a shortcut.** The
+ * exposed strip is the outer 10px of where the card would sit, and `.day-card`
+ * is padded by 20 — so nothing inside a real card would be visible in it at
+ * any point. What shows is the surface colour and the corner radius, which is
+ * all this is. The rule the neighbours are held to, that a card sliding into
+ * view must be the real thing and never a stand-in, is a rule about cards that
+ * come into view; `withinReach` caps a gesture at one page, so these two never
+ * can.
+ *
+ * The height has to be asked for. An empty card is its padding and nothing
+ * else, so it would draw as a 40px stub against a 270px deck; `100%` resolves
+ * against the track, which takes its own height from the live card.
+ */
+function edgeCard(position) {
+  return h('div', {
+    class: 'day-card day-card-edge',
+    'data-day': position,
+    // Same treatment as the neighbours. There is nothing in here to read or
+    // focus, but a screen reader should not meet a third and fourth card
+    // either.
+    'aria-hidden': 'true',
+    inert: true,
+  })
+}
+
+/**
  * The deck: the day you are on, with its neighbours parked either side.
  *
  * The 14px of yesterday showing past the left gutter is the entire affordance.
@@ -602,6 +637,10 @@ function deckCards() {
   slots.prev = dayCard({ position: 'prev', onMode: setMode })
   slots.current = dayCard({ live: true, position: 'current', onMode: setMode })
   slots.next = dayCard({ position: 'next', onMode: setMode })
+  // Bare elements rather than `dayCard`s, and they are never painted — see
+  // `edgeCard`. They outlive every render for the same reason the cards do.
+  slots.prev2 = edgeCard('prev2')
+  slots.next2 = edgeCard('next2')
 
   // The tap that predates the switch, kept for the hands that learned it. It
   // goes through the same setter, so the control it did not come from still
@@ -673,7 +712,20 @@ function paintDeck(deck, track, slots, pager, { current, prev, next, dayChanged 
    *
    * Same identity check `createScreen` makes for the same reason.
    */
-  const wanted = cards.map((c) => c.el)
+  /**
+   * The edges bracket the cards, and `next2` exists only where `next` does.
+   *
+   * They have to be listed here rather than appended once at construction:
+   * `repaint` is clear-and-append, so anything not in this array is dropped the
+   * next time the set changes. Ordered as they sit on screen, which costs
+   * nothing — all four are out of flow — and makes the identity check below
+   * read against the DOM rather than against an arbitrary order.
+   *
+   * On today there is no tomorrow and so no edge past it either. That is the
+   * same asymmetry the deck already draws at rest: yesterday peeks, tomorrow
+   * does not, because one of them has happened.
+   */
+  const wanted = [slots.prev2, ...cards.map((c) => c.el), next ? slots.next2 : null].filter(Boolean)
   const settled =
     wanted.length === track.children.length && wanted.every((el, i) => track.children[i] === el)
   if (!settled) repaint(track, ...wanted)
