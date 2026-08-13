@@ -3751,7 +3751,12 @@
    * briefly translucent against the content behind it, which is the fade this is
    * explicitly not doing.
    *
-   * The scrim keeps its own 260. It used to match this exactly, so the dimming
+   * **That last sentence was a description of this declaration and not of the
+   * screen, for as long as the dimming was the panel's parent.** See `.sheet-dim`
+   * below, which is where it moved and why. The paragraph above is what the app
+   * now actually does.
+   *
+   * The dimming keeps its own 260. It used to match this exactly, so the dimming
    * and the arrival were one blended event; now the ground settles first and the
    * last 60ms is nothing but the panel sliding, which is what makes the slide
    * the thing you watch rather than the brightness change.
@@ -3761,14 +3766,36 @@
    */
   animation: sheet-in 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
-.sheet-scrim {
+/**
+ * The dimming, as its own element inside the scrim rather than as the scrim.
+ *
+ * **The claim two blocks up — that the sheet's arrival has no opacity in it — was
+ * true of `sheet-in` and false on the screen.** This fade used to live on
+ * `.sheet-scrim`, which is the panel's PARENT, and `opacity` applies to a whole
+ * subtree: the panel was drawn at 11% at 20ms and 52% at 96ms of its slide, so
+ * the page it was covering read straight through it for the entire entry. The
+ * argument against fading a sheet in was already written and already agreed
+ * with; it just was not what the markup did.
+ *
+ * `inset: 0` against `.screen-cover`, which is fixed and `--screen-h` tall, so
+ * this is the same rectangle the scrim was. `absolute` rather than a second
+ * `.screen-cover` because it belongs to the scrim's box, not to the screen's.
+ *
+ * The colour is the `bg-black/35` that was on the scrim, moved rather than
+ * retuned — it is the same wash over the same page, and nothing about the
+ * contrast measurements taken against it in this file has changed.
+ */
+.sheet-dim {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 0.35);
   animation: scrim-in 260ms ease-out;
 }
 
 /**
  * A sheet a finger has taken hold of, at any point in its life.
  *
- * `swipeToDismiss` writes an inline transform, and for the 260ms `sheet-in` is
+ * `swipeToDismiss` writes an inline transform, and for the 320ms `sheet-in` is
  * running a CSS animation outranks that — so a drag begun inside the entry
  * window was tracked, wrote a transform, and moved nothing at all. Silently,
  * which is the worst version: no lag, no snap, a sheet that ignored you during
@@ -3784,7 +3811,7 @@
  * so source order is what decides.
  */
 .sheet-panel[data-dragging='true'],
-.sheet-scrim[data-dragging='true'] {
+.sheet-scrim[data-dragging='true'] .sheet-dim {
   animation: none;
 }
 .sheet-panel[data-closing='true'] {
@@ -3802,7 +3829,7 @@
  * the sheet has already gone, which reads as two things happening rather than
  * one.
  */
-.sheet-scrim[data-closing='true'] {
+.sheet-scrim[data-closing='true'] .sheet-dim {
   animation: scrim-out 200ms ease-out forwards;
 }
 /**
@@ -3815,7 +3842,7 @@
  * and `teardown` have both set their flag, which they always both do.
  */
 .sheet-panel[data-dismissing='true'],
-.sheet-scrim[data-dismissing='true'] {
+.sheet-scrim[data-dismissing='true'] .sheet-dim {
   animation: none;
 }
 .toast-in {

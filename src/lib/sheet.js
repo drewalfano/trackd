@@ -417,12 +417,39 @@ export function openSheet({ title, render, footer = null, action = null }) {
     footerEl
   )
 
+  /**
+   * The dimming is a child of the scrim rather than the scrim itself, and the
+   * panel is its sibling.
+   *
+   * **`opacity` applies to a whole subtree.** There is no way to fade a box and
+   * hold a child of it solid — so for as long as the scrim carried both the wash
+   * and the panel, `scrim-in` faded the panel along with it. Measured on the way
+   * up: the sheet was drawn at 11% at 20ms, 52% at 96ms and 82% at 171ms. Half
+   * see-through for the whole entry, with the page it was covering legible
+   * through it.
+   *
+   * The panel's own opacity was 1 throughout, which is why the note on
+   * `sheet-in` in styles.css claims the sheet does not fade. That claim is true
+   * of the animation and was wrong about the screen, and it is the reason this
+   * survived: nothing in either file mentioned the parent.
+   *
+   * The same inheritance ran two more moments. `swipeToDismiss` writes the wash
+   * down to 0.35 as you pull, so the sheet went 65% transparent under the finger
+   * holding it; and `scrim-out` took it with it on the way out.
+   *
+   * Source order is what stacks these two: both are absolutely positioned in the
+   * same stacking context, so the panel draws over the dim by coming second. The
+   * scrim keeps the click-to-close, which the dim's clicks bubble up to.
+   */
+  const dim = h('div', { class: 'sheet-dim', 'aria-hidden': 'true' })
+
   const scrim = h(
     'div',
     {
-      class: 'sheet-scrim screen-cover z-[60] bg-black/35',
+      class: 'sheet-scrim screen-cover z-[60]',
       onclick: () => closeAll(),
     },
+    dim,
     panel
   )
 
@@ -799,7 +826,9 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * down directly would leave those behind, so the next hardware back would
    * step through a sheet that is no longer on screen.
    */
-  swipeToDismiss(panel, { scroller: body, scrim, onDismiss: () => closeAll() })
+  // `scrim` carries the drag's state flags, `dim` is what its opacity writes
+  // land on. Two arguments rather than one because they used to be one element.
+  swipeToDismiss(panel, { scroller: body, scrim, dim, onDismiss: () => closeAll() })
 
   window.addEventListener('popstate', onPop)
   document.addEventListener('keydown', onKey)

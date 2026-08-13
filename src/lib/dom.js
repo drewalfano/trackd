@@ -1165,7 +1165,7 @@ export function swipePages(deck, { track, pageWidth, reach, onCommit, duration =
  * it is resisting, and resistance from a sheet reads as it being stuck rather
  * than as it being sure.
  */
-export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 200 } = {}) {
+export function swipeToDismiss(panel, { scroller, scrim, dim = scrim, onDismiss, duration = 200 } = {}) {
   let startY = 0
   let startX = 0
   let dy = 0
@@ -1186,12 +1186,17 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
       ? `transform ${duration}ms cubic-bezier(0.16,1,0.3,1)`
       : 'none'
     panel.style.transform = y ? `translateY(${y}px)` : ''
-    if (!scrim) return
-    scrim.style.transition = animate ? `opacity ${duration}ms ease-out` : 'none'
-    // Down to a third at a full sheet-height pull, never past it. The scrim
+    if (!dim) return
+    dim.style.transition = animate ? `opacity ${duration}ms ease-out` : 'none'
+    // Down to a third at a full sheet-height pull, never past it. The dimming
     // lifting as the sheet leaves is what makes the page behind feel like it
     // was there all along rather than being rebuilt.
-    scrim.style.opacity = y ? String(Math.max(0.35, 1 - y / panel.offsetHeight)) : ''
+    //
+    // `dim`, not `scrim`, and the distinction is the whole reason the two are
+    // separate elements — see the note in lib/sheet.js. While this wrote to the
+    // panel's own ancestor it faded the panel too, so a sheet pulled a full
+    // height down was being held at 35% opacity by the finger holding it.
+    dim.style.opacity = y ? String(Math.max(0.35, 1 - y / panel.offsetHeight)) : ''
   }
 
   const onStart = (e) => {
@@ -1347,9 +1352,9 @@ export function swipeToDismiss(panel, { scroller, scrim, onDismiss, duration = 2
     }
     panel.style.transition = `transform ${duration}ms ease-in`
     panel.style.transform = 'translateY(100%)'
-    if (scrim) {
-      scrim.style.transition = `opacity ${duration}ms ease-in`
-      scrim.style.opacity = '0'
+    if (dim) {
+      dim.style.transition = `opacity ${duration}ms ease-in`
+      dim.style.opacity = '0'
     }
     onDismiss?.()
   }
