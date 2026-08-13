@@ -1131,10 +1131,31 @@
    * No automatic row dividers either — same split, and the same reason, as
    * `.panel`. `.card > * + *` would rule a line between the parts of a layout.
    */
+  /**
+   * `contain` is here for the deck, not for the card.
+   *
+   * Three of these sit on one track and all three are written to on every
+   * render — the live card because the day changed, the neighbours because a
+   * drag brings them fully into view and they may not be a frame behind. Without
+   * containment each of those writes is a layout and style invalidation the
+   * engine has to assume could reach the rest of the document.
+   *
+   * `layout style` and deliberately not `paint`. The ring's svg carries its own
+   * headroom and is pulled back by `PAD` on both axes, so it overflows its
+   * footprint on purpose — see the SIZE box in ring.js. `paint` would clip
+   * exactly that, and the arcs would lose their outer edge. `size` is wrong for
+   * a different reason: the deck takes its height from the live card, so the
+   * card's own content is the thing that has to be measurable.
+   *
+   * Checked before adding: every absolutely positioned element inside a card
+   * resolves against the ring's own `relative` box, so `layout` making the card
+   * a containing block cannot move any of them.
+   */
   .day-card {
     background: var(--color-surface);
     border-radius: var(--radius-card);
     padding: 20px;
+    contain: layout style;
   }
 
   /**
