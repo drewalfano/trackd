@@ -2,8 +2,8 @@ import { h } from './dom.js'
 import { deleteEntry, putEntry, getSettings, uid } from './db.js'
 import { toast } from './toast.js'
 import { presentSheet } from './sheet.js'
-import { blockSelector, segmented, macroLine } from './ui.js'
-import { addDays, formatDayLabel, todayStr } from './dates.js'
+import { blockSelector, segmentedWide, macroLine } from './ui.js'
+import { addDays, formatDayLabel, formatDayShort, todayStr } from './dates.js'
 import { displayName } from './format.js'
 
 /**
@@ -34,21 +34,67 @@ export async function openDuplicateSheet(entry, host) {
   return presentSheet({
     title: 'Duplicate',
     render: (ctx) => {
-      const dayOptions = [
-        { value: addDays(todayStr(), -1), label: 'Yesterday' },
-        { value: todayStr(), label: 'Today' },
-        { value: addDays(todayStr(), 1), label: 'Tomorrow' },
-      ]
-      if (!dayOptions.some((o) => o.value === date)) {
-        dayOptions.unshift({ value: date, label: formatDayLabel(date) })
-      }
+      const days = [addDays(todayStr(), -1), todayStr(), addDays(todayStr(), 1)]
+      // The row's own day, when it is not one of the three already offered —
+      // duplicating a Tuesday dinner onto that same Tuesday is a real thing to
+      // want, and it is the day you are already looking at.
+      if (!days.includes(date)) days.unshift(date)
+
+      /**
+       * **A fourth day changes what the labels can be, because the segments now
+       * have a width.**
+       *
+       * `segmentedWide` splits the track evenly, so the label has to fit its
+       * share rather than push its neighbours along the way a scrolling chip
+       * row would. Measured at 375pt, the track is 335: three segments are
+       * 106.3 each and `Tomorrow` sets 68.8 of ink in one, which leaves 18.7 of
+       * pill either side. Four segments are 78.8, and the same word leaves 5 —
+       * the pill drawn hard against the letters, which is what it looked like.
+       *
+       * So at four the relative words give way to dates and every segment takes
+       * the same short shape: 52 of ink, 13.4 of room. Today keeps its name,
+       * because it is the one segment anyone is scanning for and the one that
+       * anchors the three dates around it as dates.
+       *
+       * Three is still the ordinary case and still reads Yesterday / Today /
+       * Tomorrow. The words are better when they fit, which is the only reason
+       * to spend the width on them.
+       */
+      const label =
+        days.length > 3
+          ? (d) => (d === todayStr() ? 'Today' : formatDayShort(d))
+          : formatDayLabel
+      const dayOptions = days.map((d) => ({ value: d, label: label(d) }))
 
       const dayRow = h('div')
       const blockRow = h('div')
 
+      /**
+       * `segmentedWide`, which is what Block directly beneath it has always
+       * been.
+       *
+       * This was `segmented` — the scrolling row of `.chip`s, ink-filled on the
+       * selected one — so the sheet asked the same kind of question twice, ten
+       * pixels apart, in two different controls: a solid black pill for the day
+       * and an outlined pill on a recessed track for the block. Two encodings of
+       * "this one is chosen" stacked vertically read as two different KINDS of
+       * choice, and they are not; they are the same one-of-N pick over a short
+       * fixed list.
+       *
+       * The wide one is the right survivor of the pair. It splits the row evenly
+       * so the options are a set rather than a queue, its selection travels
+       * between segments instead of switching on somewhere new, and it is what
+       * `blockSelector` is built on — so matching it here is the whole sheet
+       * agreeing rather than a third spelling.
+       *
+       * It takes the fourth segment when there is one. `dayOptions` grows a
+       * dated entry for a row older than yesterday, and `.segment-pill` sizes
+       * itself from `--seg-n` for exactly that reason: the control ships at two,
+       * three and four across the app.
+       */
       const paintDay = () => {
         dayRow.replaceChildren(
-          segmented({
+          segmentedWide({
             options: dayOptions,
             value: date,
             onChange: (v) => {

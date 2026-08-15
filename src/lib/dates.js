@@ -123,6 +123,27 @@ export function formatDayHeader(str) {
   return `${label}, ${short}`
 }
 
+/**
+ * `29 Jul` — a day with the weekday and the year taken off.
+ *
+ * For a date that has to fit a fixed slot rather than a line of text. The
+ * duplicate sheet's day picker is the case: it is a `segmentedWide`, so its
+ * options divide the row evenly, and a fourth segment leaves each label 78.75px
+ * at 375pt — measured, with the track at 335. `formatDayLabel` does not fit
+ * that: `Wed 12 Aug` sets 83.8 of ink and a dated one carrying its year sets
+ * 115.2, and `.segment` does not clip, so the label would sit across its
+ * neighbour. This sets 52.
+ *
+ * The weekday is what goes, and it is the right thing to lose in a row of days:
+ * the segments are consecutive and one of them is named Today, so the weekday
+ * is the part the reader can already infer from position. The year goes with it
+ * — every caller is offering a day near the one you are looking at, not
+ * locating an arbitrary one.
+ */
+export function formatDayShort(str) {
+  return fromDateStr(str).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
+
 /** The muted line under the screen title: "Tuesday, 29 July". */
 export function formatDateSub(str) {
   const d = fromDateStr(str)
