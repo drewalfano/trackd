@@ -99,8 +99,14 @@ export async function quickLogFood(food, { date, block }) {
  * an estimate. A plate's estimates carry no source of their own and are handed
  * one by `logPlate`, which is the only thing that knows they are estimates.
  */
-const putFixedEntry = (item, { date, block }) =>
-  putEntry({
+const putFixedEntry = (item, { date, block }) => {
+  const computed = {
+    kcal: round(item.computed.kcal, 1),
+    protein: round(item.computed.protein, 1),
+    fat: round(item.computed.fat, 1),
+    carbs: round(item.computed.carbs, 1),
+  }
+  return putEntry({
     date,
     block,
     foodId: null,
@@ -108,13 +114,28 @@ const putFixedEntry = (item, { date, block }) =>
     foodName: item.name || 'Unnamed',
     quantity: Number(item.quantity) || 1,
     unit: item.unit || 'serving',
-    computed: {
-      kcal: round(item.computed.kcal, 1),
-      protein: round(item.computed.protein, 1),
-      fat: round(item.computed.fat, 1),
-      carbs: round(item.computed.carbs, 1),
-    },
+    computed,
+    /**
+     * What the model said, kept beside what the row now says.
+     *
+     * The entry sheet makes an estimate's four numbers editable, which is the
+     * only lever it has — there is no food and no serving to scale. The moment
+     * that is true, `computed` stops being able to answer "what was estimated";
+     * it answers "what is this row worth", and after a correction those are two
+     * different facts.
+     *
+     * Only estimates carry it. A quick add's numbers are typed by hand at both
+     * ends, so an original and a correction are the same kind of thing and there
+     * is nothing to hold apart. This is the difference the sparkle already
+     * claims, made recoverable rather than merely drawn.
+     *
+     * Nothing surfaces it yet, deliberately — see the entry sheet, which sets
+     * `edited` and shows no badge for it. The record is here so the decision to
+     * show it later is a rendering question rather than an archaeology one.
+     */
+    estimate: item.source === DESCRIBE_SOURCE ? { ...computed } : null,
   })
+}
 
 /** Whether a meal item stands on its own numbers rather than on a food. */
 const isFixedItem = (item) => !item.foodId && !!item.computed

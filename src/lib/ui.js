@@ -852,11 +852,25 @@ export function segmentedWide({ options, value, onChange, key }) {
    switch, and that control is gone — see `modeDots` in screens/today.js for
    what replaced it and why. */
 
-export function labelledField({ label, hint, children }) {
+/**
+ * `color` tints the LABEL only, and takes a `MACRO_TEXT` value rather than a
+ * fill — the same option `valueRow` carries, for the same reason and with the
+ * same rule. A field named for a macro says which macro in the hue the app uses
+ * everywhere else for that; the number inside it stays in ink so it is
+ * readable. `macroRow` and `caloriesBlock` on Today are the original of this
+ * split, and `valueRow` is how the Settings targets take it.
+ *
+ * Fields that are not macros pass nothing and get the ordinary ink label.
+ */
+export function labelledField({ label, hint, children, color }) {
   return h(
     'label',
     { class: 'flex flex-col gap-[10px]' },
-    h('span', { class: 'text-[14px] font-semibold' }, label),
+    h(
+      'span',
+      { class: 'text-[14px] font-semibold', style: color ? { color } : null },
+      label
+    ),
     children,
     hint ? h('span', { class: 'text-[12px] text-muted' }, hint) : null
   )
