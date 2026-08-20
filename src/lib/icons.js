@@ -5,63 +5,44 @@
  */
 
 /**
- * An 8-tooth gear, generated rather than hand-authored, because eyeballing 32
- * path points produces a gear with a visible wobble at 22px.
+ * Filled icons, used only in the tab bar. Everything else stays single stroke.
+ *
+ * All three are SF Symbols — `calendar`, `chart.line.uptrend.xyaxis`, and
+ * `gearshape.fill` — copied out of the SF Symbols app as SVG at 20pt, Medium
+ * symbol scale. Note Apple's licence covers these for Apple-platform software
+ * and does not permit modification; this app is a web PWA and the transforms
+ * below are modifications, so both feet are outside it.
+ *
+ * Three things are done to Apple's export on the way in, all of them required:
+ *
+ *   - The XML declaration, DOCTYPE, `<svg>` wrapper and the `<rect opacity="0">`
+ *     bounding box are dropped. `icon()` builds its own wrapper.
+ *   - `fill="black" fill-opacity="0.85"` comes off every path. Left on, the
+ *     black overrides `currentColor` and the tab stops going grey-to-ink on
+ *     selection; the 0.85 makes every glyph faintly translucent.
+ *   - Each is wrapped in a `<g transform>` that lands it on the 24 grid.
+ *
+ * The scale factor is the SAME 0.98 for all three rather than fitted per icon.
+ * Apple draws these to balance against each other at a shared point size, so
+ * the differing bounding boxes are deliberate — a gear really is taller than a
+ * calendar. Fitting each to 24 separately throws that away and leaves the
+ * calendar visibly oversized next to the gear.
+ *
+ * `chart.line.uptrend.xyaxis` is a STROKE symbol, but Apple's SVG export bakes
+ * the stroke into filled outlines, so it belongs here rather than in `P` and
+ * has no live stroke-width. Its axis measures 1.54 units where the outline set
+ * uses 1.75, which is why it reads lighter than the two icons beside it.
+ * Changing that means re-exporting at a heavier weight, not editing this file.
  */
-function gearPath({ teeth = 8, outer = 10.6, inner = 8, hole = 3.6, cx = 12, cy = 12 } = {}) {
-  const pts = []
-  const per = (Math.PI * 2) / teeth
-  // Four points per tooth: rise, tooth top, fall, valley.
-  const offsets = [
-    [-per * 0.22, outer],
-    [per * 0.22, outer],
-    [per * 0.28, inner],
-    [per * 0.72, inner],
-  ]
-  for (let t = 0; t < teeth; t++) {
-    for (const [off, r] of offsets) {
-      const a = t * per + off - Math.PI / 2
-      pts.push(`${(cx + r * Math.cos(a)).toFixed(2)} ${(cy + r * Math.sin(a)).toFixed(2)}`)
-    }
-  }
-  // Second subpath is the centre hole, knocked out by fill-rule evenodd.
-  return (
-    `<path fill-rule="evenodd" d="M${pts.join('L')}Z` +
-    `M${cx} ${cy - hole}a${hole} ${hole} 0 1 0 0 ${hole * 2}a${hole} ${hole} 0 1 0 0 ${-hole * 2}Z"/>`
-  )
-}
-
-/** Filled icons, used only in the tab bar. Everything else stays single stroke. */
 export const FILLED = {
   calendarFilled:
-    // Rounded-square ring, then a 4×3 grid of dots inside it.
-    '<path fill-rule="evenodd" d="M6 3.5h12A2.5 2.5 0 0 1 20.5 6v12a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5Zm0 2.1a.4.4 0 0 0-.4.4v12a.4.4 0 0 0 .4.4h12a.4.4 0 0 0 .4-.4V6a.4.4 0 0 0-.4-.4H6Z"/>' +
-    '<circle cx="8.2" cy="10.2" r="1.05"/><circle cx="12" cy="10.2" r="1.05"/><circle cx="15.8" cy="10.2" r="1.05"/>' +
-    '<circle cx="8.2" cy="13.9" r="1.05"/><circle cx="12" cy="13.9" r="1.05"/><circle cx="15.8" cy="13.9" r="1.05"/>',
+    '<g transform="translate(2.29 3.18) scale(0.98)"><path d="M3.06641 17.998L16.4062 17.998C18.4473 17.998 19.4629 16.9824 19.4629 14.9707L19.4629 3.04688C19.4629 1.03516 18.4473 0.0195312 16.4062 0.0195312L3.06641 0.0195312C1.02539 0.0195312 0 1.02539 0 3.04688L0 14.9707C0 16.9922 1.02539 17.998 3.06641 17.998ZM2.91992 16.4258C2.05078 16.4258 1.57227 15.9668 1.57227 15.0586L1.57227 5.84961C1.57227 4.95117 2.05078 4.48242 2.91992 4.48242L16.5332 4.48242C17.4023 4.48242 17.8906 4.95117 17.8906 5.84961L17.8906 15.0586C17.8906 15.9668 17.4023 16.4258 16.5332 16.4258ZM7.83203 7.98828L8.4082 7.98828C8.75 7.98828 8.85742 7.89062 8.85742 7.54883L8.85742 6.97266C8.85742 6.63086 8.75 6.52344 8.4082 6.52344L7.83203 6.52344C7.49023 6.52344 7.37305 6.63086 7.37305 6.97266L7.37305 7.54883C7.37305 7.89062 7.49023 7.98828 7.83203 7.98828ZM11.0742 7.98828L11.6504 7.98828C11.9922 7.98828 12.1094 7.89062 12.1094 7.54883L12.1094 6.97266C12.1094 6.63086 11.9922 6.52344 11.6504 6.52344L11.0742 6.52344C10.7324 6.52344 10.6152 6.63086 10.6152 6.97266L10.6152 7.54883C10.6152 7.89062 10.7324 7.98828 11.0742 7.98828ZM14.3164 7.98828L14.8926 7.98828C15.2344 7.98828 15.3516 7.89062 15.3516 7.54883L15.3516 6.97266C15.3516 6.63086 15.2344 6.52344 14.8926 6.52344L14.3164 6.52344C13.9746 6.52344 13.8672 6.63086 13.8672 6.97266L13.8672 7.54883C13.8672 7.89062 13.9746 7.98828 14.3164 7.98828ZM4.58984 11.1816L5.15625 11.1816C5.50781 11.1816 5.61523 11.084 5.61523 10.7422L5.61523 10.166C5.61523 9.82422 5.50781 9.72656 5.15625 9.72656L4.58984 9.72656C4.23828 9.72656 4.13086 9.82422 4.13086 10.166L4.13086 10.7422C4.13086 11.084 4.23828 11.1816 4.58984 11.1816ZM7.83203 11.1816L8.4082 11.1816C8.75 11.1816 8.85742 11.084 8.85742 10.7422L8.85742 10.166C8.85742 9.82422 8.75 9.72656 8.4082 9.72656L7.83203 9.72656C7.49023 9.72656 7.37305 9.82422 7.37305 10.166L7.37305 10.7422C7.37305 11.084 7.49023 11.1816 7.83203 11.1816ZM11.0742 11.1816L11.6504 11.1816C11.9922 11.1816 12.1094 11.084 12.1094 10.7422L12.1094 10.166C12.1094 9.82422 11.9922 9.72656 11.6504 9.72656L11.0742 9.72656C10.7324 9.72656 10.6152 9.82422 10.6152 10.166L10.6152 10.7422C10.6152 11.084 10.7324 11.1816 11.0742 11.1816ZM14.3164 11.1816L14.8926 11.1816C15.2344 11.1816 15.3516 11.084 15.3516 10.7422L15.3516 10.166C15.3516 9.82422 15.2344 9.72656 14.8926 9.72656L14.3164 9.72656C13.9746 9.72656 13.8672 9.82422 13.8672 10.166L13.8672 10.7422C13.8672 11.084 13.9746 11.1816 14.3164 11.1816ZM4.58984 14.3848L5.15625 14.3848C5.50781 14.3848 5.61523 14.2773 5.61523 13.9355L5.61523 13.3594C5.61523 13.0176 5.50781 12.9199 5.15625 12.9199L4.58984 12.9199C4.23828 12.9199 4.13086 13.0176 4.13086 13.3594L4.13086 13.9355C4.13086 14.2773 4.23828 14.3848 4.58984 14.3848ZM7.83203 14.3848L8.4082 14.3848C8.75 14.3848 8.85742 14.2773 8.85742 13.9355L8.85742 13.3594C8.85742 13.0176 8.75 12.9199 8.4082 12.9199L7.83203 12.9199C7.49023 12.9199 7.37305 13.0176 7.37305 13.3594L7.37305 13.9355C7.37305 14.2773 7.49023 14.3848 7.83203 14.3848ZM11.0742 14.3848L11.6504 14.3848C11.9922 14.3848 12.1094 14.2773 12.1094 13.9355L12.1094 13.3594C12.1094 13.0176 11.9922 12.9199 11.6504 12.9199L11.0742 12.9199C10.7324 12.9199 10.6152 13.0176 10.6152 13.3594L10.6152 13.9355C10.6152 14.2773 10.7324 14.3848 11.0742 14.3848Z"/></g>',
 
-  /**
-   * Three ascending pill bars.
-   *
-   * Replaces the scale that labelled this tab while it was called Weight. The
-   * tab holds nutrition history as well now, and a scale named one of the two
-   * things on it — the same problem the tab's own name had.
-   *
-   * Pills rather than square bars, and that is the whole reason this reads as
-   * belonging to the app rather than to an icon set: every progress mark in
-   * Trackd is a fully rounded bar or ring, so `rx` is half the width and the
-   * bars come out as the same shape the screen behind them is full of.
-   *
-   * Bars rather than a rising line, though the screen's hero is a line chart. A
-   * hairline zigzag has to survive being drawn at 22px in a tab bar, where it
-   * is the one glyph with no label-sized detail to spare; three solid pills
-   * carry at that size and a 2px polyline does not.
-   */
   chartFilled:
-    '<rect x="3.6" y="13" width="4.2" height="7.4" rx="2.1"/>' +
-    '<rect x="9.9" y="8.6" width="4.2" height="11.8" rx="2.1"/>' +
-    '<rect x="16.2" y="3.6" width="4.2" height="16.8" rx="2.1"/>',
+    '<g transform="translate(1.53 3.09) scale(0.98)"><path d="M7.25586 6.5332L10.8496 10.2148C10.9375 10.3027 11.0352 10.3516 11.1133 10.3516C11.2012 10.3516 11.2988 10.293 11.3867 10.2148L15.2418 6.32939L16.421 7.5112L12.4414 11.5137C12.002 11.9434 11.582 12.1582 11.1133 12.1582C10.6543 12.1582 10.2148 11.9531 9.79492 11.5137L6.20117 7.83203C6.11328 7.74414 6.02539 7.69531 5.9375 7.69531C5.84961 7.69531 5.76172 7.74414 5.67383 7.83203L1.57227 12.0115L1.57227 9.62911L4.61914 6.5332C5.05859 6.07422 5.47852 5.88867 5.9375 5.88867C6.39648 5.88867 6.82617 6.09375 7.25586 6.5332Z"/><path d="M20.4102 3.03711L18.9648 8.75977C18.8379 9.25781 18.3789 9.47266 18.0273 9.12109L13.623 4.70703C13.2715 4.35547 13.4863 3.90625 13.9844 3.76953L19.6973 2.33398C20.1367 2.2168 20.5273 2.58789 20.4102 3.03711Z"/><path d="M0 17.4023C0 17.8711 0.3125 18.1738 0.78125 18.1738L20.2051 18.1738C20.6348 18.1738 20.9961 17.832 20.9961 17.3926C20.9961 16.9629 20.6348 16.6113 20.2051 16.6113L1.8457 16.6113C1.64062 16.6113 1.57227 16.543 1.57227 16.3379L1.57227 0.898438C1.57227 0.478516 1.2207 0.117188 0.791016 0.117188C0.351562 0.117188 0 0.478516 0 0.898438Z"/></g>',
 
-  gearFilled: gearPath(),
+  gearFilled:
+    '<g transform="translate(1.82 1.99) scale(0.98)"><path d="M9.30664 20.4102L11.1035 20.4102C11.6113 20.4102 11.9727 20.1074 12.0898 19.6094L12.5977 17.4609C12.9785 17.334 13.3496 17.1875 13.6719 17.0312L15.5566 18.1836C15.9766 18.4473 16.4551 18.4082 16.8066 18.0566L18.0664 16.8066C18.418 16.4551 18.4668 15.9473 18.1836 15.5273L17.0312 13.6621C17.1973 13.3203 17.3438 12.9688 17.4512 12.6172L19.6191 12.0996C20.1172 11.9824 20.4102 11.6211 20.4102 11.1133L20.4102 9.3457C20.4102 8.84766 20.1172 8.48633 19.6191 8.36914L17.4707 7.85156C17.3438 7.45117 17.1875 7.08984 17.0508 6.78711L18.2031 4.89258C18.4668 4.46289 18.4473 4.00391 18.0859 3.64258L16.8066 2.38281C16.4453 2.05078 16.0059 1.97266 15.5859 2.23633L13.6719 3.41797C13.3594 3.25195 12.998 3.10547 12.5977 2.97852L12.0898 0.800781C11.9727 0.302734 11.6113 0 11.1035 0L9.30664 0C8.79883 0 8.4375 0.302734 8.31055 0.800781L7.80273 2.95898C7.42188 3.08594 7.05078 3.23242 6.71875 3.4082L4.82422 2.23633C4.4043 1.97266 3.94531 2.03125 3.59375 2.38281L2.32422 3.64258C1.96289 4.00391 1.93359 4.46289 2.20703 4.89258L3.34961 6.78711C3.22266 7.08984 3.06641 7.45117 2.93945 7.85156L0.791016 8.36914C0.292969 8.48633 0 8.84766 0 9.3457L0 11.1133C0 11.6211 0.292969 11.9824 0.791016 12.0996L2.95898 12.6172C3.06641 12.9688 3.21289 13.3203 3.36914 13.6621L2.22656 15.5273C1.93359 15.9473 1.99219 16.4551 2.34375 16.8066L3.59375 18.0566C3.94531 18.4082 4.43359 18.4473 4.85352 18.1836L6.72852 17.0312C7.06055 17.1875 7.42188 17.334 7.80273 17.4609L8.31055 19.6094C8.4375 20.1074 8.79883 20.4102 9.30664 20.4102ZM10.2051 13.6523C8.30078 13.6523 6.75781 12.1094 6.75781 10.2051C6.75781 8.30078 8.30078 6.75781 10.2051 6.75781C12.1094 6.75781 13.6523 8.30078 13.6523 10.2051C13.6523 12.1094 12.1094 13.6523 10.2051 13.6523Z"/></g>',
 }
 
 /**
