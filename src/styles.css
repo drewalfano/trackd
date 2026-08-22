@@ -291,6 +291,87 @@
 
 }
 
+/**
+ * MOTION. Every curve and every duration in the app, named.
+ *
+ * They were all literals until now — 101 of them, spelled out at the rule that
+ * used them. Each number was argued for in the comment beside it and most of
+ * them are right; what there was no way to do was change the app's FEEL as a
+ * whole, because there was nothing that any two rules shared. Retuning meant
+ * finding every site and deciding again, one at a time, which is how a set of
+ * good individual decisions turns into no decision at all.
+ *
+ * Nothing here changes what anything currently does. Every token below is the
+ * number that was already at its call sites; this is naming, not retuning. The
+ * one thing that has changed is that the values now say which of them is
+ * structural and which is a special case, so the next person to retune knows
+ * what they are allowed to collapse.
+ *
+ * ---
+ *
+ * THE SCALE — five steps, and the default answer for anything new.
+ *
+ *   --dur-press  120  a control acknowledging a finger
+ *   --dur-fast   160  something small leaving, or a state flipping
+ *   --dur-base   200  the house duration: views, tabs, rows arriving
+ *   --dur-slow   260  a row opening, a screen's progress, anything with reach
+ *   --dur-sheet  320  a sheet coming up from the bottom edge
+ *
+ * THE EXCEPTIONS — five values that sit off the scale on purpose. Each one is
+ * load-bearing against a NEIGHBOUR rather than against the scale, which is why
+ * snapping them is not free. The relationship is named here and argued in full
+ * at the rule.
+ *
+ *   --dur-lead   140  the quicker half of a paired movement, in all four of its
+ *                     uses: the day-swap cut under the deck's 200, the swipe
+ *                     row's opacity under its own 180 of height, the
+ *                     disclosure's opacity inside its 220 of grid. Each one has
+ *                     to be finished before the thing beside it is.
+ *   --dur-brisk  180  between fast and base. Its argued case is the swipe row
+ *                     closing at two thirds of the 260 it opens in; the scrim
+ *                     and the reading swap sit on the same number.
+ *   --dur-mid    220  between base and slow, and deliberately so — an
+ *                     onboarding step is more than a tab switch and less than a
+ *                     modal. The disclosure's grid rides the same value.
+ *   --dur-panel  240  a settings panel pushing in. The one value with no stated
+ *                     argument against a neighbour; the first candidate if
+ *                     anyone wants the exception list shorter.
+ *   --dur-fill   250  bars and rings filling. Reads as travel, not arrival, and
+ *                     is the only duration shared by four separate readouts.
+ *
+ * ---
+ *
+ * CURVES. Four, and the first two carry almost everything.
+ *
+ * The distinction that matters is ARRIVAL against TRAVEL. `--ease-out` is
+ * ~95% done by its own halfway point, so the movement is over before you have
+ * followed it — right for something landing, wrong for something crossing a
+ * distance you are meant to watch. `--ease-glide` spreads the distance evenly
+ * and still lands soft, which is why every panel, view and sheet uses it and
+ * why expo-out read as a bounce in both places it was tried on one.
+ */
+:root {
+  /* The house expo-out. Arrival: lands and settles. */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Quad-out. Travel: a distance you are meant to be able to follow. */
+  --ease-glide: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  /* The swipe settling, with the small overshoot a released drag wants. */
+  --ease-settle: cubic-bezier(0.22, 1.12, 0.36, 1);
+  /* Symmetric in-out, for the two ambient loops that never start or stop. */
+  --ease-loop: cubic-bezier(0.4, 0, 0.6, 1);
+
+  --dur-press: 120ms;
+  --dur-lead: 140ms;
+  --dur-fast: 160ms;
+  --dur-brisk: 180ms;
+  --dur-base: 200ms;
+  --dur-mid: 220ms;
+  --dur-panel: 240ms;
+  --dur-fill: 250ms;
+  --dur-slow: 260ms;
+  --dur-sheet: 320ms;
+}
+
 /* Dark mode inverts neutrals only. The macro hues do not move — see spec 7. */
 /**
  * Dark mode.
@@ -1178,8 +1259,8 @@
     user-select: none;
     -webkit-tap-highlight-color: transparent;
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   /* `:active` is the desktop pointer; `data-pressed` is touch, held by
      `pressable` in dom.js because iOS applies `:active` to a plain element only
@@ -1337,7 +1418,7 @@
     height: 100%;
     border-radius: 999px;
     background: var(--color-kcal);
-    transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width var(--dur-fill) var(--ease-out);
     /* Holds the overage segment at its right end. Empty on every other day, so
        this costs the common case nothing. */
     display: flex;
@@ -1427,8 +1508,8 @@
     color: var(--color-ink);
     flex: none;
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   .chip-sm:active {
     transform: scale(0.95);
@@ -1456,7 +1537,7 @@
   }
 
   .ring-arc {
-    transition: stroke-dashoffset 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: stroke-dashoffset var(--dur-fill) var(--ease-out);
   }
 
   /* ------------------------------------------------------------------ bars */
@@ -1491,8 +1572,8 @@
     /* Fires once, on value change, then gets out of the way. The opacity leg is
        only ever used on the way back to zero — see progressBar(). */
     transition:
-      width 250ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 250ms cubic-bezier(0.16, 1, 0.3, 1);
+      width var(--dur-fill) var(--ease-out),
+      opacity var(--dur-fill) var(--ease-out);
   }
 
   /**
@@ -1546,7 +1627,7 @@
   .bar-thin-fill {
     height: 100%;
     border-radius: 999px;
-    transition: width 250ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width var(--dur-fill) var(--ease-out);
   }
 
   /**
@@ -1663,8 +1744,8 @@
     font-weight: 500;
     color: var(--color-ink);
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      background-color 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      background-color var(--dur-press) ease-out;
   }
 
   /* Days either side of the month on show. Real days, still pickable — see the
@@ -1720,8 +1801,8 @@
     color: var(--color-ink);
     flex: none;
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   .icon-btn:active:not(:disabled) {
     transform: scale(0.92);
@@ -1805,8 +1886,8 @@
     font-weight: 600;
     flex: none;
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   .back-btn:active {
     transform: scale(0.97);
@@ -1909,7 +1990,7 @@
     text-align: left;
     background: var(--color-surface);
     border-radius: var(--radius-card);
-    transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform var(--dur-press) var(--ease-out);
   }
   .food-tile:active {
     transform: scale(0.97);
@@ -2036,7 +2117,7 @@
     }
   }
   .row-in {
-    animation: row-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: row-in var(--dur-base) var(--ease-out);
   }
 
   /**
@@ -2157,18 +2238,18 @@
     }
   }
   .day-swap-fwd {
-    animation: day-swap-fwd 140ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    animation: day-swap-fwd var(--dur-lead) var(--ease-glide);
   }
   .day-swap-back {
-    animation: day-swap-back 140ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    animation: day-swap-back var(--dur-lead) var(--ease-glide);
   }
 
   .swipe-row[data-removing='true'] {
     opacity: 0;
     pointer-events: none;
     transition:
-      height 180ms ease-in,
-      opacity 140ms ease-in;
+      height var(--dur-brisk) ease-in,
+      opacity var(--dur-lead) ease-in;
   }
 
   /**
@@ -2250,7 +2331,7 @@
     height: 1px;
     margin: 0 20px;
     background: var(--color-outline);
-    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform var(--dur-base) var(--ease-out);
   }
 
   /**
@@ -2288,8 +2369,8 @@
   .swipe-row [data-swipe-surface] {
     background: var(--color-surface);
     transition:
-      background-color 160ms ease-out,
-      border-radius 160ms ease-out;
+      background-color var(--dur-fast) ease-out,
+      border-radius var(--dur-fast) ease-out;
   }
 
   /**
@@ -2338,7 +2419,7 @@
     opacity: var(--reveal);
     transform: translateX(calc((1 - var(--reveal)) * 10px)) scale(calc(0.68 + 0.32 * var(--reveal)));
     transition:
-      transform var(--swipe-settle, 0ms) cubic-bezier(0.22, 1.12, 0.36, 1),
+      transform var(--swipe-settle, 0ms) var(--ease-settle),
       opacity var(--swipe-settle, 0ms) ease-out;
   }
 
@@ -2395,8 +2476,8 @@
     font-weight: 600;
     font-size: 16px;
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   .btn-primary:active:not(:disabled),
   .btn-secondary:active:not(:disabled) {
@@ -2554,7 +2635,7 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--color-ink) 20%, transparent);
     border: 0;
-    transition: background-color 160ms ease-out;
+    transition: background-color var(--dur-fast) ease-out;
   }
   .switch[aria-checked='true'] {
     background: var(--color-ink);
@@ -2567,7 +2648,7 @@
     height: 27px;
     border-radius: 999px;
     background: var(--color-surface);
-    transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform var(--dur-fast) var(--ease-out);
   }
   .switch[aria-checked='true'] .switch-knob {
     transform: translateX(20px);
@@ -2612,8 +2693,8 @@
        modal arriving, and the two travelling selections in the app should not
        disagree about how long a selection takes to move. */
     transition:
-      transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 160ms ease-out;
+      transform var(--dur-base) var(--ease-out),
+      opacity var(--dur-fast) ease-out;
   }
 
   /* Nothing chosen yet, which is a real state — sex is unset until it is set.
@@ -2718,7 +2799,7 @@
     }
   }
   .reading-swap {
-    animation: reading-swap 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    animation: reading-swap var(--dur-brisk) var(--ease-out);
   }
   @media (prefers-reduced-motion: reduce) {
     .reading-swap {
@@ -2862,7 +2943,7 @@
      * a modal arriving, and the standards already put a frequent interaction
      * under 200.
      */
-    transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform var(--dur-base) var(--ease-out);
   }
 
   .tab {
@@ -2891,8 +2972,8 @@
      * rather than an exception to it. 120ms is the press duration everywhere.
      */
     transition:
-      color 200ms ease-out,
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+      color var(--dur-base) ease-out,
+      transform var(--dur-press) var(--ease-out);
   }
   .tab:active,
   .tab[data-pressed='true'] {
@@ -2923,8 +3004,8 @@
     background: var(--color-ink);
     color: var(--color-canvas);
     transition:
-      transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-      opacity 120ms ease-out;
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   /* The same 0.92 and 0.85 `.icon-btn` uses, not the card's 0.99. A 68px circle
      and a 44px circle are the same kind of object and should give by the same
@@ -3170,11 +3251,11 @@
   }
   .sparkle-wait > svg:first-child {
     transform-origin: 46% 45%;
-    animation: sparkle-big 1600ms cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    animation: sparkle-big 1600ms var(--ease-loop) infinite;
   }
   .sparkle-wait > svg:last-child {
     transform-origin: 75% 75%;
-    animation: sparkle-small 1250ms cubic-bezier(0.4, 0, 0.6, 1) -580ms infinite;
+    animation: sparkle-small 1250ms var(--ease-loop) -580ms infinite;
   }
 }
 
@@ -3406,7 +3487,7 @@
   }
 }
 .panel-in {
-  animation: panel-in 240ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: panel-in var(--dur-panel) var(--ease-glide);
 }
 
 /**
@@ -3464,10 +3545,10 @@
   }
 }
 .panel-in-fwd {
-  animation: panel-in-fwd 240ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: panel-in-fwd var(--dur-panel) var(--ease-glide);
 }
 .panel-in-back {
-  animation: panel-in-back 240ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: panel-in-back var(--dur-panel) var(--ease-glide);
 }
 
 /**
@@ -3567,7 +3648,7 @@
  * artefact is not this batch's.
  */
 #view[data-entering] > * > * > *:not(header):not(.back-btn):not(h1) {
-  animation: view-in 200ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: view-in var(--dur-base) var(--ease-glide);
 }
 
 /**
@@ -3764,7 +3845,7 @@
    * The exit stays at 200 — 0.63x of this, still comfortably faster than the
    * entrance, which is the direction the standards care about.
    */
-  animation: sheet-in 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: sheet-in var(--dur-sheet) var(--ease-glide);
 }
 /**
  * The dimming, as its own element inside the scrim rather than as the scrim.
@@ -3789,7 +3870,7 @@
   position: absolute;
   inset: 0;
   background: rgb(0 0 0 / 0.35);
-  animation: scrim-in 260ms ease-out;
+  animation: scrim-in var(--dur-slow) ease-out;
 }
 
 /**
@@ -3815,7 +3896,7 @@
   animation: none;
 }
 .sheet-panel[data-closing='true'] {
-  animation: sheet-out 200ms ease-in forwards;
+  animation: sheet-out var(--dur-base) ease-in forwards;
 }
 /**
  * The scrim leaves on `ease-out`, and the panel above it keeps its `ease-in` —
@@ -3830,7 +3911,7 @@
  * one.
  */
 .sheet-scrim[data-closing='true'] .sheet-dim {
-  animation: scrim-out 200ms ease-out forwards;
+  animation: scrim-out var(--dur-base) ease-out forwards;
 }
 /**
  * A sheet the finger is already carrying out finishes under its own transition.
@@ -3846,7 +3927,7 @@
   animation: none;
 }
 .toast-in {
-  animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: toast-in var(--dur-base) var(--ease-out);
 }
 
 /**
@@ -3887,7 +3968,7 @@
  * takes both together, which is the right answer and was true by accident.
  */
 .confirm-in {
-  animation: toast-in 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: toast-in var(--dur-base) var(--ease-out);
 }
 
 /**
@@ -3919,10 +4000,10 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  animation: scrim-out 180ms linear forwards;
+  animation: scrim-out var(--dur-brisk) linear forwards;
 }
 .chart-in {
-  animation: scrim-in 180ms linear;
+  animation: scrim-in var(--dur-brisk) linear;
 }
 
 /**
@@ -3944,7 +4025,7 @@
  * borrows `toast-in`.
  */
 .results-in {
-  animation: scrim-in 120ms ease-out;
+  animation: scrim-in var(--dur-press) ease-out;
 }
 
 /**
@@ -3963,11 +4044,11 @@
   padding-bottom: 0;
   margin-bottom: -10px;
   transition:
-    height 160ms ease-in,
-    padding-top 160ms ease-in,
-    padding-bottom 160ms ease-in,
-    margin-bottom 160ms ease-in,
-    opacity 160ms ease-in;
+    height var(--dur-fast) ease-in,
+    padding-top var(--dur-fast) ease-in,
+    padding-bottom var(--dur-fast) ease-in,
+    margin-bottom var(--dur-fast) ease-in,
+    opacity var(--dur-fast) ease-in;
 }
 
 /* ========================================================================== *
@@ -4059,10 +4140,10 @@
   }
 }
 .step-in-fwd {
-  animation: step-in-fwd 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: step-in-fwd var(--dur-mid) var(--ease-glide);
 }
 .step-in-back {
-  animation: step-in-back 220ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation: step-in-back var(--dur-mid) var(--ease-glide);
 }
 
 /**
@@ -4126,7 +4207,7 @@
    see `paintProgress`. 120ms is `.icon-btn`'s, so the chevron beside it and the
    bar under it turn up on the same clock. */
 .step-track {
-  transition: opacity 120ms ease-out;
+  transition: opacity var(--dur-press) ease-out;
 }
 .step-seg {
   position: relative;
@@ -4143,7 +4224,7 @@
   background: var(--color-ink);
   transform: scaleX(var(--fill, 0));
   transform-origin: left center;
-  transition: transform 260ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform var(--dur-slow) var(--ease-out);
 }
 .step-seg-fill[data-drain='true'] {
   transform-origin: right center;
@@ -4202,8 +4283,8 @@
   grid-template-rows: 0fr;
   margin-bottom: calc(-1 * var(--reveal-gap));
   transition:
-    grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1),
-    margin-bottom 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    grid-template-rows var(--dur-mid) var(--ease-out),
+    margin-bottom var(--dur-mid) var(--ease-out);
 }
 .reveal[data-open='true'] {
   margin-bottom: 0;
@@ -4212,7 +4293,7 @@
   min-height: 0;
   overflow: hidden;
   opacity: 0;
-  transition: opacity 140ms ease-out 80ms;
+  transition: opacity var(--dur-lead) ease-out 80ms;
 }
 .reveal[data-open='true'] {
   grid-template-rows: 1fr;
@@ -4249,8 +4330,8 @@
  */
 .segment {
   transition:
-    transform 120ms cubic-bezier(0.16, 1, 0.3, 1),
-    color 160ms ease-out;
+    transform var(--dur-press) var(--ease-out),
+    color var(--dur-fast) ease-out;
 }
 .segment:active,
 .segment[data-pressed='true'] {
