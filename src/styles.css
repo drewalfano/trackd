@@ -1,42 +1,42 @@
 @import 'tailwindcss';
 
 /**
- * Inter, self-hosted.
+ * NO WEBFONT. The face is whatever the OS calls its interface font.
  *
- * Linking Google Fonts would put a network dependency in front of first paint,
- * which is the one thing this app is not allowed to have. Both files are the
- * variable font across the full 100-900 axis, which is 134 KB — about three
- * times what Inclusive Sans cost. That is the price of the switch and it is
- * paid once, on first load, into the service worker's precache.
+ * This app is used as an installed PWA on an iPhone, so `-apple-system` is
+ * San Francisco — and the reason to take it over Inter is not the 134 KB it
+ * saves, though it saves that. It is OPTICAL SIZING. SF is two designs behind
+ * one name: SF Text below 20px, with looser spacing and more open apertures,
+ * and SF Display at and above it, tighter and with finer strokes. The OS
+ * switches between them on the size alone, per element, with no markup.
  *
- * The thing Inter buys back: real `tnum`. Inclusive Sans shipped none, and this
- * app is mostly numbers that count up or sit in columns — see `.tnum` below for
- * the hack that is no longer needed.
+ * That is the exact problem this app has. It puts a 48px calorie total and a
+ * 12px macro line in the same card, and Inter served both from one outline —
+ * so the number was set with spacing drawn for small text and the macro line
+ * with apertures drawn for large. Neither was wrong; neither was right either.
  *
- * latin-ext is here on purpose: Open Food Facts returns a lot of French and
- * German product names, and without it they would render in the fallback font
- * mid-list. See src/fonts/LICENSE.txt.
+ * What was given up, and why it was affordable:
+ *
+ *   `tnum`     Not given up. SF has tabular figures and `.tnum` is unchanged.
+ *              This was the stated reason for adopting Inter over Inclusive
+ *              Sans and it survives the move; it was never Inter's alone.
+ *
+ *   latin-ext  Not given up, and this is the one that would have been fatal.
+ *              Open Food Facts returns French and German product names and the
+ *              second woff2 existed so they would not drop to a fallback
+ *              mid-list. A system face has every one of those glyphs already,
+ *              so the coverage that cost 85 KB is now free and total.
+ *
+ * What is gained beyond the size: there is no `font-display: swap` any more,
+ * so there is no FOUT. First paint is final paint. That is small, and it is
+ * the only part of this change that makes the app faster rather than better
+ * set.
+ *
+ * `-apple-system` leads and `system-ui` follows it. On WebKit the first is the
+ * one that resolves, and it is the one that carries the optical sizing; the
+ * second is the standard spelling for everything else. Order matters here and
+ * is not alphabetical.
  */
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('./fonts/inter-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
-    U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('./fonts/inter-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
-    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
-    U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
 
 /* ---------------------------------------------------------------------------
    Design tokens — v1.1, matched to the mockups.
@@ -234,10 +234,22 @@
   --color-fat-on: #141414;
   --color-carbs-on: #ffffff;
 
-  /* One family. The system stack is the fallback while the woff2 loads. */
+  /* One family, and it is the OS's own. See the note at the top of the file. */
   --font-sans:
-    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+    -apple-system, system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /**
+   * The second family, and the ONLY thing it sets is the dashboard tile's
+   * numerals. See `.day-card .tnum`.
+   *
+   * `ui-rounded` first: it is the generic that resolves to whatever the OS
+   * calls its rounded interface face, so it does not depend on the name. The
+   * name follows it for browsers that know the font but not the keyword, and
+   * `--font-sans` is the fallback rather than a bare `sans-serif`, so a
+   * platform with no rounded face at all gets the app's own family rather than
+   * the browser's default.
+   */
+  --font-rounded: ui-rounded, 'SF Pro Rounded', var(--font-sans);
 
   /* One radius. 24px on everything that is not a pill. Rule intact — the 12px
      variant this redesign briefly added is gone; the mockups landed back on 24. */
@@ -252,40 +264,65 @@
    *   14  log row titles and body
    *   12  the macro line
    *
-   * Inter carries a large x-height, which is why 12px still holds up for the
-   * macro line where the old system-font scale needed 15px.
+   * 12 for the macro line survived the move off Inter, and the reason given for
+   * it did not. The claim here was that Inter's large x-height was what held
+   * that line up. Measured, in Chromium on macOS: Inter's x-height is 0.546em
+   * and SF's is 0.526em — 3.6% apart, 0.23px at this size. Nothing was resting
+   * on that.
+   *
+   * What actually holds it up is the optical size. Below 20px the OS serves SF
+   * Text, which is drawn looser and more open than SF Display, and the effect
+   * is measurable: `180g P   80g F   300g C` sets at 134.0px in SF against
+   * Inter's 133.4 at 12px, then crosses over and comes in NARROWER by 3.6% at
+   * 16 and by 10% at title size. One family, two designs, and this line gets
+   * the one drawn for it.
    */
   --text-display: 48px;
   --text-display--line-height: 1;
   --text-display--letter-spacing: -0.02em;
 
   /**
-   * 26, down from the mock's 30.
+   * 27, one step back toward the mock's 30 — and the step is the font swap
+   * paying for itself.
    *
-   * 30 was drawn for a narrower face. Inter sets about 8% wider, and at that
-   * size the day header — the tightest line in the app, 227px between two
-   * chevrons — was loud on the screen it appears on most and still needed
-   * `fitText` to stop the longer dates truncating.
+   * 26 was never the size this wanted. 30 was drawn, and Inter sets about 8%
+   * wider than the face it was drawn for, so the day header — the tightest line
+   * in the app, 227px between two chevrons — had to come down two steps to fit.
+   * SF is narrower again, so part of that concession is refundable.
    *
-   * Measured at 26, against the 227 available: "Today, Aug 2" 160,
-   * "Yesterday, Aug 1" 206, "Tomorrow, Aug 12" 225. Every day anyone actually
-   * reads now fits outright, where at 30 all three were over.
+   * Measured against the 227 available, in Chromium on macOS at weight 600 and
+   * -0.02em. The Inter column reproduces the numbers this comment used to
+   * state, which is the check that the SF column can be trusted:
    *
-   * One string still is not: "Wed, Jan 13, 2027" at 230, three pixels long.
-   * That is a date from another year, reached only by paging back months, and
-   * `fitText` takes it down half a step rather than the two it used to need. So
-   * the backstop stays — it just stopped being load-bearing.
+   *                        Inter 26   SF 26   SF 27   SF 28
+   *   Today, Aug 2            159.6   143.8   149.2   154.8
+   *   Yesterday, Aug 1        206.3   188.4   195.6   202.9
+   *   Tomorrow, Aug 12        225.2   205.6   213.4   221.3
+   *   Wed, Jan 13, 2027       229.8   215.2   223.5   231.8
    *
-   * Line height is 1.25, not the 1.1 it was drawn at. Inter's own box is
-   * 1.211em tall (0.969 up, 0.242 down), so a 1.1 line box is shorter than the
-   * font it holds — and every title that truncates also hides its overflow,
-   * which turned that shortfall into a visible cut across the bottom of the
-   * descenders. "Today, Aug 3" lost the tail of its g. 1.25 is the first step
-   * that clears the metrics, and it is what every non-truncating title was
-   * already setting by hand with `leading-tight`, so this makes the token say
-   * what the screens were saying over it.
+   * 27 and not 28, for two reasons that agree. It is the last size at which
+   * EVERY string fits, the cross-year date included — 223.5 against 227 — so
+   * `fitText` is now a backstop nothing in the app reaches, where at 26 on
+   * Inter it was still catching that one string at 230. And the everyday worst
+   * case keeps 13.6px of headroom, 6.4%, which is the margin that absorbs the
+   * difference between this measurement and iOS Safari's own. 28 spends that
+   * down to 5.7px and puts the year date back over.
+   *
+   * It is also the size-preserving choice, which is what a font swap should be.
+   * Apparent size follows cap height, not width: Inter's is 0.7275em against
+   * SF's 0.7046, so 26 x 0.7275 / 0.7046 = 26.85. The title reads the same
+   * height it did yesterday and stops fighting the chevrons.
+   *
+   * Line height stays 1.25, and the arithmetic behind it has changed. It was
+   * set against Inter's 1.211em box (0.969 up, 0.242 down), the point being
+   * that the 1.1 it was drawn at is shorter than the font it holds — and every
+   * title that truncates also hides its overflow, so the shortfall showed up as
+   * a cut across the descenders. "Today, Aug 3" lost the tail of its g. SF's
+   * box at this size is 1.185em, so 1.25 clears it by 1.75px where it cleared
+   * Inter's by 1.0. The bug this token exists to prevent is now further away,
+   * not nearer, which is why the number does not move.
    */
-  --text-title: 26px;
+  --text-title: 27px;
   --text-title--line-height: 1.25;
   --text-title--letter-spacing: -0.02em;
 
@@ -1193,6 +1230,34 @@
    */
   .tnum {
     font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /**
+   * The dashboard tile counts in SF Pro Rounded. Nothing else in the app does.
+   *
+   * Scoped to `.day-card` rather than hung on `.tnum`, which is the whole app's
+   * numeral class — the log rows, the Trends readouts and the sheets all wear
+   * it, and they are text you read in a line rather than a figure you take in
+   * at a glance. The tile is the one place the numbers ARE the content.
+   *
+   * Rounded is the idiom this card is already speaking. Three arcs around a
+   * value, with the total above them, is Apple's own readout, and it sets its
+   * numerals in this face. The card had every part of that except the numerals.
+   *
+   * The labels stay in `--font-sans` on purpose. `Calories`, `Protein`, `Fat`
+   * and `Carbs` name the thing; the numerals are the thing. Setting both in
+   * Rounded would spend the distinction to no end and leave the card with a
+   * softer voice overall rather than a softer READOUT, which is not the same
+   * decision.
+   *
+   * `tabular-nums` above still applies and still has to: the hero counts up on
+   * every change, and a proportional `1` would make the whole number shuffle
+   * sideways as it ran. Verified rather than assumed — every digit 0-9 sets to
+   * the same advance in this face, which is what `countTo` needs and the reason
+   * `.tnum` wraps these spans at all.
+   */
+  .day-card .tnum {
+    font-family: var(--font-rounded);
   }
 
   /* -------------------------------------------------------------- day card */
