@@ -106,7 +106,91 @@ function emit(scope) {
   // The one derived thing in this file that is expensive enough to hold on to.
   // Invalidated here so no write path can forget it. See `quickAddFoods`.
   if (scope === 'entries' || scope === 'foods' || scope === 'all') quickAddCache = null
+  /**
+   * The read caches below are maintained SURGICALLY by the two entry writers,
+   * not invalidated here, which is the opposite of the rule above.
+   *
+   * `quickAddCache` is derived from a ranking that any food write can reorder,
+   * so there is no cheap way to patch it and dropping it is correct. A day's
+   * entries are the opposite: `putEntry` and `deleteEntry` are the only things
+   * that can change them, and each one knows exactly which row moved and which
+   * date it moved in. Dropping the map on their emit would hand every screen a
+   * cache miss on the one change it was built to make free.
+   *
+   * `'all'` is the exception, because import and clear rewrite the store
+   * underneath the map without going through either writer.
+   */
+  if (scope === 'all') {
+    entriesByDate.clear()
+    stampedDays.clear()
+    firstLoggedCache = undefined
+  }
   for (const fn of listeners) fn(scope)
+}
+
+/* --------------------------------------------------------- the read caches */
+
+/**
+ * A day's entries, held in memory, because the rebuild path reads them far more
+ * often than anything writes them.
+ *
+ * Today's build alone asks for three days at once — the day you are on and both
+ * neighbours, so a swipe has something to drag in — and it runs that build on
+ * every settings change, every log, every delete and every day step. Off
+ * IndexedDB that was three index reads and a cursor per keystroke-scale event,
+ * on the phone, between the tap and anything moving.
+ *
+ * Kept as a map rather than a single-day slot because the deck holds three days
+ * at once and paging is exactly the motion that must not stall.
+ *
+ * @type {Map<string, object[]>}
+ */
+const entriesByDate = new Map()
+
+/**
+ * Days already stamped with a target snapshot. See `ensureDayTargets`.
+ *
+ * Only ever added to. A day that has been stamped cannot become unstamped —
+ * first write wins is the whole rule — so a hit here is permanent and a miss
+ * costs the read it always did.
+ *
+ * @type {Set<string>}
+ */
+const stampedDays = new Set()
+
+/**
+ * `undefined` means not yet read; `null` means nothing has ever been logged.
+ * The distinction matters because null is a real answer worth caching.
+ */
+let firstLoggedCache
+
+/** Entries are shown and summed in the order they were logged. */
+const byCreatedAt = (a, b) => a.createdAt - b.createdAt
+
+/**
+ * Fold one written row into the cached day, in place, keeping the order.
+ *
+ * A miss is a no-op rather than a hydrate: nothing has asked for this day yet,
+ * so the first thing that does will read it whole and get the row anyway.
+ */
+function cacheEntry(record) {
+  const rows = entriesByDate.get(record.date)
+  if (!rows) return
+  const at = rows.findIndex((r) => r.id === record.id)
+  if (at >= 0) rows[at] = record
+  else rows.push(record)
+  rows.sort(byCreatedAt)
+}
+
+/** Drop a row from whichever day is holding it. The id does not carry its date. */
+function uncacheEntry(id) {
+  for (const rows of entriesByDate.values()) {
+    const at = rows.findIndex((r) => r.id === id)
+    if (at >= 0) {
+      rows.splice(at, 1)
+      return
+    }
+  }
 }
 
 /* -------------------------------------------------------------------- open */
@@ -303,6 +387,7 @@ export async function clearPlate() {
 export async function putDayTargets(date, targets) {
   const record = { date, targets: { ...targets }, savedAt: Date.now() }
   await write(async () => (await db()).put('dayTargets', record))
+  stampedDays.add(date)
   emit('dayTargets')
   return record
 }
@@ -313,8 +398,16 @@ export async function putDayTargets(date, targets) {
  */
 export async function ensureDayTargets(date) {
   if (!date) return null
+  // The hit is what makes the second and every later log of a day free. `null`
+  // rather than the record because the only caller that matters — `putEntry` —
+  // discards the return, and reading the row back to hand it over would undo
+  // the round trip this is here to skip.
+  if (stampedDays.has(date)) return null
   const existing = await (await db()).get('dayTargets', date)
-  if (existing) return existing
+  if (existing) {
+    stampedDays.add(date)
+    return existing
+  }
   const { targets } = await getSettings()
   return putDayTargets(date, targets)
 }
@@ -637,9 +730,21 @@ export async function rememberPortion(foodId, phrase, { quantity, unit }) {
 
 /* ----------------------------------------------------------------- entries */
 
+/**
+ * A day's entries, newest last.
+ *
+ * Served from `entriesByDate` after the first read of that day. The copy is not
+ * a nicety: the cached array is the one the two writers patch in place, so
+ * handing it out directly would let a caller's `sort` or `splice` rewrite what
+ * every other screen is about to render. Three arrays of a dozen rows is not a
+ * cost worth reasoning about; a shared mutable one is.
+ */
 export async function listEntries(date) {
-  const rows = await (await db()).getAllFromIndex('entries', 'date', date)
-  return rows.sort((a, b) => a.createdAt - b.createdAt)
+  const cached = entriesByDate.get(date)
+  if (cached) return cached.slice()
+  const rows = (await (await db()).getAllFromIndex('entries', 'date', date)).sort(byCreatedAt)
+  entriesByDate.set(date, rows)
+  return rows.slice()
 }
 
 export async function entriesInRange(from, to) {
@@ -654,12 +759,23 @@ export async function putEntry(entry) {
   const record = { createdAt: Date.now(), ...entry, id: entry.id || uid() }
   await write(async () => (await db()).put('entries', record))
   await ensureDayTargets(record.date)
+  cacheEntry(record)
+  // Only ever earlier. A row written into a day before the first one on record
+  // moves the floor; one written after it cannot.
+  if (firstLoggedCache !== undefined) {
+    if (firstLoggedCache == null || record.date < firstLoggedCache) firstLoggedCache = record.date
+  }
   emit('entries')
   return record
 }
 
 export async function deleteEntry(id) {
   await write(async () => (await db()).delete('entries', id))
+  uncacheEntry(id)
+  // Dropped rather than adjusted. Removing the last row of the earliest day
+  // moves the floor forward to a date this function has no way to know, and a
+  // delete is rare enough that re-reading one key is the cheap answer.
+  firstLoggedCache = undefined
   emit('entries')
 }
 
@@ -677,8 +793,10 @@ export async function countEntriesForFood(id) {
  * first key is one read.
  */
 export async function firstLoggedDate() {
+  if (firstLoggedCache !== undefined) return firstLoggedCache
   const cursor = await (await db()).transaction('entries').store.index('date').openKeyCursor()
-  return cursor ? cursor.key : null
+  firstLoggedCache = cursor ? cursor.key : null
+  return firstLoggedCache
 }
 
 /* ------------------------------------------------------------------- meals */
