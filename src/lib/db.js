@@ -164,6 +164,36 @@ const stampedDays = new Set()
  */
 let firstLoggedCache
 
+/**
+ * Entry writes still in flight, chained.
+ *
+ * The two writers below patch the cache and emit BEFORE the disk has taken the
+ * row, so that a tap repaints on the next frame rather than after a readwrite
+ * transaction commits — measured at 6.25ms on desktop Chromium, and iOS
+ * Safari's IndexedDB is not the faster of the two.
+ *
+ * That leaves a window, a few milliseconds wide, in which the cache knows
+ * something the store does not. Everything that reads a day THROUGH the cache
+ * is fine inside it, which is the common path and the whole point. Everything
+ * that goes around the cache to the store — a range read for Trends, a cache
+ * miss, a lookup by id — is not, and would read past the row it was emitted
+ * about. So those wait here first.
+ *
+ * Chained rather than a set, because ordering is the property that matters: two
+ * logs in quick succession must land in the order they were made. `catch` keeps
+ * a rejected write from poisoning the chain for every read after it — the
+ * writer that owns the failure has already rolled its own cache change back.
+ */
+let inflight = Promise.resolve()
+const settled = () => inflight
+function tracked(promise) {
+  inflight = inflight.then(
+    () => promise,
+    () => promise
+  ).catch(() => {})
+  return promise
+}
+
 /** Entries are shown and summed in the order they were logged. */
 const byCreatedAt = (a, b) => a.createdAt - b.createdAt
 
@@ -180,6 +210,15 @@ function cacheEntry(record) {
   if (at >= 0) rows[at] = record
   else rows.push(record)
   rows.sort(byCreatedAt)
+}
+
+/** The cached row for an id, or null. Only the rollback in `deleteEntry` needs it. */
+function findCachedEntry(id) {
+  for (const rows of entriesByDate.values()) {
+    const found = rows.find((r) => r.id === id)
+    if (found) return found
+  }
+  return null
 }
 
 /** Drop a row from whichever day is holding it. The id does not carry its date. */
@@ -742,44 +781,94 @@ export async function rememberPortion(foodId, phrase, { quantity, unit }) {
 export async function listEntries(date) {
   const cached = entriesByDate.get(date)
   if (cached) return cached.slice()
+  await settled()
   const rows = (await (await db()).getAllFromIndex('entries', 'date', date)).sort(byCreatedAt)
   entriesByDate.set(date, rows)
   return rows.slice()
 }
 
 export async function entriesInRange(from, to) {
+  await settled()
   return (await db()).getAllFromIndex('entries', 'date', IDBKeyRange.bound(from, to))
 }
 
 export async function getEntry(id) {
+  await settled()
   return (await db()).get('entries', id)
 }
 
+/**
+ * The screens go first and the disk follows. See `inflight`.
+ *
+ * The row exists as far as everything that can see it is concerned before the
+ * transaction that stores it has committed, and the rollback is what makes that
+ * honest rather than a lie that usually gets away with it: a write that throws
+ * takes its row back out of the cache, emits again so every screen drops it,
+ * and then rethrows so the caller still gets to say what happened. What the
+ * user sees in that case is a row that appears and leaves, which is a true
+ * account of what took place.
+ */
 export async function putEntry(entry) {
   const record = { createdAt: Date.now(), ...entry, id: entry.id || uid() }
-  await write(async () => (await db()).put('entries', record))
-  await ensureDayTargets(record.date)
+  const floorWas = firstLoggedCache
   cacheEntry(record)
   // Only ever earlier. A row written into a day before the first one on record
   // moves the floor; one written after it cannot.
   if (firstLoggedCache !== undefined) {
     if (firstLoggedCache == null || record.date < firstLoggedCache) firstLoggedCache = record.date
   }
+  /**
+   * Registered in the barrier BEFORE the emit, not after.
+   *
+   * `emit` runs its listeners synchronously, so a screen that misses the cache
+   * for this day calls `listEntries` and reaches `settled()` inside the same
+   * tick. If the write were started after the emit, that barrier would still be
+   * holding the PREVIOUS chain — already resolved — and the read would go
+   * straight to a store that does not have the row yet. The whole guarantee is
+   * one statement's worth of ordering.
+   */
+  const done = tracked(
+    (async () => {
+      await write(async () => (await db()).put('entries', record))
+      await ensureDayTargets(record.date)
+    })()
+  )
   emit('entries')
+  try {
+    await done
+  } catch (err) {
+    uncacheEntry(record.id)
+    firstLoggedCache = floorWas
+    emit('entries')
+    throw err
+  }
   return record
 }
 
+/** Optimistic on the same terms as `putEntry`, and restores the row if it fails. */
 export async function deleteEntry(id) {
-  await write(async () => (await db()).delete('entries', id))
+  const floorWas = firstLoggedCache
+  const removed = findCachedEntry(id)
   uncacheEntry(id)
   // Dropped rather than adjusted. Removing the last row of the earliest day
   // moves the floor forward to a date this function has no way to know, and a
   // delete is rare enough that re-reading one key is the cheap answer.
   firstLoggedCache = undefined
+  // Before the emit, for the reason given in `putEntry`.
+  const done = tracked(write(async () => (await db()).delete('entries', id)))
   emit('entries')
+  try {
+    await done
+  } catch (err) {
+    if (removed) cacheEntry(removed)
+    firstLoggedCache = floorWas
+    emit('entries')
+    throw err
+  }
 }
 
 export async function countEntriesForFood(id) {
+  await settled()
   return (await db()).countFromIndex('entries', 'foodId', id)
 }
 
