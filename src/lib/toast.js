@@ -1,4 +1,4 @@
-import { h, swipeAway } from './dom.js'
+import { h, swipeAway, paintedTranslate } from './dom.js'
 import { icon } from './icons.js'
 
 /**
@@ -174,14 +174,47 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
     open.delete(dismiss)
     if (!el.isConnected) return
     /**
-     * The box collapses with the fade rather than after it.
+     * TWO EXITS, and which one runs is decided by whether anything is left.
      *
-     * It used to hold its full height for the whole 160ms and then vanish on the
-     * frame `remove()` ran, so a survivor sitting above it stayed put through
-     * the fade and then dropped by a toast height plus the gap. That jump is the
-     * last thing that happens after a delete, and a jump at the end reads as a
-     * glitch rather than as a queue draining.
+     * The collapse exists for exactly one reason: a survivor sitting above this
+     * toast would otherwise hold still through the fade and then drop by a toast
+     * height plus the gap on the frame `remove()` ran. A jump at the end reads as
+     * a glitch rather than as a queue draining.
      *
+     * **That reason does not exist when this is the last toast on screen**, and
+     * that is the common case — most of all on Undo, where you tapped the one
+     * control on the one toast that was up. Folding a box shut when there is
+     * nothing above it to protect is an accordion played at the moment the user
+     * has already got what they asked for: the undo has happened, and the toast
+     * is still on screen taking 160ms to concertina. It leaves instead, on the
+     * reverse of the way it arrived — `toast-in` comes up 12px, so this goes back
+     * down 12 and fades.
+     *
+     * `open` has already had this dismissal deleted from it by the line above, so
+     * its size is what will be left, not what was there.
+     */
+    if (open.size === 0) {
+      /**
+       * Written inline rather than left to the stylesheet, because a swipe has
+       * already put an inline transform and opacity on this element and inline
+       * wins. A rule that said `translateY(12px)` would haul a toast the finger
+       * had dragged to 60 back UP before fading it.
+       *
+       * So the exit is relative: wherever it is now, 12 further in the direction
+       * it was already going. A tapped toast starts at 0 and drifts 12 — the
+       * reverse of `toast-in` — and a swiped one carries on out.
+       */
+      const { y } = paintedTranslate(el)
+      el.dataset.removing = 'solo'
+      el.style.transition =
+        'opacity var(--dur-fast) ease-in, transform var(--dur-fast) ease-in'
+      void el.offsetHeight
+      el.style.transform = `translateY(${y + 12}px)`
+      el.style.opacity = '0'
+      setTimeout(() => el.remove(), 170)
+      return
+    }
+    /**
      * Measured, written, reflowed, then zeroed — `height: auto` does not
      * interpolate, and a `requestAnimationFrame` here is not a substitute. The
      * long form of that argument is at `entryRow`, which leaves a list the same

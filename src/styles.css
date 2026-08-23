@@ -4191,6 +4191,24 @@ body:has(.sheet-scrim) .toast-host {
     opacity var(--dur-press) ease-out;
 }
 
+/**
+ * The last toast leaving. No collapse — there is nothing above it to hold still,
+ * so it simply goes back the way it came. See the two exits in toast.js.
+ *
+ * The fade itself is written inline by `dismiss`, not here, because the swipe
+ * may have left an inline transform on this element and inline wins — the exit
+ * has to be measured from wherever the finger left it. This rule only stops a
+ * toast on its way out from taking a tap. See the two exits in toast.js.
+ */
+.toast[data-removing='solo'] {
+  pointer-events: none;
+  /* A running `toast-in` outranks an inline style, so a toast dismissed inside
+     its own 200ms entrance would ignore the exit written by `dismiss` and simply
+     vanish when it was removed. Rare by hand, not rare when the stack cap
+     dismisses the oldest the instant a third toast arrives. */
+  animation: none;
+}
+
 .toast[data-removing='true'] {
   opacity: 0;
   overflow: hidden;
