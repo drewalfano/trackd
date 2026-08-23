@@ -1,4 +1,4 @@
-import { h, repaint, countTo, setTabularText, haptic, swipePages, pressable } from '../lib/dom.js'
+import { h, repaint, countTo, setTabularText, haptic, swipePages } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listEntries,
@@ -669,7 +669,6 @@ function deckCards() {
   slots.current.el.addEventListener('click', () => {
     setMode(cardMode === 'consumed' ? 'remaining' : 'consumed')
   })
-  pressable(slots.current.el)
 
   return slots
 }

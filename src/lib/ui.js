@@ -1,4 +1,4 @@
-import { h, countTo, setTabularText, fitText, pressable } from './dom.js'
+import { h, countTo, setTabularText, fitText } from './dom.js'
 import { icon, sparkleHalf } from './icons.js'
 import { MACRO_ORDER, MACRO_META, progress } from './compute.js'
 import { g, kcal, round, cmToFtIn, ftInToCm, displayName } from './format.js'
@@ -806,17 +806,6 @@ export function segmentedWide({ options, value, onChange, key }) {
       opt.label
     )
   )
-
-  /**
-   * The press dip, from audit 1's finding 11 — every other control in the app
-   * acknowledges a finger and these did not.
-   *
-   * `pressable` rather than leaning on `:active`, for the reason written at
-   * `dom.js`'s note on it: iOS does not hand `:active` to these reliably, and a
-   * press state that appears on some taps is worse than none. The CSS carries
-   * both selectors so a pointer still gets it on desktop.
-   */
-  buttons.forEach((b) => pressable(b))
 
   const track = h('div', { class: 'segmented' }, pill, buttons)
   track.style.setProperty('--seg-n', String(options.length))

@@ -407,6 +407,33 @@
   --dur-fill: 250ms;
   --dur-slow: 260ms;
   --dur-sheet: 320ms;
+
+  /**
+   * THE PRESS. Two scales and one dip, everywhere something takes a finger.
+   *
+   * There were seven scales — 0.90, 0.92, 0.94, 0.95, 0.96, 0.97, 0.99 — and
+   * four controls with no dip at all, which is a lot of separate decisions
+   * about the one gesture the app is made of. Worse, six of the ten press rules
+   * could only be reached by `:active`, so on the phone they did not run: the
+   * primary button and the Quick add tiles were styled to give under a finger
+   * and never did. `pressDelegate` in dom.js is the half that was missing.
+   *
+   * The dip is not decoration. Scale alone is easy to miss on a small control
+   * against a flat field, and it is the dip that makes the press read as
+   * physical rather than as a wobble. 120ms is short enough that the control is
+   * already back by the time the finger lifts.
+   *
+   * Two scales because there are two sizes of thing. A 44px icon button and a
+   * 300px primary button are not the same object, and the smaller one needs a
+   * deeper proportion to travel the same absolute distance.
+   *
+   * ONE exception, and it is argued where it lives: `.day-card-toggle` keeps
+   * 0.99 and 0.9, because it is nearly the whole screen and the standard press
+   * on something that size reads as the page lurching.
+   */
+  --press-scale: 0.97;
+  --press-scale-sm: 0.92;
+  --press-dim: 0.85;
 }
 
 /* Dark mode inverts neutrals only. The macro hues do not move — see spec 7. */
@@ -1576,9 +1603,10 @@
       transform var(--dur-press) var(--ease-out),
       opacity var(--dur-press) ease-out;
   }
-  .chip-sm:active {
-    transform: scale(0.95);
-    opacity: 0.85;
+  .chip-sm:active,
+  .chip-sm[data-pressed='true'] {
+    transform: scale(var(--press-scale-sm));
+    opacity: var(--press-dim);
   }
 
   /**
@@ -1810,7 +1838,8 @@
     color: var(--color-ink);
     transition:
       transform var(--dur-press) var(--ease-out),
-      background-color var(--dur-press) ease-out;
+      background-color var(--dur-press) ease-out,
+      opacity var(--dur-press) ease-out;
   }
 
   /* Days either side of the month on show. Real days, still pickable — see the
@@ -1835,8 +1864,10 @@
     opacity: 0.3;
   }
 
-  .cal-day:active:not(:disabled) {
-    transform: scale(0.9);
+  .cal-day:active:not(:disabled),
+  .cal-day[data-pressed='true']:not(:disabled) {
+    transform: scale(var(--press-scale-sm));
+    opacity: var(--press-dim);
   }
 
   /* --------------------------------------------------------------- controls */
@@ -1869,9 +1900,10 @@
       transform var(--dur-press) var(--ease-out),
       opacity var(--dur-press) ease-out;
   }
-  .icon-btn:active:not(:disabled) {
-    transform: scale(0.92);
-    opacity: 0.85;
+  .icon-btn:active:not(:disabled),
+  .icon-btn[data-pressed='true']:not(:disabled) {
+    transform: scale(var(--press-scale-sm));
+    opacity: var(--press-dim);
   }
   /* Same 0.3 the primary button uses, so "unavailable" reads one way. */
   .icon-btn:disabled {
@@ -1933,9 +1965,10 @@
    * its own bearing inside the 20px icon box and the last letter of a word does
    * not, so equal numbers read visibly left-heavy.
    *
-   * The press is `.btn-primary`'s 0.97, not `.icon-btn`'s 0.92. The dip is a
+   * The press is `--press-scale`, not `--press-scale-sm`. The dip is a
    * proportion, and 8% off a 130px pill travels three times as far across the
-   * screen as 8% off a 44px circle.
+   * screen as 8% off a 44px circle — which is the whole reason there are two
+   * steps rather than one.
    */
   .back-btn {
     display: inline-flex;
@@ -1954,9 +1987,10 @@
       transform var(--dur-press) var(--ease-out),
       opacity var(--dur-press) ease-out;
   }
-  .back-btn:active {
-    transform: scale(0.97);
-    opacity: 0.85;
+  .back-btn:active,
+  .back-btn[data-pressed='true'] {
+    transform: scale(var(--press-scale));
+    opacity: var(--press-dim);
   }
 
   /* ------------------------------------------------------------- food rail */
@@ -2055,10 +2089,14 @@
     text-align: left;
     background: var(--color-surface);
     border-radius: var(--radius-card);
-    transition: transform var(--dur-press) var(--ease-out);
+    transition:
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
-  .food-tile:active {
-    transform: scale(0.97);
+  .food-tile:active,
+  .food-tile[data-pressed='true'] {
+    transform: scale(var(--press-scale));
+    opacity: var(--press-dim);
   }
 
   /**
@@ -2545,9 +2583,11 @@
       opacity var(--dur-press) ease-out;
   }
   .btn-primary:active:not(:disabled),
-  .btn-secondary:active:not(:disabled) {
-    transform: scale(0.97);
-    opacity: 0.85;
+  .btn-primary[data-pressed='true']:not(:disabled),
+  .btn-secondary:active:not(:disabled),
+  .btn-secondary[data-pressed='true']:not(:disabled) {
+    transform: scale(var(--press-scale));
+    opacity: var(--press-dim);
   }
 
   .btn-primary {
@@ -3032,17 +3072,25 @@
      * untouched controls on the screen, which on the most-tapped row in the app
      * reads as the bar not having received the tap at all.
      *
-     * `scale(0.94)` sits between `.icon-btn`'s 0.92 and `.segment`'s 0.96, which
-     * is where a tab sits by size — the same rule the rest of the scales follow
-     * rather than an exception to it. 120ms is the press duration everywhere.
+     * `--press-scale-sm`, the small step, because that is what a tab is by size
+     * — a 22px icon over a 12px label in a 60px cell, closer to the icon button
+     * than to the primary. It was 0.94, chosen when there were seven scales in
+     * the app and an in-between one could be argued for; there are two now, and
+     * a tab is not a third case.
+     *
+     * The dip is new here. The tabs were scale-only, which on the most-tapped
+     * row in the app is the case the dip exists for: a small control on a flat
+     * white bar, where 8% of travel is genuinely easy to miss.
      */
     transition:
       color var(--dur-base) ease-out,
-      transform var(--dur-press) var(--ease-out);
+      transform var(--dur-press) var(--ease-out),
+      opacity var(--dur-press) ease-out;
   }
   .tab:active,
   .tab[data-pressed='true'] {
-    transform: scale(0.94);
+    transform: scale(var(--press-scale-sm));
+    opacity: var(--press-dim);
   }
 
   /**
@@ -3078,8 +3126,8 @@
      that much movement would read as the page lurching rather than a press. */
   .add-btn:active,
   .add-btn[data-pressed='true'] {
-    transform: scale(0.92);
-    opacity: 0.85;
+    transform: scale(var(--press-scale-sm));
+    opacity: var(--press-dim);
   }
 
   /**
@@ -4373,11 +4421,17 @@
  * its five questions are asked with it, and on those three it is the only thing
  * on the page you can touch.
  *
- * `scale(0.96)`, not `.btn-primary`'s 0.97. A segment is a third of a row rather
- * than the whole of one, and the same ratio on a smaller box reads as less
- * movement — the scale numbers in this file vary by control size on purpose
- * (0.92 circles, 0.97 pills, 0.9 calendar day), and this is that rule rather
- * than an exception to it.
+ * `--press-scale`, the same step `.btn-primary` takes. It was 0.96, argued at
+ * the time on the grounds that a segment is a third of a row rather than the
+ * whole of one and that the scales in this file vary by control size — which
+ * they did, across seven values. Two now: circles and small chips take
+ * `--press-scale-sm`, everything wider than it is tall takes `--press-scale`,
+ * and a segment is the second of those. 0.01 of scale was never the thing
+ * distinguishing it from a button.
+ *
+ * The dip is new here, and it matters more on this control than most: a segment
+ * sits on a filled track, so the scale alone has a neighbouring edge to be
+ * measured against and reads as a twitch rather than a press.
  *
  * The transform goes on the button and the pill is a sibling above it, so
  * pressing a segment dips the *label* and never the selection travelling toward
@@ -4396,11 +4450,13 @@
 .segment {
   transition:
     transform var(--dur-press) var(--ease-out),
-    color var(--dur-fast) ease-out;
+    color var(--dur-fast) ease-out,
+    opacity var(--dur-press) ease-out;
 }
 .segment:active,
 .segment[data-pressed='true'] {
-  transform: scale(0.96);
+  transform: scale(var(--press-scale));
+  opacity: var(--press-dim);
 }
 
 @media (prefers-reduced-motion: reduce) {

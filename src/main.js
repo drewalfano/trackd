@@ -1,6 +1,6 @@
 import './styles.css'
 
-import { h, mount, clear, pressable } from './lib/dom.js'
+import { h, mount, clear, pressDelegate } from './lib/dom.js'
 import { icon } from './lib/icons.js'
 import { checkStorage, getSettings, saveSettings, onChange } from './lib/db.js'
 import { toast } from './lib/toast.js'
@@ -191,21 +191,15 @@ function tabBar() {
       h('span', { class: 'text-[12px] font-semibold' }, tab.label)
     )
   )
-  // Same reason the add button beside them takes it: iOS does not hand `:active`
-  // to these reliably, and a press state that appears on some taps is worse than
-  // none. The CSS carries both selectors so a pointer still gets it on desktop.
-  tabButtons.forEach((b) => pressable(b))
-
   // The one control on this bar that does something rather than going
   // somewhere, so it is the one that most wants to feel like it was pressed.
-  // `pressable` rather than `:active` alone because iOS will not give `:active`
-  // to a plain element on touch — see the note on the helper.
+  // Its press comes from `pressDelegate`, like every other control's — see the
+  // note on it for why touch cannot be left to `:active`.
   const addButton = h(
     'button',
     { class: 'add-btn', 'aria-label': 'Add food', onclick: () => openAddFood() },
     icon('plus', { size: 28, stroke: 2.25 })
   )
-  pressable(addButton)
 
   return h(
     'nav',
@@ -534,6 +528,16 @@ function maybeShowInstallHint(settings) {
 /* ------------------------------------------------------------------- boot */
 
 async function boot() {
+  /**
+   * Before anything is built, and never torn down.
+   *
+   * It is delegated on the document, so it does not care what is mounted — the
+   * storage-blocked screen, onboarding, or the app — and it covers controls
+   * built long after this line ran, which is every control in the app given
+   * that screens rebuild their own subtrees.
+   */
+  pressDelegate()
+
   try {
     await checkStorage()
   } catch {

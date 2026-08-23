@@ -1387,41 +1387,107 @@ export function swipeToDismiss(panel, { scroller, scrim, dim = scrim, onDismiss,
  * every page turn is a card that is both dipped and sliding — which reads as
  * the tap having gone wrong rather than as a swipe having begun.
  */
-export function pressable(el, { slop = 10 } = {}) {
+/**
+ * Everything in the app that acknowledges a finger.
+ *
+ * A list rather than an attribute because the press is a property of the
+ * CONTROL, not of the screen that happened to build it — and every one of these
+ * is constructed in a dozen places. An opt-in attribute would have to be
+ * remembered at each of them, which is exactly how six of these ended up with a
+ * press rule in the stylesheet and no way to reach it.
+ */
+const PRESSABLE = [
+  '.btn-primary',
+  '.btn-secondary',
+  '.icon-btn',
+  '.back-btn',
+  '.chip-sm',
+  '.cal-day',
+  '.food-tile',
+  '.tab',
+  '.add-btn',
+  '.segment',
+  '.day-card-toggle',
+].join(',')
+
+/**
+ * ONE press handler for the whole app, delegated on the document.
+ *
+ * `:active` is the desktop pointer and cannot be the touch story: iOS hands it
+ * to a plain element only under conditions that are not worth depending on, and
+ * a press state that shows up on some taps is worse than none. So touch is
+ * `data-pressed`, written here, and every press rule carries both selectors.
+ *
+ * **Delegated, and that is the whole point.** This used to be `pressable(el)`,
+ * bound per element, and it reached four controls out of eleven — because
+ * binding per element means every control has to be found and wired at the
+ * place it is built, and the six that were missed were missed silently: they
+ * had the stylesheet half of the press and nothing to trigger it. The primary
+ * button and the Quick add tiles were among them, which is to say the two
+ * things you touch most in the app did not move when you touched them.
+ *
+ * It also removes a hazard the old shape had to keep working around. Screens
+ * here rebuild their subtrees, so a per-element binding either has to live on a
+ * node that outlives every render or be re-bound on each one, and re-binding
+ * stacks a fresh set of touch handlers on the same element every time. Today's
+ * deck has a comment about exactly that. One listener on the document has
+ * neither problem and covers nodes built after it was installed.
+ *
+ * Capture phase throughout, so a control inside something that stops
+ * propagation — the swipe handler, a sheet — still clears its own press.
+ */
+export function pressDelegate(root = document, { slop = 10 } = {}) {
+  let current = null
   let startX = 0
   let startY = 0
-  let down = false
 
-  const set = (on) => {
-    down = on
-    if (on) el.dataset.pressed = 'true'
-    else delete el.dataset.pressed
+  const clear = () => {
+    if (current) delete current.dataset.pressed
+    current = null
   }
 
   const onStart = (e) => {
+    // A second finger arriving is not a second press. Drop whatever was held.
+    clear()
     if (e.touches.length > 1) return
+    const el = e.target?.closest?.(PRESSABLE)
+    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return
     const p = e.touches[0]
     startX = p.clientX
     startY = p.clientY
-    set(true)
+    current = el
+    el.dataset.pressed = 'true'
   }
-  const onMove = (e) => {
-    if (!down) return
-    const p = e.touches[0]
-    if (Math.abs(p.clientX - startX) > slop || Math.abs(p.clientY - startY) > slop) set(false)
-  }
-  const onEnd = () => set(false)
 
-  el.addEventListener('touchstart', onStart, { passive: true })
-  el.addEventListener('touchmove', onMove, { passive: true })
-  el.addEventListener('touchend', onEnd)
-  el.addEventListener('touchcancel', onEnd)
+  /**
+   * The slop is what keeps a press off a scroll.
+   *
+   * Every one of these controls can sit inside something that scrolls — the
+   * Quick add rail scrolls sideways under the tiles, the settings list scrolls
+   * under its rows — and a finger that starts on a control and then drags is
+   * scrolling, not pressing. Past the threshold the press is abandoned and does
+   * not come back, even if the finger returns: it stopped being a tap the
+   * moment it travelled.
+   */
+  const onMove = (e) => {
+    if (!current) return
+    const p = e.touches[0]
+    if (!p) return
+    if (Math.abs(p.clientX - startX) > slop || Math.abs(p.clientY - startY) > slop) clear()
+  }
+
+  const opts = { passive: true, capture: true }
+  root.addEventListener('touchstart', onStart, opts)
+  root.addEventListener('touchmove', onMove, opts)
+  root.addEventListener('touchend', clear, opts)
+  root.addEventListener('touchcancel', clear, opts)
 
   return () => {
-    el.removeEventListener('touchstart', onStart)
-    el.removeEventListener('touchmove', onMove)
-    el.removeEventListener('touchend', onEnd)
-    el.removeEventListener('touchcancel', onEnd)
+    root.removeEventListener('touchstart', onStart, opts)
+    root.removeEventListener('touchmove', onMove, opts)
+    root.removeEventListener('touchend', clear, opts)
+    root.removeEventListener('touchcancel', clear, opts)
+    clear()
   }
 }
 
