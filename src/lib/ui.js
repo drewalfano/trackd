@@ -228,7 +228,20 @@ export function macroLine(totals, { size = 12, muted = false, omit = [] } = {}) 
   return h(
     'div',
     {
-      class: 'flex flex-wrap items-baseline gap-x-[6px] font-medium',
+      /**
+       * 400, and it moves with the row title above it — see `foodRowBody`.
+       *
+       * The two were one step apart at 600 and 500, and that step is what keeps
+       * a name ahead of its own numbers. Dropping only the title would have put
+       * them on the same weight and flattened the row; dropping both keeps the
+       * relationship and moves the pair down together.
+       *
+       * The units do NOT follow. `macroUnit` stays at 600 because it is the
+       * only thing on this line carrying colour, and colour here means macro
+       * identity — see spec 7. Lightening the anchor with everything else would
+       * spend the one distinction the line is built on.
+       */
+      class: 'flex flex-wrap items-baseline gap-x-[6px] font-normal',
       style: { fontSize: `${size}px` },
       'aria-label': `${kcal(totals.kcal)} calories, ${g(totals.protein)} grams protein, ${g(
         totals.fat
@@ -295,8 +308,26 @@ export function foodRowBody({ name, detail, sub, totals, badge = null, missing =
     h(
       'div',
       {
+        /**
+         * 500, not 600.
+         *
+         * This is the app's main body copy — every logged entry, every food in
+         * a list — and at 14px semibold it was too dense to be one. SF Text is
+         * already the heavier of the family's two optical designs, drawn with
+         * more weight at small sizes on purpose, so 600 on top of that thickened
+         * the strokes until the name and the macro line under it competed and
+         * the row read as two headings rather than a heading and its detail.
+         *
+         * The other half of the argument is the line itself. `detail` beside it
+         * is 400, so the row used to make a two-step jump inside a single line.
+         * 500 against 400 is one step, which is all a name needs to lead a
+         * timestamp.
+         *
+         * 400 was drawn and rejected: it matches `detail` exactly, and a name
+         * that weighs the same as the time after it stops leading the row.
+         */
         class:
-          'flex items-baseline text-[14px] font-semibold leading-tight' +
+          'flex items-baseline text-[14px] font-medium leading-tight' +
           (missing ? ' text-muted line-through' : ''),
       },
       badge,
