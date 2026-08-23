@@ -1,4 +1,4 @@
-import { h } from './dom.js'
+import { h, swipeAway } from './dom.js'
 import { icon } from './icons.js'
 
 /**
@@ -13,16 +13,17 @@ let host = null
 function getHost() {
   if (!host) {
     host = h('div', {
-      // Clears the floating tab bar, tracking its shared geometry.
+      // The bottom inset moved to `.toast-host` in styles.css, because it is not
+      // one number: a toast clears the tab bar when the tab bar is there, and
+      // sits on the bottom edge when a sheet has covered it. See the rule.
       //
       // pointer-events-none is load-bearing. This host spans the full width and
       // sits above the tab bar, and its bottom padding overlaps the add button;
       // without it the first toast permanently swallows every tap on the tab
       // bar. Individual toasts opt back in.
       class:
-        'pointer-events-none screen-floor z-[80] items-center ' +
+        'toast-host pointer-events-none screen-floor z-[80] items-center ' +
         'gap-[10px] px-[20px]',
-      style: { paddingBottom: 'calc(var(--nav-height) + var(--nav-inset) + 10px)' },
       role: 'status',
       'aria-live': 'polite',
     })
@@ -83,126 +84,70 @@ function bindEscape() {
  * undo arrow, and the circle is not drawn at all.
  */
 /**
- * A message row, and — when there is something to press — a control row under it.
+ * ONE ROW: the message, and the action if there is one.
  *
- * What this replaces was one row holding all three: message, labelled button,
- * circle. That left the message **165px of a 335px toast**, so
- * `Logged Grilled Chicken Breast` — a completely ordinary entry — wrapped to two
- * lines. Giving row one to the message alone takes that to **295**, and 295 is
- * not an improvement so much as the ceiling: a line at full inner width is the
- * widest a single line can ever be in this toast. Anything still wrapping after
- * this is wider than the container and cannot be fixed by moving things around.
+ * What this replaces was two rows and a circle — a message row, then a control
+ * row holding a full-width Undo beside a 44px X. It measured **115px** with an
+ * action and **84px** without, on a box that exists for five seconds over the
+ * bottom of whatever you were just looking at.
  *
- * **Both controls are 44 and neither needs `.tap-44`.** The row's height comes
- * from the button either way, so a 44px circle beside it is free — it was drawn
- * at 28 first, which cost the same height and bought only a smaller target. What
- * separates them is width: 241 against 44, which is the shape of a primary
- * action with a close beside it and does the hierarchy without a size trick.
+ * The two rows were bought for a specific reason and the reason does not survive
+ * being measured. Row one was given to the message alone so a name like
+ * `Grilled Chicken Breast, 180g` would have the full 295px and not wrap.
  *
- * A 50/50 split of that row was drawn and rejected. Equal width asserts equal
- * weight, and the two are not equal — Undo is the only one with a consequence,
- * where dismissing is what the five-second timeout already does for free.
+ * That name does wrap here, and the wrap costs **6px**: the line box goes 21 to
+ * 42, the action holds the row at 36, so the taller of the two wins and the
+ * toast goes 60 to 66. The old shape spent ~50px making sure it never happened.
+ * Paying fifty to avoid six is the whole of the change.
  *
- * **The X is 44 in both rows.** It shipped once at 28 in the message row and
- * that was wrong — see the note on the button. The size does not follow the row
- * it lands in; it follows the control, which is the same control doing the same
- * job in both.
+ * The X is gone with it. It existed so the toast could be dismissed early, and
+ * it was the app's only control drawn at 44px purely so it would not look
+ * smaller than itself elsewhere — the note that used to be here admitted it
+ * cost 17px on the commonest toast in the app and took that deliberately. Early
+ * dismissal is now the swipe, which costs no pixels at all.
  *
- * Heights at 375pt: **84px with no action**, **115px with one**, and **136px**
- * when the message wraps anyway.
+ * **The one thing the X was genuinely protecting is still protected.** A toast
+ * sits where a thumb rests, and the thing it covers is the thing you just
+ * changed, so a stray tap is likely — and on an Undo toast a stray tap that
+ * dismissed would destroy the recovery you were just offered. There is still no
+ * tap-to-dismiss surface. The only tappable thing on a toast is its action, and
+ * a swipe is a deliberate gesture that a resting thumb does not perform.
  *
- * **The no-action toast is the one that got more expensive**, from the 67 the
- * old single-row version measured to 84, and it is the shape most of the app's
- * toasts take. That is the price of the circle being one size, and it was taken
- * deliberately rather than absorbed: the alternative was a sole control drawn
- * smaller than the same control elsewhere.
+ * The action is a 36px pill rather than a 44px full-width bar. It keeps its fill
+ * so it still reads as a control, at a size proportional to a message that is
+ * leaving on its own in five seconds — a full-width filled button is the shape
+ * of a primary action, and Undo is an offer, not an instruction.
  *
- * One thing the bigger circle buys back. A two-line message is 42px, still under
- * the circle's 44, so on a no-action toast the message can wrap for free — the
- * box does not grow. `Could not copy. Screenshot it instead.` is the only string
- * in the app that this moved onto two lines, and it costs nothing.
+ * Measured at 375pt: **60px with an action, 45px without, 66px when the message
+ * wraps.** Against 115 and 84 before, and the old two-row shape was 115 whether
+ * the message wrapped or not.
  */
 export function toast(message, { action, onAction, actionDismisses = false, duration = 5000 } = {}) {
   /**
-   * A real close target, rather than dismissing on a tap anywhere.
+   * The action, and the only thing on a toast you can tap.
    *
-   * Tap-the-whole-surface is the tidier rule and it is wrong here. A toast
-   * lives at the bottom of the screen, directly over where a thumb rests, and
-   * the thing it is covering is the thing you just changed — so a stray tap is
-   * likely, and on an Undo toast a stray tap would destroy the undo. That is
-   * the one interaction in the app where being careless costs you a recovery
-   * you were explicitly offered.
-   *
-   * So the glyph earns its pixels: dismissal becomes deliberate, and Undo can
-   * never be lost to a mis-tap. Drawn on every toast that does not already
-   * carry its own way out — the rule being fought for is that a toast is never
-   * without a visible dismissal, not that it always has this exact circle, and
-   * a second one next to "Got it" makes the first less trusted, not more.
-   *
-   * **44 in both rows, and it needs no `.tap-44` because 44 is what it is.**
-   *
-   * It was drawn at 28 in the message row for one version, on the precedent
-   * `.icon-btn-sm` sets — a full circle next to type reads as a second button
-   * rather than as something the row owns. That precedent does not reach this
-   * case and the version that shipped it was wrong. `.icon-btn-sm` sits among
-   * other controls on a busy row; here, with no action, the circle is the ONLY
-   * control on the toast, and drawing the sole control as the smaller of its two
-   * variants is backwards. One control doing one job is one size.
-   *
-   * The cost is honest and is paid on the common toast: once the circle is
-   * taller than the 21px line box it sets the row height, so `Saved` goes from
-   * 68px to **84px**. There is no arrangement that avoids that — absolutely
-   * positioning the circle only moves the overflow somewhere worse.
-   *
-   * The fill is `.16`, the same as the action button's. Drawn lighter first, at
-   * `.10`, so the circle would sit behind Undo rather than beside it — and at
-   * matched heights that read as a control someone had greyed out rather than as
-   * a quieter one. Same weight, different width, is the version that looks right.
-   */
-  const dismissBtn = actionDismisses
-    ? null
-    : h(
-        'button',
-        {
-          class: 'flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-full',
-          style: { background: 'color-mix(in srgb, currentColor 16%, transparent)' },
-          'aria-label': 'Dismiss',
-          onclick: () => dismiss(),
-        },
-        icon('close', { size: 16, stroke: 2.25 })
-      )
-
-  /**
-   * The action, taking what is left of the control row.
-   *
-   * `flex-1`, not `w-full`: it shares the row with the dismiss circle, and a
-   * full-width button beside a 44px sibling overflows the row rather than
-   * splitting it. 241 × 44 at 375pt.
-   *
-   * No `.tap-44` — it is past the floor on both axes already, and a class that
-   * changes nothing is a thing someone has to explain later.
+   * `shrink-0` so the message yields to it rather than the other way round: the
+   * label is two known words and the message is arbitrary, so the message is the
+   * one that should wrap. `min-w-0` on the message is what allows that — without
+   * it a long word refuses to go under its own content width and pushes the pill
+   * off the end.
    */
   const actionBtn = action
     ? h(
         'button',
         {
           class:
-            'flex h-[44px] min-w-0 flex-1 items-center justify-center gap-[6px] ' +
-            'rounded-full text-[14px] font-semibold',
+            'toast-act flex h-[36px] shrink-0 items-center gap-[6px] rounded-full ' +
+            'px-[16px] text-[13px] font-semibold',
           style: { background: 'color-mix(in srgb, currentColor 16%, transparent)' },
           onclick: () => {
             dismiss()
             onAction?.()
           },
         },
-        // Trailing, where the circle it replaced was, and where a close on this
-        // app already lives — every sheet's X is the last thing on its header
-        // row. Leading is right for the undo arrow, which is a verb the label
-        // completes: the glyph says what happens and the word says to what. An X
-        // is not a verb. It is the exit, and the exit goes at the end.
-        //
-        // Same 16 at 2.25 the circle draws, so an X means one thing on a toast
-        // however it is labelled.
+        // Leading for the undo arrow, which is a verb the label completes: the
+        // glyph says what happens and the word says to what. Trailing for the X,
+        // because an X is not a verb — it is the exit, and the exit goes last.
         ...(actionDismisses
           ? [action, icon('close', { size: 16, stroke: 2.25 })]
           : [icon('undo', { size: 16 }), action])
@@ -213,33 +158,14 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
     'div',
     {
       class:
-        'toast toast-in pointer-events-auto flex w-full max-w-[430px] flex-col ' +
-        'gap-[10px] rounded-[24px] bg-ink p-[20px] text-canvas',
+        'toast toast-in pointer-events-auto flex w-full max-w-[430px] items-center ' +
+        'gap-[12px] rounded-[24px] bg-ink py-[12px] pl-[20px] text-canvas ' +
+        // 12 behind the pill because the pill's own fill carries the edge; 20
+        // when there is nothing there, so a message-only toast is padded evenly.
+        (actionBtn ? 'pr-[12px]' : 'pr-[20px]'),
     },
-    /**
-     * The message row. It holds the dismiss circle ONLY when there is no control
-     * row for it to live in — that is the whole conditional, and it is why the
-     * message gets the full 295 in the case that needed it.
-     *
-     * `items-center` rather than `items-start`, which only shows on a message
-     * long enough to wrap. On one line the two are identical; on two, centring is
-     * what this app's own sheet headers do with the same pair of a title and an
-     * X, and pinning the circle to the first line's top would need an optical
-     * nudge to sit against a 21px line box anyway.
-     */
-    h(
-      'div',
-      { class: 'flex items-center gap-[10px]' },
-      h('span', { class: 'min-w-0 flex-1 text-[14px] font-medium' }, message),
-      action ? null : dismissBtn
-    ),
-    /**
-     * The control row. `actionDismisses` leaves `dismissBtn` null, so the "Got
-     * it" button takes the whole row on its own — which is right, because that
-     * flag means the labelled button IS the way out and a circle beside it would
-     * be a second one.
-     */
-    actionBtn && h('div', { class: 'flex items-center gap-[10px]' }, actionBtn, dismissBtn)
+    h('span', { class: 'min-w-0 flex-1 text-[14px] font-medium' }, message),
+    actionBtn
   )
 
   let timer = null
@@ -279,6 +205,27 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
   bindEscape()
   getHost().appendChild(el)
   timer = setTimeout(dismiss, duration)
+
+  /**
+   * The gesture that replaced the X.
+   *
+   * Wired here rather than beside `el`, because it needs `dismiss` — which needs
+   * `el` — and the pause needs `timer`. All three exist by this line.
+   *
+   * The hold is the point of `onHold`/`onRelease`: a finger on the toast stops
+   * the clock, and letting go without committing starts a full fresh five
+   * seconds rather than resuming a partly spent one. Resuming would mean a toast
+   * you deliberately grabbed could still vanish a few hundred milliseconds
+   * later, which is the behaviour the pause exists to prevent.
+   */
+  swipeAway(el, {
+    onDismiss: dismiss,
+    onHold: () => clearTimeout(timer),
+    onRelease: () => {
+      timer = setTimeout(dismiss, duration)
+    },
+  })
+
   return dismiss
 }
 

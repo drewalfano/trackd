@@ -4149,6 +4149,48 @@
  * the clamp relaxes at exactly the rate the box closes. `.swipe-row` never hit
  * this because its padding sits on a child.
  */
+/**
+ * WHERE A TOAST SITS, and it is not one number.
+ *
+ * The inset used to be an inline style on the host: nav height, plus nav inset,
+ * plus 10 — 98px of clearance for the floating tab bar. That is right on the
+ * three tab screens and wrong everywhere else, because a sheet covers the tab
+ * bar and the toast went on reserving space for it. Logging from the add sheet
+ * put the toast 98px up with nothing under it, floating in the middle of a
+ * surface whose own bottom edge is at the screen's.
+ *
+ * `:has(.sheet-scrim)` and not a flag, for the reason `releaseOrphanedLock` in
+ * sheet.js already argues about the body lock: what matters is whether anything
+ * is actually on screen, which is a fact about the document rather than a
+ * variable somebody has to remember to clear on all six close paths. A stale
+ * flag here would strand every later toast at the wrong height for the session.
+ * It also means a sheet opening or closing UNDER a live toast moves it, which a
+ * value read once at creation could not do.
+ *
+ * With a sheet up the toast takes the same 20 the tab bar itself floats at, over
+ * the bottom safe area — so it sits where the bottom-most thing on screen sits
+ * rather than above a control that is not there.
+ */
+.toast-host {
+  padding-bottom: calc(var(--nav-height) + var(--nav-inset) + 10px);
+}
+body:has(.sheet-scrim) .toast-host {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--nav-inset));
+}
+
+/* The toast's own control, on the app's small press step like every other
+   chip-sized thing. See THE PRESS. */
+.toast-act:active,
+.toast-act[data-pressed='true'] {
+  transform: scale(var(--press-scale-sm));
+  opacity: var(--press-dim);
+}
+.toast-act {
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    opacity var(--dur-press) ease-out;
+}
+
 .toast[data-removing='true'] {
   opacity: 0;
   overflow: hidden;

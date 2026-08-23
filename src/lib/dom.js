@@ -1408,6 +1408,7 @@ const PRESSABLE = [
   '.add-btn',
   '.segment',
   '.day-card-toggle',
+  '.toast-act',
 ].join(',')
 
 /**
@@ -1489,6 +1490,108 @@ export function pressDelegate(root = document, { slop = 10 } = {}) {
     root.removeEventListener('touchcancel', clear, opts)
     clear()
   }
+}
+
+/**
+ * Swipe a toast away.
+ *
+ * Deliberately NOT `swipeToDismiss` above, which closes a sheet: that one drags
+ * a panel against a scroller and dims a scrim behind it, and a toast has
+ * neither. Same gesture, different object, and folding them together would mean
+ * a toast carrying arguments for parts it does not have.
+ *
+ * This is what replaced the dismiss circle. The X was a 44px control that
+ * existed only so a toast could be closed before its five seconds were up, and
+ * it cost that height on every toast in the app including the ones with nothing
+ * else on them. A gesture costs nothing and does the same job.
+ *
+ * **Down, and only down.** The toast arrives on `toast-in` from 12px below and
+ * sits at the bottom of the screen, so down is the direction it came from and
+ * the direction there is nothing else in. Horizontal was the other candidate and
+ * is wrong here: the app already spends horizontal drags on the day deck and on
+ * the swipe rows in the log, and a third meaning for the same gesture in the
+ * same corner of the screen is how a gesture stops being learnable.
+ *
+ * Upward is rubber-banded rather than ignored. A drag that does nothing at all
+ * reads as the toast not having heard you; a third of the distance says it heard
+ * and is not going that way.
+ *
+ * The auto-dismiss is paused for the length of the drag. A toast that vanishes
+ * out of a finger mid-gesture is the timer contradicting the thing the user is
+ * actively doing, and the five seconds are meant to be reading time — a hand on
+ * the toast is proof it is being read.
+ */
+export function swipeAway(el, { onDismiss, onHold, onRelease, threshold = 44 } = {}) {
+  let startX = 0
+  let startY = 0
+  let dy = 0
+  let tracking = false
+  let decided = false
+
+  const damp = (d) => (d < 0 ? d / 3 : d)
+
+  const onStart = (e) => {
+    if (e.touches.length > 1) return
+    startX = e.touches[0].clientX
+    startY = e.touches[0].clientY
+    dy = 0
+    tracking = true
+    decided = false
+  }
+
+  /**
+   * Non-passive, because a committed drag has to call `preventDefault` — the
+   * toast sits in a fixed host over a scrolling document, and without it the
+   * page scrolls behind the gesture and the toast slides at the same time.
+   *
+   * The direction is decided ONCE, on the first few pixels, and only a
+   * predominantly vertical move claims the gesture. Anything else is left alone
+   * so a horizontal drag that happens to start on a toast still reaches the deck
+   * underneath it.
+   */
+  const onMove = (e) => {
+    if (!tracking) return
+    const p = e.touches[0]
+    const rawY = p.clientY - startY
+    const rawX = p.clientX - startX
+    if (!decided) {
+      if (Math.abs(rawX) < 6 && Math.abs(rawY) < 6) return
+      if (Math.abs(rawX) > Math.abs(rawY)) {
+        tracking = false
+        return
+      }
+      decided = true
+      onHold?.()
+    }
+    e.preventDefault()
+    dy = damp(rawY)
+    el.style.transform = `translateY(${dy}px)`
+    // Fades toward the threshold rather than to it, so a drag that is going to
+    // succeed already looks like it is leaving before the finger lifts.
+    el.style.opacity = String(Math.max(0.35, 1 - Math.max(0, dy) / (threshold * 2)))
+  }
+
+  const onEnd = () => {
+    if (!tracking) return
+    tracking = false
+    if (!decided) return
+    if (dy > threshold) {
+      onDismiss?.()
+      return
+    }
+    el.style.transition = `transform var(--dur-fast) var(--ease-out), opacity var(--dur-fast) ease-out`
+    el.style.transform = ''
+    el.style.opacity = ''
+    setTimeout(() => {
+      el.style.transition = ''
+    }, 200)
+    onRelease?.()
+  }
+
+  el.addEventListener('touchstart', onStart, { passive: true })
+  el.addEventListener('touchmove', onMove, { passive: false })
+  el.addEventListener('touchend', onEnd)
+  el.addEventListener('touchcancel', onEnd)
 }
 
 /** Long press without swallowing taps or fighting the swipe handler. */
