@@ -600,6 +600,20 @@ export function listRow({ title, subtitle, right, onclick, chevron = false, lead
  * correction `.back-btn` makes with its 14/18 padding, for the same reason — a
  * glyph's box is not where the glyph is.
  *
+ * **The same 7px on the LEFT flank, because the bearing is symmetrical and the
+ * gap next to it was not.** That first paragraph is an argument about a glyph
+ * having empty air around it, and it was only ever spent on the flank that
+ * meets the card's edge. The other flank meets `.row`'s 10px `gap`, so every
+ * value in the app that ends a row — a Settings value, a weigh-in, History's
+ * calorie figure — was declaring 10 and drawing about 17. On a row whose other
+ * gaps are a true 10 that is the value drifting away from the mark that says
+ * the row opens, which is what it was reported as, on History.
+ *
+ * So the box now overhangs at both ends and the ink sits where the numbers say:
+ * 20 from the card on the right, 10 from whatever precedes it on the left.
+ * There is no risk of collision in the 7px it takes back — that space is inside
+ * the svg and has nothing drawn in it.
+ *
  * **A function rather than a line inside `listRow`, because three rows in this
  * app are hand-rolled and cannot use `listRow`.** The Source code row is an
  * `<a href>`, History's day row carries three rings and a figure before its
@@ -615,7 +629,7 @@ export function listRow({ title, subtitle, right, onclick, chevron = false, lead
  * costs a slightly earlier ellipsis and nothing else.
  */
 export function rowChevron() {
-  return icon('chevronRight', { size: 20, class: '-mr-[7px] shrink-0 text-muted' })
+  return icon('chevronRight', { size: 20, class: '-ml-[7px] -mr-[7px] shrink-0 text-muted' })
 }
 
 /** Ids for label association. Monotonic, since a rebuild makes new elements. */
