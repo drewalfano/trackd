@@ -7,14 +7,16 @@ import { h } from './dom.js'
  * this the bar sits on top of live text and both become hard to read. Purely
  * decorative — callers hide it from assistive tech and it never takes pointers.
  *
- * One caller now: `.tabbar-fade`. The sheet footer's band was the other and is
- * still there, but it is a plain gradient over its own box rather than a
- * progressive blur; see the note on `FADE_RAMP` below for what stopped this
- * applying to it.
+ * Two callers: `.tabbar-fade` and `.sheet-head-fade`. The sheet FOOTER's band
+ * is a third band of the same family and deliberately not one of them — it is a
+ * plain gradient over its own box; see the note on `SHEET_HEAD_RAMP` below for
+ * what separates the two ends of a sheet.
  *
- * **A ramp is [radius, solid to %, transparent by %], bottom-up.** Each layer
- * sits on top of the previous one and re-blurs its output, so radii compound
- * rather than replace.
+ * **A ramp is [radius, solid to %, transparent by %], measured from the deep
+ * end.** `dir` is which way that measurement runs — `to top` for a band whose
+ * deep end is its bottom edge, `to bottom` for one hanging from its top. Each
+ * layer sits on top of the previous one and re-blurs its output, so radii
+ * compound rather than replace.
  *
  * The radii are deliberately mild. The effect's depth comes from the gradient
  * veil layered over the blur, not from the radius — an aggressive blur reads as
@@ -28,10 +30,10 @@ import { h } from './dom.js'
  * and has every reason to be legible. Blurring readable content is a cost with
  * no matching benefit: nothing is about to slide under the bar up there.
  */
-export function fadeLayers(ramp) {
+export function fadeLayers(ramp, dir = 'to top') {
   return ramp.map(([radius, solid, clear]) => {
     const span = h('span')
-    const mask = `linear-gradient(to top, #000 0%, #000 ${solid}%, transparent ${clear}%)`
+    const mask = `linear-gradient(${dir}, #000 0%, #000 ${solid}%, transparent ${clear}%)`
     span.style.backdropFilter = `blur(${radius}px)`
     span.style.webkitBackdropFilter = `blur(${radius}px)`
     span.style.maskImage = mask
@@ -77,3 +79,37 @@ export const FADE_RAMP = [
   [5, 0, 24],
 ]
 
+/**
+ * The other ramp: the band under a sheet's header, hanging from its top edge.
+ *
+ * **A sheet has two ends and they are not the same argument.** The footer's
+ * band is a plain gradient because it reaches full sheet colour at the button's
+ * top edge — nothing survives behind the deep end for a blur to act on, so
+ * three compositor snapshots a frame would buy nothing. See `.sheet-fade` in
+ * styles.css, which makes that case at length.
+ *
+ * The header's band is the opposite case and is the tab bar's. Its deep end is
+ * a title with no surface of its own, sitting over a list that runs on
+ * underneath it — so what is behind it matters, and the only question is
+ * whether it reads as receding or as clipped. It read as clipped: the scroller
+ * used to END at the header, so the first row was cut through the middle by a
+ * hard horizontal line the moment anything scrolled. A veil alone would have
+ * moved that line rather than removed it. The blur is what makes the content
+ * go away rather than stop.
+ *
+ * **Measured top-down over a 124px band** — an 84px header (44px controls
+ * between two gutters) plus two gutters of rise below it. The veil is opaque
+ * for the top 44 and ramps out over the remaining 80, so the blur is spent in
+ * that 80: the first layer covers all of it, and the two deeper ones stack up
+ * where the row is emerging and are gone well before the band's bottom edge.
+ *
+ * The radii run a little higher than the tab bar's 1.5/3/5. That band gets
+ * 105px to ramp through and this one gets 80, and the effect is the distance
+ * over which the blur changes, not the depth it reaches — the same softness
+ * over a shorter run has to be steeper.
+ */
+export const SHEET_HEAD_RAMP = [
+  [2, 35, 100],
+  [4, 22, 72],
+  [6, 10, 48],
+]

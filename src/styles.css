@@ -3765,6 +3765,127 @@
 }
 
 /**
+ * The header floats over the scroller; it is not a row above it.
+ *
+ * The same move the footer made, at the other end, and for the same reason the
+ * note on `.sheet-fade` sets out: a scroller that ENDS at a piece of chrome has
+ * no content behind that chrome, so nothing there can read as receding. The
+ * header's edge was worse than the footer's ever was, because a list scrolls
+ * PAST it constantly — the first row was cut through the middle by a hard
+ * horizontal line, name gone and macros left, the moment anything moved.
+ *
+ * So the scroller runs up behind this row and reserves `.sheet-head-fade`'s
+ * height as its top padding (`syncHeader` in lib/sheet.js measures the band,
+ * not this element). The gutters and the layout of the row are untouched.
+ *
+ * **The `z-index` is the one thing source order does not settle**, and it took
+ * a screenshot to see why. The footer floats over the same scroller and needs
+ * none, because it comes AFTER the scroller in the markup and a header cannot.
+ * Being positioned is not enough on its own: the scroller carries `isolate`,
+ * and an element that forms a stacking context without being positioned paints
+ * where a `z-index: 0` one would — the same step this header paints in, decided
+ * by tree order, which the header loses. The list drew straight over the title.
+ *
+ * 1, not 30 or 60. This is a fight between two siblings inside one panel, not a
+ * claim against the app's layers.
+ */
+.sheet-head {
+  z-index: 1;
+}
+
+/**
+ * **Every child has to be positioned**, which is the one thing the float costs.
+ * The band is absolutely positioned inside the header, so it paints over any
+ * sibling that is still static — a back chevron, a title, a close button, all
+ * of them under an opaque veil. This puts them back on top without a second
+ * `z-index` fight, exactly as `.sheet-footer`'s rule does; it is also why the
+ * action slot in lib/sheet.js stopped being `display: contents`, since a box
+ * that has no box cannot be positioned.
+ */
+.sheet-head > *:not(.sheet-head-fade) {
+  position: relative;
+}
+
+/**
+ * The band behind the header: the header's own box, plus a rise below it.
+ *
+ * `top: 0` and a negative `bottom` rather than a height, so the box is the
+ * header's by construction and nothing has to know that a `.icon-btn` is 44px.
+ * `.sheet-fade` hangs off its footer the same way, upside down.
+ *
+ * **The rise, the ramp and the reservation are one number three times.** The
+ * rise is how far the band stands below the header; the scroller reserves the
+ * whole band, so every pixel of rise is also a pixel of clearance the first row
+ * gains — lengthening the ramp buys softness and never buys back a dimmed row.
+ * Two gutters, the same as the footer's, which makes the ramp four: the header's
+ * own bottom gutter plus the rise plus one more, 80px against the footer's 60.
+ * The extra length is bought by the same reservation and the band is deeper, so
+ * it may as well be spent.
+ *
+ * The stops are `.fade-veil`'s renormalised over the ramp, as `.sheet-fade`'s
+ * are — the eased approach is most of why these bands have no visible start.
+ * In px off `--sheet-gutter` and never in percent, so the ramp stays the same
+ * length whatever the band's height turns out to be.
+ *
+ * Opaque `--color-sheet` for the top 44px, which covers the sheet's own rounded
+ * corners and the upper half of the title. The lower half of it has content
+ * behind it at 8-14%, blurred by most of `SHEET_HEAD_RAMP` — that leak is the
+ * effect rather than a miss. `.fade-veil` argues against exactly this and is
+ * arguing about a different band: the tab bar's veil ends under a `nav` that
+ * carries its own fill and its own hairline, so anything showing through is
+ * dirt on a surface. There is no surface here. A title over content that is
+ * visibly going away is what tells you the list continues.
+ */
+.sheet-head-fade {
+  /* How far the band hangs below the header box. Reserved by the scroller, so
+     this is also the extra clearance the first row gets. */
+  --sheet-head-rise: calc(2 * var(--sheet-gutter));
+  /* Band bottom up to full sheet colour — the rise plus the header's own bottom
+     gutter plus one more, so the title's top half never has content behind it. */
+  --sheet-head-ramp: calc(var(--sheet-head-rise) + 2 * var(--sheet-gutter));
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  bottom: calc(-1 * var(--sheet-head-rise));
+  pointer-events: none;
+}
+
+/* The sheet's corner, on the layers rather than on the box: a rounded box with
+   `overflow: hidden` is the other way to clip these, and clipping a
+   `backdrop-filter` through an ancestor's overflow is the fragile one. Their
+   own radius clips both the blur and the veil to the panel's edge. Square
+   corners here would paint sheet colour outside the sheet, over the scrim. */
+.sheet-head-fade > span {
+  position: absolute;
+  inset: 0;
+  display: block;
+  border-top-left-radius: var(--radius-sheet);
+  border-top-right-radius: var(--radius-sheet);
+}
+
+.sheet-head-fade > .fade-veil {
+  background: linear-gradient(
+    to top,
+    transparent 0,
+    color-mix(in srgb, var(--color-sheet) 22%, transparent) calc(0.3 * var(--sheet-head-ramp)),
+    color-mix(in srgb, var(--color-sheet) 54%, transparent) calc(0.55 * var(--sheet-head-ramp)),
+    color-mix(in srgb, var(--color-sheet) 86%, transparent) calc(0.83 * var(--sheet-head-ramp)),
+    var(--color-sheet) var(--sheet-head-ramp)
+  );
+}
+
+/**
+ * The scroller reaches the panel's top edge now, so it is the thing that has to
+ * respect the corner. A scroll container clips its overflow to the rounded
+ * padding box, so this is the whole fix: without it a row scrolling past the
+ * header squares off the two corners the sheet is most recognisable for.
+ */
+.sheet-body {
+  border-top-left-radius: var(--radius-sheet);
+  border-top-right-radius: var(--radius-sheet);
+}
+
+/**
  * Transparent, like the tab bar's `nav`. The opaque part is `.sheet-fade`
  * behind it, which is what lets content recede under the button instead of
  * being cut off by a slab.

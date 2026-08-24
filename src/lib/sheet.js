@@ -1,4 +1,5 @@
 import { h, clear, swipeToDismiss, reduceMotion } from './dom.js'
+import { fadeLayers, SHEET_HEAD_RAMP } from './fade.js'
 import { icon } from './icons.js'
 import { setScrimmed } from './statusBar.js'
 import { captureViewportState } from './viewportProbe.js'
@@ -269,15 +270,57 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * on the row under the title, where it read as an orphaned control rather than
    * as part of the frame. Beside the close it is unmistakably chrome, and the two
    * match — both `.icon-btn`, both `size: 20, stroke: 2`.
+   *
+   * **A real box rather than `display: contents`, now that the header floats.**
+   * The band behind the header is absolutely positioned, so every element that
+   * has to draw on top of it must be positioned too — and `position` does
+   * nothing to a box that has no box. `contents` handed the button straight to
+   * the header's flex line and left it static, which put the one optional
+   * control in the frame UNDER the veil. A flex item holding a single 44px
+   * button lays out identically on that same line, and `empty:hidden` keeps the
+   * `gap` from opening for a slot with nothing in it.
    */
-  const actionSlot = h('div', { class: 'contents' })
+  const actionSlot = h('div', { class: 'flex items-center empty:hidden' })
 
+  /**
+   * The band behind the header, sized to the header and one rise below it.
+   *
+   * The mirror of `footerFade`, and the header floats for the same reason the
+   * footer does: a scroller that ENDS at a piece of chrome cuts its first row
+   * through the middle with a hard horizontal line, and no gradient over the
+   * chrome can soften an edge that has bare surface below it. The scroller runs
+   * up behind the header instead and reserves this band's height, so the first
+   * row's resting line and the band's bottom edge are the same edge — at rest
+   * it covers nothing, exactly as the footer's does.
+   *
+   * Progressive blur here where the footer takes a plain gradient. `.sheet-fade`
+   * reaches full sheet colour at the button's top edge and has nothing left to
+   * see into; this one has a whole list running under a title that carries no
+   * surface of its own. The ramp and the argument are `SHEET_HEAD_RAMP` in
+   * lib/fade.js; the geometry is `.sheet-head-fade` in styles.css.
+   *
+   * A permanent child, unlike the footer's: every sheet has a header, so there
+   * is no empty case to hide.
+   */
+  const headFade = h(
+    'div',
+    { class: 'sheet-head-fade', 'aria-hidden': 'true' },
+    fadeLayers(SHEET_HEAD_RAMP, 'to bottom'),
+    h('span', { class: 'fade-veil' })
+  )
+
+  /**
+   * `absolute`, over the scroller rather than above it — see `headFade`. The
+   * gutters are unchanged: this is the same row in the same place, with the
+   * content it used to sit on top of now passing behind it.
+   */
   const header = h(
     'header',
     {
       class:
-        'flex items-center gap-[10px] px-[var(--sheet-gutter)] pb-[var(--sheet-gutter)] pt-[var(--sheet-gutter)]',
+        'sheet-head absolute inset-x-0 top-0 flex items-center gap-[10px] px-[var(--sheet-gutter)] pb-[var(--sheet-gutter)] pt-[var(--sheet-gutter)]',
     },
+    headFade,
     backBtn,
     titleEl,
     actionSlot,
@@ -321,7 +364,7 @@ export function openSheet({ title, render, footer = null, action = null }) {
      * because one axis cannot clip while the other scrolls.
      */
     class:
-      'isolate min-h-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain px-[var(--sheet-gutter)]',
+      'sheet-body isolate min-h-0 flex-1 overflow-y-auto overflow-x-clip overscroll-contain px-[var(--sheet-gutter)]',
   })
 
   /**
@@ -507,6 +550,34 @@ export function openSheet({ title, render, footer = null, action = null }) {
     body.style.paddingBottom = hasFooter
       ? `${footerFade.offsetHeight}px`
       : 'calc(var(--sheet-gutter) + env(safe-area-inset-bottom, 0px))'
+    /**
+     * The same reservation at the other end, and the same reasoning: the BAND
+     * is measured, not the header.
+     *
+     * The header's own box would leave the first row parked under the rise —
+     * the part of the band that stands below the header so its ramp has room to
+     * be soft — which is a row dimmed and blurred at rest with nowhere further
+     * to go. That is the bug `.sheet-fade` was cut down to fix, arrived at from
+     * the top this time. Reserving the band makes the row's resting line and
+     * the band's bottom edge the same edge by construction.
+     *
+     * Measured rather than written down for the same reason as the footer: the
+     * sum is `.icon-btn`'s height plus two gutters plus the fade's rise, and
+     * those three live in two other files.
+     *
+     * Unconditional, because there is no headerless sheet.
+     *
+     * **It carries the sticky rows too, and for free.** `totalsLine` in
+     * sheets/log.js and the photo slot in lib/labelPhoto.js both pin themselves
+     * with `sticky top-0` inside this scroller, and the obvious reading is that
+     * they now park under the veil — the scrollport's top edge is up behind the
+     * header. They do not: a sticky offset is resolved against the scroll
+     * container's CONTENT box, so this padding moves the parking line down with
+     * it and `top: 0` lands them exactly on the band's bottom edge. Verified on
+     * both, at rest and pinned. An explicit offset would double the padding and
+     * park them a whole band too low, which is what the first attempt did.
+     */
+    body.style.paddingTop = `${headFade.offsetHeight}px`
   }
 
   /**
