@@ -9,48 +9,77 @@ import { icon } from './icons.js'
  */
 
 let host = null
+let deck = null
 
-function getHost() {
-  if (!host) {
-    host = h('div', {
-      // The bottom inset moved to `.toast-host` in styles.css, because it is not
-      // one number: a toast clears the tab bar when the tab bar is there, and
-      // sits on the bottom edge when a sheet has covered it. See the rule.
-      //
-      // pointer-events-none is load-bearing. This host spans the full width and
-      // sits above the tab bar, and its bottom padding overlaps the add button;
-      // without it the first toast permanently swallows every tap on the tab
-      // bar. Individual toasts opt back in.
-      class:
-        'toast-host pointer-events-none screen-floor z-[80] items-center ' +
-        'gap-[10px] px-[20px]',
-      role: 'status',
-      'aria-live': 'polite',
-    })
+function getDeck() {
+  if (!deck) {
+    // The bottom inset moved to `.toast-host` in styles.css, because it is not
+    // one number: a toast clears the tab bar when the tab bar is there, and
+    // sits on the bottom edge when a sheet has covered it. See the rule.
+    //
+    // pointer-events-none is load-bearing. This host spans the full width and
+    // sits above the tab bar, and its bottom padding overlaps the add button;
+    // without it the first toast permanently swallows every tap on the tab
+    // bar. Individual toasts opt back in.
+    //
+    // The deck is the one grid cell every toast shares — see THE DECK below.
+    deck = h('div', { class: 'toast-deck w-full' })
+    host = h(
+      'div',
+      {
+        class: 'toast-host pointer-events-none screen-floor z-[80] items-center px-[20px]',
+        role: 'status',
+        'aria-live': 'polite',
+      },
+      deck
+    )
     document.body.appendChild(host)
   }
-  return host
+  return deck
 }
 
 /**
- * How many toasts may be on screen at once.
+ * THE DECK: toasts stack in depth, not in a column.
  *
- * They stack upward from the tab bar, over the bottom of whatever screen you
- * are on, and three of them reach halfway up a phone — deleting a few entries
- * in a row buried Today's Quick add rail completely. Two is the smallest cap
- * that does not cost anything real: the case that produces more than one toast
- * is a burst of the same action, and each carries its own Undo, so collapsing
- * to a single toast would silently throw away the ability to undo all but the
- * last.
+ * They used to sit in a flex column, oldest on top, newest under it, and the
+ * column grew upward from the tab bar by a full toast and a gap for every one on
+ * screen. That is why the cap was two — three of them reached halfway up a
+ * phone and buried Today's Quick add rail.
  *
- * Over the cap the OLDEST goes, not the newest. The newest is the one whose
- * consequence you are still looking for, and the oldest has had the longest to
- * be read and undone.
+ * Now every toast occupies the same grid cell, bottoms aligned, and the newest
+ * is in front. The ones behind it are lifted a few pixels and drawn a little
+ * narrower, so what shows of each is a strip along its top edge — enough to say
+ * there is a queue, and nothing more. Three toasts cost one toast plus two
+ * strips instead of three toasts and two gaps.
+ *
+ * Depth is a number on the element, `--depth`, and the stylesheet turns it into
+ * the lift and the scale. `layout()` is the only writer; it runs after every
+ * arrival and every departure, so a card behind comes forward on the same
+ * transition whether the front left by a tap, a swipe, or its own timer.
+ *
+ * **Only the front is live.** A card behind is covered except for its strip,
+ * and a swipe that started on the strip would drag a toast down behind the one
+ * in front — a gesture with no legible result. Its Undo is unreachable until it
+ * comes forward, which it does the moment the front is swiped away. That is the
+ * cost of the deck, taken deliberately: a burst of deletes used to show every
+ * Undo at once, and it also used to cover the screen.
  */
-const MAX_VISIBLE = 2
+const MAX_VISIBLE = 3
 
-/** Live toasts, oldest first, so the cap and Escape both have something to act on. */
-const open = new Set()
+/** Live toasts, oldest first. Each is `{ el, dismiss }`. */
+const open = []
+
+function layout() {
+  const n = open.length
+  open.forEach(({ el }, i) => {
+    const depth = n - 1 - i
+    el.style.setProperty('--depth', String(depth))
+    el.dataset.depth = String(depth)
+    // Newest on top. Written inline so a card on its way out keeps the layer it
+    // had, above or below whichever neighbour is moving past it.
+    el.style.zIndex = String(10 + i)
+  })
+}
 
 /**
  * Escape clears everything.
@@ -58,15 +87,15 @@ const open = new Set()
  * The tap is the real dismissal and works with a thumb; this is the same
  * affordance for a keyboard, which otherwise has no way past a toast at all.
  * Registered once, on first use, and never removed — the app is a single page
- * and the listener is idle whenever the set is empty.
+ * and the listener is idle whenever the deck is empty.
  */
 let escBound = false
 function bindEscape() {
   if (escBound) return
   escBound = true
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || !open.size) return
-    for (const fn of [...open]) fn()
+    if (e.key !== 'Escape' || !open.length) return
+    for (const { dismiss } of [...open]) dismiss()
   })
 }
 
@@ -171,41 +200,33 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
   let timer = null
   const dismiss = () => {
     clearTimeout(timer)
-    open.delete(dismiss)
+    const i = open.findIndex((o) => o.el === el)
+    if (i === -1) return
+    const wasFront = i === open.length - 1
+    open.splice(i, 1)
+    // Whatever is left takes its new place on the same frame this one starts to
+    // leave, so a card coming forward and a card going out are one movement.
+    layout()
     if (!el.isConnected) return
     /**
-     * TWO EXITS, and which one runs is decided by whether anything is left.
+     * TWO EXITS, and which one runs is decided by where the toast was.
      *
-     * The collapse exists for exactly one reason: a survivor sitting above this
-     * toast would otherwise hold still through the fade and then drop by a toast
-     * height plus the gap on the frame `remove()` ran. A jump at the end reads as
-     * a glitch rather than as a queue draining.
+     * **The front leaves the way it came.** `toast-in` brought it up 12px, so it
+     * goes back down 12 and fades, and the card behind it, if there is one,
+     * comes forward on `layout()` above.
      *
-     * **That reason does not exist when this is the last toast on screen**, and
-     * that is the common case — most of all on Undo, where you tapped the one
-     * control on the one toast that was up. Folding a box shut when there is
-     * nothing above it to protect is an accordion played at the moment the user
-     * has already got what they asked for: the undo has happened, and the toast
-     * is still on screen taking 160ms to concertina. It leaves instead, on the
-     * reverse of the way it arrived — `toast-in` comes up 12px, so this goes back
-     * down 12 and fades.
+     * Written inline rather than left to the stylesheet, because a swipe has
+     * already put an inline transform and opacity on this element and inline
+     * wins. A rule that said `translateY(12px)` would haul a toast the finger
+     * had dragged to 60 back UP before fading it.
      *
-     * `open` has already had this dismissal deleted from it by the line above, so
-     * its size is what will be left, not what was there.
+     * So the exit is relative: wherever it is now, 12 further in the direction
+     * it was already going. A tapped toast starts at 0 and drifts 12 — the
+     * reverse of `toast-in` — and a swiped one carries on out.
      */
-    if (open.size === 0) {
-      /**
-       * Written inline rather than left to the stylesheet, because a swipe has
-       * already put an inline transform and opacity on this element and inline
-       * wins. A rule that said `translateY(12px)` would haul a toast the finger
-       * had dragged to 60 back UP before fading it.
-       *
-       * So the exit is relative: wherever it is now, 12 further in the direction
-       * it was already going. A tapped toast starts at 0 and drifts 12 — the
-       * reverse of `toast-in` — and a swiped one carries on out.
-       */
+    if (wasFront) {
       const { y } = paintedTranslate(el)
-      el.dataset.removing = 'solo'
+      el.dataset.removing = 'front'
       el.style.transition =
         'opacity var(--dur-fast) ease-in, transform var(--dur-fast) ease-in'
       void el.offsetHeight
@@ -215,28 +236,26 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
       return
     }
     /**
-     * Measured, written, reflowed, then zeroed — `height: auto` does not
-     * interpolate, and a `requestAnimationFrame` here is not a substitute. The
-     * long form of that argument is at `entryRow`, which leaves a list the same
-     * way for the same reason.
+     * **A card behind drops out from behind.** It is under the front card
+     * already, so it sinks to the front card's own position, a little smaller,
+     * and fades — the strip that was showing slides down under the front edge
+     * and is gone. The front never moves, because nothing about the front has
+     * changed. The rule is `.toast[data-removing='behind']`.
      */
-    el.style.height = `${el.offsetHeight}px`
-    el.dataset.removing = 'true'
-    void el.offsetHeight
-    el.style.height = '0px'
+    el.dataset.removing = 'behind'
     setTimeout(() => el.remove(), 170)
   }
 
   // Before appending, so the cap counts what will be on screen rather than one
-  // frame of three.
-  while (open.size >= MAX_VISIBLE) {
-    const oldest = open.values().next().value
-    oldest()
-  }
+  // frame of four. The OLDEST goes, not the newest: the newest is the one whose
+  // consequence you are still looking for, and the oldest has had the longest
+  // to be read and undone.
+  while (open.length >= MAX_VISIBLE) open[0].dismiss()
 
-  open.add(dismiss)
+  open.push({ el, dismiss })
   bindEscape()
-  getHost().appendChild(el)
+  getDeck().appendChild(el)
+  layout()
   timer = setTimeout(dismiss, duration)
 
   /**
@@ -250,10 +269,19 @@ export function toast(message, { action, onAction, actionDismisses = false, dura
    * seconds rather than resuming a partly spent one. Resuming would mean a toast
    * you deliberately grabbed could still vanish a few hundred milliseconds
    * later, which is the behaviour the pause exists to prevent.
+   *
+   * `transition: none` for the length of the hold, because the deck's own
+   * transform transition — the one that carries a card forward — would
+   * otherwise put 200ms of lag between the finger and the toast. The swipe
+   * writes its own spring on release and clears it, which hands the stylesheet
+   * transition back.
    */
   swipeAway(el, {
     onDismiss: dismiss,
-    onHold: () => clearTimeout(timer),
+    onHold: () => {
+      clearTimeout(timer)
+      el.style.transition = 'none'
+    },
     onRelease: () => {
       timer = setTimeout(dismiss, duration)
     },

@@ -4165,25 +4165,6 @@
 }
 
 /**
- * A toast leaving takes its space with it — gaps item 8.
- *
- * `MAX_VISIBLE` is 2, so deleting a couple of rows in a row puts two of these on
- * screen and expires the older one underneath the newer. Fading alone left the
- * box occupying its full height for the whole exit and then removed it, so the
- * survivor held position through the fade and jumped on the frame the node left
- * the DOM.
- *
- * The negative margin is the host's `gap-[10px]` being paid for, the same way
- * `.reveal` pays for its column's gap: a collapsed toast is zero pixels tall and
- * still a child, so the gap outlives the box and leaves a last 10px to drop. It
- * transitions on the same curve and duration as the height, because it is the
- * same movement.
- *
- * 160ms is the toast's own exit number, not the 180 the deleting row takes —
- * this is a queue draining on its own, not something you asked to remove, and
- * the opacity it rides alongside was already 160.
- */
-/**
  * The confirm box arrives with its own scrim — gaps item 14.
  *
  * `.sheet-scrim` gives it `scrim-in` for free, but the box inside was a plain
@@ -4263,14 +4244,6 @@
 }
 
 /**
- * The vertical padding has to go with it, and this is the part that is easy to
- * miss. The toast carries its own `p-[20px]`, and a border-box height cannot
- * compress below its own padding — so `height: 0` alone bottoms out at 40px and
- * the survivor still has 40 to drop. Both are animated, on the same curve, so
- * the clamp relaxes at exactly the rate the box closes. `.swipe-row` never hit
- * this because its padding sits on a child.
- */
-/**
  * WHERE A TOAST SITS, and it is not one number.
  *
  * The inset used to be an inline style on the host: nav height, plus nav inset,
@@ -4313,35 +4286,92 @@ body:has(.sheet-scrim) .toast-host {
 }
 
 /**
- * The last toast leaving. No collapse — there is nothing above it to hold still,
- * so it simply goes back the way it came. See the two exits in toast.js.
+ * THE DECK — every toast in one grid cell, newest in front.
+ *
+ * The host is a flex column that ends at the tab bar; the deck is one child of
+ * it, and every toast is placed in the deck's single cell with its bottom on the
+ * cell's bottom. The cell is as tall as the tallest toast, so a wrapped message
+ * behind a one-liner peeks a few pixels more, and nothing has to be measured.
+ *
+ * `--depth` is written by `layout()` in toast.js: 0 in front, 1 behind it, 2
+ * behind that. Each step lifts the card 10px and takes 6% off its width, so the
+ * strip that shows is a narrower band along its top — the shape of a card
+ * behind a card rather than a second toast half-hidden. The origin is the top
+ * edge so the scale takes width from both sides and none of the lift back.
+ *
+ * The transition on `transform` is what carries a card forward when the one in
+ * front of it leaves. It is also why `swipeAway` sets `transition: none` for the
+ * length of a drag — see the note at the call site.
+ *
+ * A hairline of canvas along the top edge is what makes two ink cards read as
+ * two. Ink on ink has no edge, and without it the strip behind was a bump in
+ * the silhouette rather than a card. 22% is the least that survives both
+ * schemes. The shadow under it is faint on purpose: the hairline is what draws
+ * the edge, and the shadow only keeps the strip from reading as flat. The first
+ * draft had it at 35% over 14px and it read as a dark band across the card
+ * behind, which Drew called harsh. 14% over 8px is the least that still
+ * separates ink from ink without drawing anything of its own.
+ */
+.toast-deck {
+  display: grid;
+  align-items: end;
+  justify-items: center;
+}
+.toast-deck > .toast {
+  grid-area: 1 / 1;
+  --depth: 0;
+  transform-origin: 50% 0;
+  transform: translateY(calc(var(--depth) * -10px)) scale(calc(1 - var(--depth) * 0.06));
+  box-shadow:
+    0 -1px 0 0 color-mix(in srgb, var(--color-canvas) 22%, transparent),
+    0 -3px 8px -4px rgb(0 0 0 / 0.14);
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    opacity var(--dur-fast) ease-in;
+}
+/* Only the front is live. A card behind shows a strip, and a swipe that began
+   on the strip would drag a toast down behind the one in front of it. It comes
+   forward, and becomes tappable, when the front leaves. */
+.toast-deck > .toast:not([data-depth='0']) {
+  pointer-events: none;
+}
+
+/**
+ * The front leaving. It goes back the way it came — see the two exits in
+ * toast.js.
  *
  * The fade itself is written inline by `dismiss`, not here, because the swipe
  * may have left an inline transform on this element and inline wins — the exit
  * has to be measured from wherever the finger left it. This rule only stops a
- * toast on its way out from taking a tap. See the two exits in toast.js.
+ * toast on its way out from taking a tap.
  */
-.toast[data-removing='solo'] {
+.toast-deck > .toast[data-removing='front'] {
   pointer-events: none;
   /* A running `toast-in` outranks an inline style, so a toast dismissed inside
      its own 200ms entrance would ignore the exit written by `dismiss` and simply
-     vanish when it was removed. Rare by hand, not rare when the stack cap
-     dismisses the oldest the instant a third toast arrives. */
+     vanish when it was removed. Rare by hand, not rare when the cap dismisses
+     the oldest the instant another toast arrives. */
   animation: none;
 }
 
-.toast[data-removing='true'] {
-  opacity: 0;
-  overflow: hidden;
+/**
+ * A card behind dropping out from behind.
+ *
+ * It sinks to the front card's position and a step smaller, so the strip slides
+ * down under the front edge — the front card is what hides it, and the fade is
+ * only there for the last few pixels of strip before it is fully covered. The
+ * front does not move, because the front has not changed.
+ *
+ * `ease-in` and 160ms, the toast's own exit numbers: this is a queue draining
+ * on its own, not something you asked to remove.
+ */
+.toast-deck > .toast[data-removing='behind'] {
   pointer-events: none;
-  padding-top: 0;
-  padding-bottom: 0;
-  margin-bottom: -10px;
+  animation: none;
+  opacity: 0;
+  transform: translateY(4px) scale(0.9);
   transition:
-    height var(--dur-fast) ease-in,
-    padding-top var(--dur-fast) ease-in,
-    padding-bottom var(--dur-fast) ease-in,
-    margin-bottom var(--dur-fast) ease-in,
+    transform var(--dur-fast) ease-in,
     opacity var(--dur-fast) ease-in;
 }
 
