@@ -235,6 +235,17 @@ Rules:
 /** Thrown only for a model this key cannot reach, so discovery can catch it. */
 class ModelNotFoundError extends DescribeError {}
 
+/**
+ * Thrown for a model that exists and is allowed but is not answering right
+ * now — a 503 "overloaded", or any other 5xx.
+ *
+ * Google sheds load per model, not per key, so the same Flash being busy for
+ * one phone is busy for every phone, and every one of them showed the same
+ * "(503)" at once. Treating it as final was the bug: the next model in the
+ * list is usually fine, and even the same one usually is a second later.
+ */
+class ModelBusyError extends DescribeError {}
+
 function authHeaders() {
   const key = getAiKey()
   if (!key) throw new DescribeError('No API key is stored.')
@@ -257,6 +268,7 @@ async function post(version, model, body, { signal }) {
   if (res.status === 429) {
     throw new DescribeError('Gemini is rate limiting. Wait a minute and try again.')
   }
+  if (res.status >= 500) throw new ModelBusyError(`Gemini is overloaded (${res.status}).`)
   if (!res.ok) throw new DescribeError(`Gemini is unavailable (${res.status}).`)
 
   try {
@@ -313,6 +325,8 @@ async function listModels(version, { signal }) {
 async function callAnyModel(body, { signal }) {
   const tried = new Set()
   let attempts = 0
+  /** The last model that was reachable but busy, if any were. */
+  let busy = null
 
   const attempt = async (version, model) => {
     if (!model || tried.has(`${version}/${model}`)) return null
@@ -325,6 +339,11 @@ async function callAnyModel(body, { signal }) {
       return data
     } catch (err) {
       if (err instanceof ModelNotFoundError) return null
+      // A busy model is not a missing one: keep the error, try the next.
+      if (err instanceof ModelBusyError) {
+        busy = err
+        return null
+      }
       throw err
     }
   }
@@ -343,6 +362,10 @@ async function callAnyModel(body, { signal }) {
       if (data) return data
     }
   }
+
+  // Something answered, and the answer was "not now". That is a different
+  // diagnosis from a key that reaches nothing, and it is the one a retry fixes.
+  if (busy) throw busy
 
   throw new DescribeError(
     tried.size
@@ -390,7 +413,9 @@ function readReply(data) {
  * until the next error to arrive was a 429 blaming the wrong thing.
  *
  * Model availability is handled inside `callAnyModel` rather than here, so
- * what is left is the genuine transient: a dropped connection.
+ * what is left is the genuine transient: a dropped connection, or every model
+ * that was tried shedding load at the same moment. Both are worth one more
+ * pass after the wait; nothing else is.
  */
 async function request(prompt, schema, { signal }) {
   const body = {
@@ -406,10 +431,18 @@ async function request(prompt, schema, { signal }) {
   try {
     return await callAnyModel(body, { signal })
   } catch (err) {
-    if (err.name === 'AbortError' || err instanceof DescribeError) throw err
+    if (err.name === 'AbortError') throw err
+    if (err instanceof DescribeError && !(err instanceof ModelBusyError)) throw err
     await new Promise((r) => setTimeout(r, RETRY_DELAY_MS))
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError')
-    return callAnyModel(body, { signal })
+    try {
+      return await callAnyModel(body, { signal })
+    } catch (again) {
+      if (again instanceof ModelBusyError) {
+        throw new DescribeError('Gemini is overloaded right now. Try again in a minute.')
+      }
+      throw again
+    }
   }
 }
 
