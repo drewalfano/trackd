@@ -2420,6 +2420,18 @@
      * inherit it.
      */
     scroll-padding-inline: 20px;
+    /**
+     * Room above and below the cards, paid back so the layout does not move.
+     *
+     * `overflow-x: auto` forces `overflow-y` to compute to `auto` as well (a
+     * scroll container cannot be visible on one axis), so the rail clips
+     * vertically at its own box. Anything a card draws past its edges, the
+     * focus ring's 4px (2 offset + 2 width) above all, was sliced flat.
+     * 6px of padding gives that room inside the clip, and the equal negative
+     * margin hands the 6px back, so every neighbour sits where it did.
+     */
+    padding-block: 6px;
+    margin-block: -6px;
     /* The peek is the scroll affordance. A scrollbar sitting under a 123px row
        of cards is a second one, drawn by the platform, in a place the design
        does not have a line. */
