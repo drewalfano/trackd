@@ -622,12 +622,21 @@
      * simply right. `clientHeight` stays 812 whether or not the page scrolls — that
      * is in the table above — so this cannot oscillate.
      *
-     * It is on `html` rather than `body` on purpose: `lockScroll` takes `body` out
-     * of flow while a sheet is open, and a floor on `body` would stop counting at
-     * exactly the moment the sheet needs the surface to stay full height.
+     * It is on `html` rather than `body` because `lockScroll` used to take
+     * `body` out of flow while a sheet was open, and a floor on `body` would have
+     * stopped counting at exactly the moment the sheet needed the surface full
+     * height. `lockScroll` is gone (Phase 3), and `html` stays the place: it is
+     * where this was measured.
      *
-     * The price is up to 62pt of slack scroll on a screen with nothing to scroll.
-     * That is the price. It was tried the other way four times.
+     * **Since Phase 3 the floor is all this element does.** Pages scroll inside
+     * `#view`, a fixed box `--screen-h` tall, so the document holds nothing in
+     * flow and is exactly this floor: 874 against a layout viewport of 812,
+     * always scrollable, so the surface is always 874. What it no longer costs is
+     * the slack. The 62pt of scroll used to be reachable on every short screen;
+     * now `#view` covers the screen and keeps its own overscroll, so no finger on
+     * a page reaches the document at all. Taking the floor away, or replacing it
+     * with `overflow: hidden`, would hand iOS a document that cannot scroll, and
+     * that is the 812 surface again. See `#view`.
      */
     min-height: var(--screen-h);
     /**
@@ -644,36 +653,13 @@
   }
 
   /**
-   * The canvas colour, painted across the whole web view rather than the document.
-   *
-   * `html`'s background above propagates to the canvas, and on every other browser
-   * that is the end of it. Not here. Installed, with `black-translucent`, the web
-   * view covers all 874pt of the screen while the layout viewport stays 812 — so on
-   * a screen too short to scroll there is a 62pt band at the bottom that the
-   * document's background never reaches. It renders black, which in dark mode is a
-   * black bar under the tab bar and in light mode was the "dead canvas" the earlier
-   * screenshots showed. The chrome that floats down there is anchored correctly and
-   * still has nothing behind it.
-   *
-   * A fixed box the height of the screen fixes that without touching the document.
-   * The alternative was a `min-height` floor to force the band into the document,
-   * which buys 62pt of pointless scroll on every short screen and does nothing for a
-   * sheet, where the body is deliberately pinned and cannot scroll at all.
-   *
-   * `-1` puts it behind body's content and in front of the root's own background,
-   * which is the same colour — so this is invisible everywhere it was already
-   * working, and only shows up in the band nothing else covers.
+   * `body::before` used to sit here: a fixed box `--screen-h` tall in the canvas
+   * colour, painting the 62pt band at the bottom of a short screen that the
+   * document's background never reached. `#view` is now that same box (fixed,
+   * top 0, `--screen-h` tall) and carries the canvas itself, so the patch was
+   * painting under an element that already covers it. The floor on `html` above
+   * is what keeps the band from existing in the first place.
    */
-  body::before {
-    content: '';
-    position: fixed;
-    inset-inline: 0;
-    top: 0;
-    height: var(--screen-h);
-    background: var(--color-canvas);
-    z-index: -1;
-    pointer-events: none;
-  }
 
   body {
     margin: 0;
@@ -874,6 +860,12 @@
      * is the position that always looked right — `tabbar.bottom 854` against an
      * 874 screen, a 20px gap. Anchoring to `lvh` gives every screen that number
      * instead of only the ones long enough to scroll.
+     *
+     * **Phase 3 asked whether this could become `100%` of a fixed box.** It
+     * cannot, because it is the other way round: `#view` is the fixed box, and
+     * it is sized FROM this token, as is every piece of chrome that is not
+     * inside it (the tab bar, its fade, toasts, sheets). Something has to say
+     * how tall the screen is, and this is still the measured answer.
      */
     --screen-h: 100svh;
   }
@@ -1014,6 +1006,9 @@
     height: var(--screen-h);
     overflow-y: auto;
     overscroll-behavior-y: contain;
+    /* The canvas, across the whole screen-sized box. This is what
+       `body::before` used to paint; see the note where it stood. */
+    background: var(--color-canvas);
   }
 
   /**
@@ -3915,11 +3910,11 @@
    * Anchored to the bottom of the painted box, from its TOP. Everything in the
    * app that floats at the bottom uses this.
    *
-   * The bug this exists for is fixed at its cause in index.html — the status bar
-   * went back to `default` — and under `default` a plain `bottom: 0` would work
-   * again. This stays because it is the same thing said out loud: the height comes
-   * from `--screen-h`, one token, argued in one place, rather than from whichever
-   * edge WebKit happens to resolve `bottom` against.
+   * The status bar is `black-translucent` (index.html), so the edge `bottom: 0`
+   * resolves against is still not the screen's on a short surface. The height
+   * comes from `--screen-h`, one token, argued in one place, rather than from
+   * whichever edge WebKit happens to resolve `bottom` against. Since Phase 3
+   * `#view` is anchored the same way, so pages and chrome share one box.
    *
    * What it cost to learn, in order, because each step looked reasonable:
    *
