@@ -144,10 +144,79 @@ export function fitText(el, { min = 22 } = {}) {
   return el
 }
 
-/** Fires once per user action, ~10ms, then gets out of the way. */
+/**
+ * Fires once per user action, ~10ms, then gets out of the way.
+ *
+ * Two paths, because the phone this app is used on has never had the first.
+ *
+ * `navigator.vibrate` is the web's API for it, and Android honours it. Safari
+ * has never shipped it, so on iPhone every `haptic()` call in the app was
+ * silent. What iOS 18 did ship is `<input type="checkbox" switch>`, a native
+ * switch control, and toggling one plays the system's selection tick. That
+ * includes a toggle made by clicking its `<label>` from script, which is the
+ * whole trick: one hidden switch, built on first use and kept, and a label
+ * `.click()` per haptic. The pattern argument is ignored on that path; the
+ * system tick has one strength.
+ *
+ * It only fires inside a user gesture, which every call site already is.
+ * Outside one, and on any iOS before 18, the click is a harmless no-op on an
+ * invisible checkbox.
+ *
+ * The switch is hidden with opacity and a 1px box, not `display: none` or
+ * `hidden`: a control that is not rendered is not toggled by its label. It is
+ * kept out of the tab order and the accessibility tree, and the click is
+ * stopped at the label so no delegated handler ever sees it. If the click
+ * moves focus onto the switch, focus goes straight back, so a haptic can never
+ * dismiss the keyboard from a field someone is typing in.
+ */
+let hapticLabel = null
+
+function hapticSwitch() {
+  if (hapticLabel?.isConnected) return hapticLabel
+  const input = h('input', {
+    type: 'checkbox',
+    // An attribute rather than a property (`h` sets `true` as an empty
+    // attribute), because older engines do not know the property at all.
+    switch: true,
+    tabindex: '-1',
+    'aria-hidden': 'true',
+  })
+  hapticLabel = h(
+    'label',
+    {
+      'aria-hidden': 'true',
+      style: {
+        position: 'fixed',
+        top: '0',
+        left: '0',
+        width: '1px',
+        height: '1px',
+        overflow: 'hidden',
+        opacity: '0',
+        pointerEvents: 'none',
+      },
+    },
+    input
+  )
+  const stop = (e) => e.stopPropagation()
+  hapticLabel.addEventListener('click', stop)
+  input.addEventListener('change', stop)
+  document.body.appendChild(hapticLabel)
+  return hapticLabel
+}
+
 export function haptic(pattern = 8) {
   try {
-    navigator.vibrate?.(pattern)
+    if (navigator.vibrate) {
+      navigator.vibrate(pattern)
+      return
+    }
+    const label = hapticSwitch()
+    const focused = document.activeElement
+    label.click()
+    if (document.activeElement !== focused && focused?.focus) {
+      focused.focus({ preventScroll: true })
+    }
   } catch {
     /* not supported, and not worth telling anyone about */
   }
