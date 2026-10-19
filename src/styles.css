@@ -948,6 +948,30 @@
   }
 
   /**
+   * The page-level catch-all for sideways overflow.
+   *
+   * `.day-deck`, `.bubble-field` and `.step-body` each guard themselves, but
+   * only against what they know about. Any other element that is wider than
+   * the screen, or translated past its edge mid-animation, would give the
+   * whole page a horizontal scroll range, and on iOS that is a page you can
+   * drag off its own edge.
+   *
+   * On `#view`, not `body`. Overflow declared on `body` propagates to the
+   * viewport, and the viewport's scroll behaviour is exactly what the long
+   * notes on `html` and `body::before` spent four attempts pinning down. `#view`
+   * is an ordinary box, so this changes nothing about how the document scrolls.
+   *
+   * `clip`, not `hidden`: `clip` does not make `#view` a scroll container, so
+   * vertical overflow stays visible and `position: sticky` inside keeps
+   * sticking to the viewport. The full-bleed rows (`.food-rail`, `.day-deck`'s
+   * neighbours) pull out by exactly the 20px gutter, which lands on `#view`'s
+   * own edge, so they still reach the screen edge on a phone.
+   */
+  #view {
+    overflow-x: clip;
+  }
+
+  /**
    * The page header's slot, and the reason it is a class rather than a row of
    * utilities on one element.
    *
