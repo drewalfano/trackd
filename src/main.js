@@ -2,7 +2,14 @@ import './styles.css'
 
 import { h, mount, clear, pressDelegate } from './lib/dom.js'
 import { icon } from './lib/icons.js'
-import { checkStorage, getSettings, saveSettings, onChange, firstLoggedDate } from './lib/db.js'
+import {
+  checkStorage,
+  getSettings,
+  saveSettings,
+  onChange,
+  firstLoggedDate,
+  requestPersistentStorage,
+} from './lib/db.js'
 import { isIOS, isStandalone } from './lib/platform.js'
 import { toast } from './lib/toast.js'
 import { closeAnySheet } from './lib/sheet.js'
@@ -616,6 +623,13 @@ async function boot() {
       createOnboarding({ onDone: resolve }).then((el) => mount(app, el))
     })
   }
+
+  /**
+   * After onboarding, so a first launch asks the moment there is a profile
+   * worth keeping, and every later launch asks again while the answer is
+   * still no. Not awaited: the shell does not wait on a permission.
+   */
+  requestPersistentStorage()
 
   clear(app)
   app.appendChild(view)

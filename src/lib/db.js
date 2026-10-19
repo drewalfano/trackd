@@ -1164,6 +1164,41 @@ export async function clearAll() {
   emit('all')
 }
 
+/**
+ * Ask the browser not to evict this origin's data.
+ *
+ * Everything the app knows lives in IndexedDB, and without this the browser is
+ * free to delete it under storage pressure. iOS does exactly that to sites it
+ * judges idle, and "best effort" storage is the default until something asks.
+ * WebKit decides the answer itself (an installed Home Screen app is the case
+ * it is most likely to grant), so the request is cheap to repeat: it is made
+ * on every launch where the answer is not already yes, and once more the
+ * moment onboarding finishes, because that is when there is first something
+ * worth keeping.
+ *
+ * Returns true, false, or null when the API is missing. Never throws: a
+ * browser that cannot promise anything is not a reason to stop booting.
+ */
+export async function requestPersistentStorage() {
+  try {
+    if (!navigator.storage?.persist) return null
+    if (await navigator.storage.persisted?.()) return true
+    return await navigator.storage.persist()
+  } catch {
+    return null
+  }
+}
+
+/** Whether the data is currently exempt from eviction. Null when unknown. */
+export async function storagePersisted() {
+  try {
+    const persisted = await navigator.storage?.persisted?.()
+    return typeof persisted === 'boolean' ? persisted : null
+  } catch {
+    return null
+  }
+}
+
 /** Rough footprint, shown in Settings so "export it" has a sense of scale. */
 export async function storageEstimate() {
   try {

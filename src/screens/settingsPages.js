@@ -11,6 +11,7 @@ import {
   previewImport,
   clearAll,
   storageEstimate,
+  storagePersisted,
   listFoods,
 } from '../lib/db.js'
 import {
@@ -618,7 +619,7 @@ export function dataScreen() {
 export function aboutScreen() {
   return createScreen(
     async () => {
-      const estimate = await storageEstimate()
+      const [estimate, persisted] = await Promise.all([storageEstimate(), storagePersisted()])
 
       return settingsPage(
         'About',
@@ -634,6 +635,19 @@ export function aboutScreen() {
                   'span',
                   { class: 'text-[12px] text-muted' },
                   `${round(estimate.usage / 1024, 0)} KB`
+                ),
+              })
+            : null,
+          // Whether the browser has agreed not to evict the data under storage
+          // pressure (see `requestPersistentStorage` in db.js). Hidden when
+          // the browser cannot say, rather than guessing either way.
+          persisted != null
+            ? listRow({
+                title: 'Storage',
+                right: h(
+                  'span',
+                  { class: 'text-[12px] text-muted' },
+                  persisted ? 'Protected' : 'Not protected'
                 ),
               })
             : null,
