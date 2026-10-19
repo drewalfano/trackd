@@ -1,6 +1,6 @@
 import './styles.css'
 
-import { h, mount, clear, pressDelegate } from './lib/dom.js'
+import { h, mount, clear, pressDelegate, reduceMotion } from './lib/dom.js'
 import { icon } from './lib/icons.js'
 import {
   checkStorage,
@@ -215,6 +215,24 @@ function tabBar() {
         'data-tab': tab.path,
         onclick: () => {
           if (tab.path === 'today') setDate(todayStr())
+          /**
+           * The tab you are already on scrolls its page back to the top.
+           *
+           * iOS's own version of this, tapping the status bar, scrolls the
+           * DOCUMENT, and since Phase 3 the document is not what a page scrolls
+           * in (`#view` is; see lib/scroller.js), so that gesture no longer
+           * reaches anything. This is the in-app equivalent UIKit tab bars
+           * already have. It used to re-navigate to the same route, which
+           * rebuilt the screen and jumped to the top in one frame; now nothing
+           * is rebuilt and the page glides there.
+           *
+           * Only on the tab's root. From a sub-page like Trends' weight chart,
+           * the tab still goes back to the root, as it always did.
+           */
+          if (currentPath() === tab.path) {
+            view.scrollTo({ top: 0, behavior: reduceMotion() ? 'auto' : 'smooth' })
+            return
+          }
           navigate(tab.path)
         },
       },
