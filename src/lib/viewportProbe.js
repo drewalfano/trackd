@@ -106,8 +106,17 @@ export function readViewport() {
    */
   const fadeEl = document.querySelector('.tabbar-fade')
   const fadeBox = fadeEl && fadeEl.getClientRects().length ? fadeEl.getBoundingClientRect() : null
-  const root = document.documentElement
-  const scrollLeftToGo = round1(root.scrollHeight - (window.scrollY + root.clientHeight))
+  /**
+   * The page's scroller is `#view` now, not the document, so "does this screen
+   * scroll" and "how far is left" are its numbers. The document's own rows
+   * stay below because the 874/812 surface is still decided by them: `html`
+   * keeps a floor so the document reads as scrollable, and `doc.scrollHeight`
+   * against `innerHeight` is how to see that it still does.
+   */
+  const scroller = view || document.documentElement
+  const scrollLeftToGo = round1(
+    scroller.scrollHeight - (scroller.scrollTop + scroller.clientHeight)
+  )
 
   return {
     build: BUILD_ID,
@@ -139,13 +148,15 @@ export function readViewport() {
     'safe-area left/right': `${round1(insets.paddingLeft)} / ${round1(insets.paddingRight)}`,
 
     'doc.scrollHeight': document.documentElement.scrollHeight,
-    'body.scrollHeight': document.body.scrollHeight,
-    'body.clientHeight': document.body.clientHeight,
     scrollY: round1(window.scrollY),
-    scrollable: document.documentElement.scrollHeight > window.innerHeight + 1,
 
-    'body pinned': document.body.style.position === 'fixed',
-    'body top/height': `${document.body.style.top || '—'} / ${document.body.style.height || '—'}`,
+    /* `#view`, the box a page actually scrolls in. Its top and bottom should be
+       0 and `--screen-h` on every screen; that is the whole of Phase 3. */
+    'view top/bottom': viewBox ? `${round1(viewBox.top)} / ${round1(viewBox.bottom)}` : '—',
+    'view.clientHeight': view ? view.clientHeight : '—',
+    'view.scrollHeight': view ? view.scrollHeight : '—',
+    'view.scrollTop': view ? round1(view.scrollTop) : '—',
+    scrollable: scroller.scrollHeight > scroller.clientHeight + 1,
 
     'tabbar.bottom': barBox ? round1(barBox.bottom) : '—',
     gapBelowBarFromInner: barBox ? round1(window.innerHeight - barBox.bottom) : '—',
@@ -206,9 +217,16 @@ export function captureViewportState() {
    * viewport, or the document is scrolled while having nothing to scroll. Either
    * one means wait for the next event, and there will be one — the bounce ends.
    */
+  /**
+   * With `#view` as the scroller the bounce happens inside it, and iOS reports
+   * a rubber-band as a `scrollTop` outside its range: negative past the top,
+   * beyond the last pixel past the bottom. Either is a page in motion.
+   */
   const vv = window.visualViewport
-  const bouncing =
-    (vv && Math.round(vv.offsetTop) !== 0) || (!reading.scrollable && window.scrollY > 0)
+  const view = document.getElementById('view')
+  const viewBouncing =
+    view && (view.scrollTop < 0 || view.scrollTop > view.scrollHeight - view.clientHeight + 1)
+  const bouncing = (vv && Math.round(vv.offsetTop) !== 0) || viewBouncing
   if (bouncing) return
 
   try {

@@ -129,7 +129,9 @@ async function show(factory) {
   void view.offsetWidth
   view.dataset.entering = 'true'
   mount(view, next.el)
-  window.scrollTo(0, 0)
+  // `#view` is the page's scroller now, not the window. See lib/scroller.js.
+  view.scrollTop = 0
+  watchContent(next.el)
   /**
    * **Taken off again, and leaving it on was a real bug.**
    *
@@ -270,34 +272,29 @@ const fade = tabBarFade()
  * across the bottom of the page with nothing behind it to justify itself. An
  * empty Today, Settings on a large phone, and a one-item log all land there.
  *
- * Turned off with `display: none` rather than opacity, so the three
- * backdrop-filter layers stop compositing as well as stop showing. That cost is
- * paid every frame while the band exists, which is exactly the note above
- * `BLUR_RAMP` — this is the case where the right number of layers is zero.
+ * Turned off with `display: none` rather than opacity, so the backdrop-filter
+ * layer stops compositing as well as stops showing. That cost is paid every
+ * frame while the band exists, which is exactly the note on `FADE_RAMP` in
+ * lib/fade.js; this is the case where the right number of layers is zero.
  *
- * Measured against the document rather than any one screen: `.screen` already
- * reserves the bar's height as bottom padding, so "does the page scroll at all"
- * and "can anything reach the bar" are the same question. 1px of slack because
- * a fractional viewport height reports as scrollable when it is not.
+ * Measured against the page's scroller rather than any one screen: `.screen`
+ * already reserves the bar's height as bottom padding, so "does the page
+ * scroll at all" and "can anything reach the bar" are the same question. 1px
+ * of slack because a fractional height reports as scrollable when it is not.
  */
 function syncFade() {
   /**
-   * `clientHeight`, not `innerHeight`. They disagree by the top inset on the
-   * installed PWA — 812 against 874, measured; see `.screen-floor` in styles.css
-   * — and the one that decides whether the document scrolls is the scrolling
-   * box, which is `clientHeight`. Against `innerHeight` a page 60px taller than
-   * the viewport reported as not scrolling, so the band switched itself off for
-   * exactly the content most likely to pass under the bar.
-   */
-  /**
-   * `body.scrollHeight`, because the DOCUMENT now has a floor.
+   * `#view`'s own heights, because `#view` is what scrolls.
    *
-   * `html` carries `min-height: var(--screen-h)` so the surface never shrinks — see
-   * the note there — which means the document is nominally scrollable on every
-   * screen and `documentElement.scrollHeight` can no longer answer "is there
-   * content under the bar". The body's own height still can: it is the content.
+   * This used to be the document, and it took two corrections to measure that
+   * honestly: `clientHeight` rather than `innerHeight` (812 against 874 on the
+   * installed PWA), then `body.scrollHeight` rather than the document's once
+   * `html` grew a floor that made the document nominally scrollable on every
+   * screen. Both questions are gone. `#view` is a fixed box the screen's
+   * height, so its `clientHeight` is the box content scrolls in and its
+   * `scrollHeight` is the content, padding included.
    */
-  const scrollable = document.body.scrollHeight > document.documentElement.clientHeight + 1
+  const scrollable = view.scrollHeight > view.clientHeight + 1
   fade.dataset.active = String(scrollable)
 }
 
@@ -318,10 +315,23 @@ function syncChrome() {
   requestAnimationFrame(() => captureViewportState())
 }
 
-// Content height changes on every data load, not just on navigation, so this
-// watches the box rather than hooking the router.
-if (typeof ResizeObserver === 'function') {
-  new ResizeObserver(syncChrome).observe(document.body)
+/**
+ * Content height changes on every data load, not just on navigation, so this
+ * watches the content rather than hooking the router.
+ *
+ * The screen's own element, not `body` or `#view`. Both of those used to grow
+ * with the page; now `#view` is fixed at the screen's height and `body` holds
+ * nothing in flow, so neither box changes when a log gets longer. The mounted
+ * screen's root does, and `show` hands each new one over as it mounts.
+ */
+const contentObserver =
+  typeof ResizeObserver === 'function' ? new ResizeObserver(syncChrome) : null
+let watchedContent = null
+function watchContent(el) {
+  if (!contentObserver || el === watchedContent) return
+  if (watchedContent) contentObserver.unobserve(watchedContent)
+  watchedContent = el
+  contentObserver.observe(el)
 }
 window.addEventListener('resize', syncChrome)
 

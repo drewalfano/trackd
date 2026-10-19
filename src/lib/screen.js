@@ -1,6 +1,7 @@
 import { h, mount } from './dom.js'
 import { onChange } from './db.js'
 import { subscribe } from '../state.js'
+import { pageScroller, maxScroll } from './scroller.js'
 
 /**
  * Screens rebuild their own subtree when the data they care about changes.
@@ -39,7 +40,8 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
     try {
       do {
         queued = false
-        const scrollY = window.scrollY
+        const scroller = pageScroller()
+        const scrollY = scroller.scrollTop
         const content = await build({ rerender })
         if (disposed) return
         if (queued) continue
@@ -65,7 +67,7 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
          */
         if (el.childNodes.length !== 1 || el.firstChild !== content) mount(el, content)
         /**
-         * Rebuilding changes document height; keep the user where they were.
+         * Rebuilding changes the page's height; keep the user where they were.
          *
          * Clamped to the LAST SCROLLABLE PIXEL, which is the document's height
          * less the SCROLLING BOX's — not to the document's height, which was the
@@ -76,13 +78,12 @@ export function createScreen(build, { watch = null, watchDate = true } = {}) {
          * that has nothing left to scroll. A browser clamps that; iOS clamps it
          * against a layout it is in the middle of recomputing.
          *
-         * `clientHeight` and not `innerHeight` for the subtrahend: on the
-         * installed PWA those are 812 and 874, and the scrolling box is the
-         * smaller one. See `.screen-floor` in styles.css.
+         * The scroller is `#view` now, not the document (see lib/scroller.js),
+         * which also retires the old trap here: the document's `clientHeight`
+         * and `innerHeight` disagreed by the top inset on the installed PWA.
+         * `#view` is one box, so its own two heights are the whole answer.
          */
-        const root = document.documentElement
-        const maxScroll = Math.max(0, root.scrollHeight - root.clientHeight)
-        if (scrollY > 0) window.scrollTo(0, Math.min(scrollY, maxScroll))
+        if (scrollY > 0) scroller.scrollTop = Math.min(scrollY, maxScroll(scroller))
       } while (queued)
     } finally {
       pending = false

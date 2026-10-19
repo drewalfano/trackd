@@ -1,3 +1,5 @@
+import { scrollParent } from './scroller.js'
+
 /**
  * Drag-to-reorder for a grid of tiles, by handle.
  *
@@ -151,9 +153,13 @@ export function reorderable(grid, { handle, onChange, getId = (el) => el.dataset
     else if (clientY > innerHeight - EDGE)
       dy = Math.ceil(((clientY - (innerHeight - EDGE)) / EDGE) * MAX_SCROLL)
     if (dy) {
-      const beforeY = scrollY
-      scrollBy(0, dy)
-      if (scrollY !== beforeY) place()
+      // Whatever the grid scrolls in: `#view` on Trends, the sheet's body in
+      // the Library. It used to be the window, which inside a sheet moved
+      // nothing at all.
+      const scroller = scrollParent(grid)
+      const beforeY = scroller.scrollTop
+      scroller.scrollTop = beforeY + dy
+      if (scroller.scrollTop !== beforeY) place()
     }
     drag.raf = requestAnimationFrame(autoScroll)
   }

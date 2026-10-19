@@ -42,80 +42,28 @@ const PANEL_EASE = 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
 const EXIT_MS = 200
 
 /**
- * iOS-safe scroll lock.
+ * **There is no scroll lock any more, and two things here went with it.**
  *
- * `overflow: hidden` on body does not reliably lock scrolling in mobile Safari,
- * and the page loses its scroll offset while the sheet is open — so closing it
- * snaps the list back to the top. Pinning the body at a negative offset holds
- * the position visually, and it is restored on unlock.
+ * While the document was the page's scroller, opening a sheet pinned `<body>`
+ * at a negative offset (`position: fixed; top: -scrollY`) so the page could
+ * neither scroll under the sheet nor lose its place, and put it back on close.
+ * That was `lockScroll`. The second piece was `releaseOrphanedLock`, which
+ * checked on every foreground and resize that no sheet had left the body
+ * pinned, because one had: a misread history entry skipped the unlock, and on
+ * iOS a pinned body dragged the tab bar off the bottom of the screen for the
+ * rest of the session.
  *
- * The height is given rather than left to `height: auto`, which would shrink the
- * pinned body to its content, and rather than `bottom: 0`, which is the edge
- * `.screen-floor` in styles.css exists because WebKit will not commit to. It uses
- * `--screen-h` for the same reason everything else does: `dvh` is short here. The box
- * runs from `-lockedScrollY` to the bottom of the screen — so the page still
- * shows the row it was showing, and the `overflow: hidden` clip lands a full
- * viewport below the fold rather than mid-screen.
+ * Neither has anything to do now. The page scrolls in `#view` (lib/scroller.js),
+ * which is not an ancestor of the scrim, so a finger on a sheet or on the
+ * scrim can never reach it, and nothing about the page's scroll position is
+ * touched by opening or closing a sheet. That also removes the jump on close:
+ * the unlock restored the offset with a `scrollTo`, a frame after the page
+ * re-entered flow.
+ *
+ * Do not reintroduce an `overflow: hidden` on `body` or `html` as a lighter
+ * lock. WebKit propagates it to the viewport, and a viewport that cannot
+ * scroll is the one iOS hands the short 812pt surface.
  */
-let lockedScrollY = 0
-
-function lockScroll(lock) {
-  const { style } = document.body
-  if (lock) {
-    lockedScrollY = window.scrollY
-    style.position = 'fixed'
-    style.top = `-${lockedScrollY}px`
-    style.height = `calc(var(--screen-h) + ${lockedScrollY}px)`
-    style.left = '0'
-    style.right = '0'
-  } else {
-    style.position = ''
-    style.top = ''
-    style.height = ''
-    style.left = ''
-    style.right = ''
-    window.scrollTo(0, lockedScrollY)
-  }
-}
-
-/**
- * A pinned `<body>` with no sheet on screen, released.
- *
- * This has gone wrong once already and the note on `onPop` describes what it
- * cost: a sheet whose history entry was misread never reached `destroy`, so
- * `lockScroll(false)` never ran and the body stayed at `position: fixed;
- * overflow: hidden` for the rest of the session. **On iOS that is not a quiet
- * failure.** A pinned layout viewport drags fixed chrome off the bottom of the
- * screen — the tab bar stops sitting 20px up, the sheet's own bottom edge stops
- * meeting the screen's, and a list ends well above where the screen does.
- *
- * That specific route is closed: history entries carry the sheet's id, and
- * `destroy` is idempotent. This is not a substitute for either. It is the
- * admission that the balance of one `lockScroll(true)` against one
- * `lockScroll(false)` is a property of every close path there is — the close
- * button, the scrim, Escape, the swipe, the hardware back, a sheet replaced by
- * another mid-teardown — and that the cost of getting it wrong is paid on the
- * screen the app is looked at first, silently, until the app is relaunched.
- *
- * So the invariant is checked rather than argued: no sheet in the document
- * means the body is not pinned. Checked on the events that bracket where the
- * failure would be noticed — coming back to a backgrounded PWA, a viewport
- * change, a restore from the page cache — rather than on a timer, because there
- * is nothing here worth a wakeup.
- *
- * `active` is deliberately not the test on its own. It stays set through the
- * 200ms exit animation, and what matters is whether anything is actually on
- * screen holding the lock, which is a fact about the document.
- */
-function releaseOrphanedLock() {
-  if (active || document.querySelector('.sheet-scrim')) return
-  if (document.body.style.position !== 'fixed') return
-  lockScroll(false)
-}
-
-window.addEventListener('pageshow', releaseOrphanedLock)
-window.addEventListener('resize', releaseOrphanedLock)
-document.addEventListener('visibilitychange', releaseOrphanedLock)
 
 export function isSheetOpen() {
   return !!active
@@ -869,7 +817,6 @@ export function openSheet({ title, render, footer = null, action = null }) {
      */
     const heldFocus = scrim.contains(document.activeElement)
     scrim.remove()
-    lockScroll(false)
     if (heldFocus && opener?.isConnected && typeof opener.focus === 'function') {
       opener.focus({ preventScroll: true })
     }
@@ -1123,7 +1070,6 @@ export function openSheet({ title, render, footer = null, action = null }) {
   document.addEventListener('keydown', onKey)
   document.body.appendChild(scrim)
   holdScrim()
-  lockScroll(true)
   syncKeyboard()
 
   active = { scrim, destroy, closeAll }
@@ -1132,8 +1078,8 @@ export function openSheet({ title, render, footer = null, action = null }) {
   /**
    * A reading of the sheet, once it has finished arriving.
    *
-   * The body's ResizeObserver in main.js fires when `lockScroll` pins the page,
-   * which is a frame before this panel has slid anywhere — measuring `.sheet-panel`
+   * Taken on a timer rather than when the panel mounts, because the panel
+   * mounts a frame before it has slid anywhere, and measuring `.sheet-panel`
    * then reports its opening transform rather than where it comes to rest. The
    * 260ms `sheet-in` plus a margin is what makes the number mean something.
    *
@@ -1151,9 +1097,9 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * The panel carries `role="dialog"`, so landing on it is what gets the sheet
    * announced, and one Tab from there reaches the same controls in order.
    *
-   * `preventScroll` because the panel is inside a fixed, scroll-locked scrim on
-   * iOS, where focusing a tall element is enough to shift the layout viewport
-   * out from under everything.
+   * `preventScroll` because the panel is inside a fixed scrim on iOS, where
+   * focusing a tall element is enough to shift the layout viewport out from
+   * under everything.
    */
   panel.focus({ preventScroll: true })
 

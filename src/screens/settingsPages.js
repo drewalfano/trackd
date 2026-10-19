@@ -739,7 +739,7 @@ export function viewportScreen() {
         '--screen-h',
         '100dvh',
         'scrollable',
-        'body pinned',
+        'view top/bottom',
         'tabbar.bottom',
         'gapBelowBarFromScreen',
         'panel.bottom',
@@ -866,6 +866,8 @@ export function viewportScreen() {
       }
       window.addEventListener('resize', onEvent)
       window.addEventListener('scroll', onEvent, { passive: true })
+      // The page scrolls in `#view`, and a scroll event does not bubble.
+      document.getElementById('view')?.addEventListener('scroll', onEvent, { passive: true })
       window.visualViewport?.addEventListener('resize', onEvent)
       window.visualViewport?.addEventListener('scroll', onEvent)
       document.addEventListener('visibilitychange', onEvent)

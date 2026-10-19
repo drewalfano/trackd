@@ -956,19 +956,64 @@
    * whole page a horizontal scroll range, and on iOS that is a page you can
    * drag off its own edge.
    *
-   * On `#view`, not `body`. Overflow declared on `body` propagates to the
+   * On `#view`, not `body`: overflow declared on `body` propagates to the
    * viewport, and the viewport's scroll behaviour is exactly what the long
-   * notes on `html` and `body::before` spent four attempts pinning down. `#view`
-   * is an ordinary box, so this changes nothing about how the document scrolls.
+   * notes on `html` spent four attempts pinning down.
    *
-   * `clip`, not `hidden`: `clip` does not make `#view` a scroll container, so
-   * vertical overflow stays visible and `position: sticky` inside keeps
-   * sticking to the viewport. The full-bleed rows (`.food-rail`, `.day-deck`'s
-   * neighbours) pull out by exactly the 20px gutter, which lands on `#view`'s
-   * own edge, so they still reach the screen edge on a phone.
+   * Written as `clip`, though since `#view` became the page's scroller (the
+   * next rule) it computes to `hidden`: one axis cannot clip while the other
+   * scrolls. That is the same thing `.sheet-body` does and the outcome is the
+   * one wanted, no horizontal range. The full-bleed rows (`.food-rail`,
+   * `.day-deck`'s neighbours) pull out by exactly the 20px gutter, which lands
+   * on `#view`'s own edge, so they still reach the screen edge on a phone.
    */
   #view {
     overflow-x: clip;
+  }
+
+  /**
+   * **`#view` is the page's scroller, and the document no longer scrolls.**
+   *
+   * Until Phase 3 the whole document scrolled with fixed chrome over it, and
+   * on the installed PWA that made the screen's height depend on the content:
+   * iOS gives a document that scrolls the full 874pt surface and one that does
+   * not only 812 (the table is on `html` below). Every anchor in this file,
+   * the floor on `html`, `body::before`, `lockScroll` and `syncFade`'s
+   * measuring all existed to live with that.
+   *
+   * Now `#view` is a fixed box exactly `--screen-h` tall, and a finger on a
+   * page scrolls it rather than the document. Its height cannot change with
+   * what is in it, so the tab bar cannot move with it either: an empty Today
+   * and a full one put the bar in the same place by construction rather than
+   * by a floor forcing them into the same state.
+   *
+   * **The document keeps its floor, and that is deliberate.** The brief for
+   * this change said to put `overflow: hidden` on `html` and `body`, and the
+   * on-device record says not to: a document WebKit sees as unable to scroll
+   * is the one handed the 812 surface, and an `overflow: hidden` that
+   * propagated to the viewport collapsed it exactly that way while a sheet was
+   * open (see `html` and the history on `lockScroll` in lib/sheet.js). So the
+   * floor stays and `html` still has 62pt of scroll, which keeps the surface
+   * at 874; nothing a finger can reach scrolls it, because `#view` covers the
+   * screen and keeps its own overscroll (`contain`, so a bounce at either end
+   * stays in `#view` instead of chaining out to the document).
+   *
+   * Top-anchored at `--screen-h` like every other screen-sized box here, never
+   * `bottom: 0`; `.screen-floor` explains why that edge cannot be trusted.
+   * Centred by the auto margins `.screen` already has, which a fixed box with
+   * both inline insets honours.
+   *
+   * The safe-area top and the `--nav-clear` bottom are `.screen`'s padding,
+   * inside the scroller, so the first title still clears the status bar at rest
+   * and the last card still parks on the band's top edge at full scroll.
+   */
+  #view {
+    position: fixed;
+    top: 0;
+    inset-inline: 0;
+    height: var(--screen-h);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
   }
 
   /**
