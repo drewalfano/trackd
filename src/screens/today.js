@@ -298,7 +298,9 @@ function calorieBlock({ live = true }) {
   const qualifier = tnum('', 'text-[16px] text-muted')
   const controlSlot = h('div', { class: 'contents' })
   const over = h('span', { class: 'kbar-over' })
-  const fill = h('div', { class: 'kbar-fill', style: { width: '0%' } })
+  // Slid rather than sized: `pct - 100` percent of its own (full-track) width.
+  // See `.kbar-fill` in styles.css.
+  const fill = h('div', { class: 'kbar-fill', style: { transform: 'translateX(-100%)' } })
   const reading = h('div', { class: 'reading flex items-baseline gap-[8px]' }, number, qualifier)
   const bar = h(
     'div',
@@ -398,16 +400,17 @@ function calorieBlock({ live = true }) {
      * The bar resumes from where it is painted, because it is the same bar. The
      * instant case has to suppress its own transition to jump, and the forced
      * reflow is load-bearing: style is computed once at the end of a task, so
-     * setting `transition: none` and the new width together would leave only the
-     * final pair and the bar would glide anyway.
+     * setting `transition: none` and the new offset together would leave only
+     * the final pair and the bar would glide anyway.
      */
+    const offset = `translateX(${pct - 100}%)`
     if (instant) {
       fill.style.transition = 'none'
-      fill.style.width = `${pct}%`
+      fill.style.transform = offset
       void fill.offsetWidth
       fill.style.transition = ''
     } else {
-      fill.style.width = `${pct}%`
+      fill.style.transform = offset
     }
 
     /**

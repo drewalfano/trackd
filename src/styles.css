@@ -1857,11 +1857,26 @@
     overflow: hidden;
   }
 
+  /**
+   * Laid out at the track's full width and slid in from the left, rather than
+   * sized. `width` re-ran layout on every frame of the fill; a translate is a
+   * compositor transform and lays out nothing.
+   *
+   * **`translateX`, not the `scaleX` `.step-seg-fill` uses**, and audit 1's
+   * finding 8 is why. Scaling an 18px pill squashes its rounded right cap into
+   * a sliver on a short fill, and it would distort `.kbar-over` riding inside
+   * it, which then needs a counter-scale every frame. Translated, the fill is
+   * never resized: its right cap is always its true shape, the overage segment
+   * is untouched, and the track's own rounded `overflow: hidden` trims the
+   * part still to the left of the bar. `today.js` writes the offset as
+   * `pct - 100` percent of the fill's own width, which is the track's.
+   */
   .kbar-fill {
     height: 100%;
     border-radius: 999px;
     background: var(--color-kcal);
-    transition: width var(--dur-fill) var(--ease-out);
+    transform: translateX(-100%);
+    transition: transform var(--dur-fill) var(--ease-out);
     /* Holds the overage segment at its right end. Empty on every other day, so
        this costs the common case nothing. */
     display: flex;
@@ -5057,7 +5072,8 @@ body:has(.sheet-scrim) .toast-host {
  * compositor transform and the 3px track is never re-laid-out. The rounded-cap
  * distortion that made finding 8 expensive for `.kbar-fill` costs nothing at
  * this size: the radius is 1.5px on a 3px bar, and unlike the calorie bar there
- * is no chip riding inside the fill that would need a counter-scale.
+ * is no chip riding inside the fill that would need a counter-scale. (The
+ * calorie bar took the other compositor route, a translate; see `.kbar-fill`.)
  *
  * **`transform-origin` is set by the direction of travel, and that is the whole
  * idea.** Going forward, a segment fills from its left edge — the way you are
