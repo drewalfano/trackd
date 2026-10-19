@@ -5254,8 +5254,9 @@ body:has(.sheet-scrim) .toast-host {
  * Frostier under reduced transparency — review finding 6.
  *
  * The blur bands are the only translucent chrome in the app: the tab bar and
- * the sheet header both float over a list on a stack of `backdrop-filter`
- * layers with a gradient veil on top. The setting asks for the see-through
+ * the sheet header both float over a list on a `backdrop-filter` layer
+ * (three, until Phase 2 measured most of them as invisible; see `FADE_RAMP`)
+ * with a gradient veil on top. The setting asks for the see-through
  * part to go, not the structure, and the veil IS the structure — it is what
  * carries the band to solid canvas at the bar's edge. So the blur spans are
  * dropped and the veil stays, which is the plain-gradient mode the sheet's

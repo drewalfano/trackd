@@ -73,11 +73,27 @@ export function fadeLayers(ramp, dir = 'to top') {
  * now the band rather than the bar, so the resting line and the band's top edge
  * are the same edge and the ramp reaches over open page again.
  */
-export const FADE_RAMP = [
-  [1.5, 34, 62],
-  [3, 16, 42],
-  [5, 0, 24],
-]
+/**
+ * **One layer, down from three.** It was [1.5, 34, 62], [3, 16, 42] and
+ * [5, 0, 24], and laid against `.tabbar-fade > .fade-veil` most of that was
+ * blur nobody could see: the veil is solid canvas for the bottom 34%, so the
+ * 5px layer (gone by 24%) sat wholly under paint, and the 3px one showed only
+ * in the 8 points between 34% and 42%. Each still cost the compositor a
+ * snapshot-and-blur of the band on every scrolling frame.
+ *
+ * Drew turned on Reduce Transparency, which drops these spans entirely (see
+ * the `prefers-reduced-transparency` block in styles.css), and scrolling under
+ * the bar was noticeably smoother on the phone. So the band keeps the one
+ * layer the eye actually reaches: solid where the veil stops being opaque, out
+ * by where the old mildest layer ended, so its reach up the page is unchanged.
+ * 2px is about what the old stack added up to at 34%, where the old 1.5 ran
+ * at full strength with a third of the 3 on top of it.
+ *
+ * If scrolling still lags with one layer, the next step is in the Phase 2
+ * brief: hide the blur while a scroll is in progress and bring it back when
+ * it settles.
+ */
+export const FADE_RAMP = [[2, 34, 62]]
 
 /**
  * The other ramp: the band under a sheet's header, hanging from its top edge.
@@ -108,8 +124,14 @@ export const FADE_RAMP = [
  * over which the blur changes, not the depth it reaches — the same softness
  * over a shorter run has to be steeper.
  */
-export const SHEET_HEAD_RAMP = [
-  [2, 35, 100],
-  [4, 22, 72],
-  [6, 10, 48],
-]
+/**
+ * **One layer, down from three, for the same reason as `FADE_RAMP`.** The
+ * "124px band" above is from before `--sheet-head-rise` went to zero: the band
+ * is now the header's own 84px, and `.sheet-head-fade > .fade-veil` is solid
+ * sheet colour for its top 44 (52%) and ramps out over the bottom 40. Against
+ * that, the old [6, 10, 48] layer ended at 40px, wholly under the solid veil,
+ * and [4, 22, 72] showed only between 52% and 72%. The one layer left starts
+ * where the veil turns see-through and runs to the band's bottom edge like the
+ * old mildest layer did. 3px is roughly what the old stack summed to at 52%.
+ */
+export const SHEET_HEAD_RAMP = [[3, 52, 100]]
