@@ -16,7 +16,6 @@ import {
   ratePerWeek,
   windowPoints,
   axisBounds,
-  GRID_FRACTIONS,
   MIN_ENTRIES_FOR_TREND,
 } from '../lib/trend.js'
 import {
@@ -91,6 +90,9 @@ const PAD = { top: 10, right: 6, bottom: 8, left: 6 }
  * else.
  */
 const CHART_SWAP_MS = 180
+
+// Interim: replaced by round ticks in the next change.
+const GRID_FRACTIONS = [0.885, 0.5, 0.115]
 
 /**
  * The chart's box, held when there is no chart to put in it.
@@ -354,7 +356,7 @@ export function weightScreen() {
       let swapTimer = null
 
       const drawRange = (animate) => {
-        const points = windowPoints(allPoints, range)
+        const points = windowPoints(allPoints, range, today)
         const rate = ratePerWeek(points)
         const readings = points.filter((p) => p.kg != null).length
 

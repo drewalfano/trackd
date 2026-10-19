@@ -72,16 +72,120 @@ eq('over is always whole', Number.isInteger(C.progress(2911.37, 2837.42).over), 
 
 // --- trend
 const mk = (n, fn) => Array.from({ length: n }, (_, i) => ({ date: D.addDays('2026-01-01', i), kg: fn(i) }))
-eq('under 7 readings suppresses the trend', T.computeTrend(mk(6, () => 80), 7).every(p => p.trend === null), true)
-const flat = T.computeTrend(mk(20, () => 80), 7)
-eq('flat data gives a flat trend', Math.round(flat.at(-1).trend * 100) / 100, 80)
-eq('flat data gives ~0 per week', Math.abs(T.ratePerWeek(flat)) < 0.001, true)
-const cut = T.computeTrend(mk(60, i => 85 - i * 0.07142857), 7)   // exactly -0.5 kg/week
-eq('steady cut reads about -0.5 kg/week', T.ratePerWeek(T.windowPoints(cut, 30)).toFixed(2), '-0.50')
-const noisy = T.computeTrend(mk(40, i => 85 - i * 0.05 + (i % 2 ? 1.2 : -1.2)), 7)
-eq('trend smooths alternating 2.4kg water swings', Math.abs(noisy.at(-1).trend - (85 - 39 * 0.05)) < 0.6, true)
+const at = (pairs) => pairs.map(([day, kg]) => ({ date: D.addDays('2026-01-01', day), kg }))
+const near = (a, b, tol = 1e-9) => Math.abs(a - b) <= tol
+
+/**
+ * The time-aware EWMA. The old trend keeps 2^(-gap / half-life) of its weight,
+ * the gap is in days and capped at a week, and the half-life is twice the
+ * Trend window setting. Each case below pins one of those three clauses.
+ */
+eq('the half-life is twice the window', [T.trendHalfLife(7), T.trendHalfLife(14)], [14, 28])
+eq('the gap cap is a week', T.GAP_CAP_DAYS, 7)
+eq('the trend starts at the first reading', T.smoothTrend(at([[0, 80], [1, 81]]), 7)[0].trend, 80)
+eq('one point per reading, not per day', T.smoothTrend(at([[0, 80], [9, 79]]), 7).length, 2)
+const flat = T.smoothTrend(mk(20, () => 80), 7)
+eq('flat data gives a flat trend', flat.every((p) => near(p.trend, 80)), true)
+eq('a reading the next day moves the trend 4.8%',
+  near(T.smoothTrend(at([[0, 80], [1, 90]]), 7)[1].trend, 80 + 10 * (1 - 2 ** (-1 / 14))), true)
+// Weighted by elapsed days: the same reading counts for more after a longer
+// gap, because it is the only news in that time.
+const after = (gap) => T.smoothTrend(at([[0, 80], [gap, 90]]), 7)[1].trend
+eq('a longer gap gives the next reading more weight', after(5) > after(2) && after(2) > after(1), true)
+// The cap: past a week the gap is a week, so one reading after a month away
+// moves the trend exactly as far as one after seven days, 29% of the way.
+eq('a 30-day gap counts as 7', near(after(30), after(7)), true)
+eq('a 90-day gap counts as 7', near(after(90), after(7)), true)
+eq('so one reading moves it at most 29% of the way', (after(30) - 80) / 10 < 0.3, true)
+eq('the 14-day setting is smoother', T.smoothTrend(at([[0, 80], [7, 90]]), 14)[1].trend < after(7), true)
+// Entry count used to be the clock: two readings a day apart and two a week
+// apart moved the trend identically. Uncapped elapsed time without the cap
+// would hand the reading after 12 days 45%; the cap holds it to 29%.
+eq('entry count is no longer the clock', near(after(1), after(7)), false)
+
+/**
+ * Drew's shape: eight weigh-ins across 90 days, about eleven days apart, a
+ * slow loss and then one reading 3 lb under it. The old entry-count EWMA drew
+ * the last step as a 1.0 lb cliff; uncapped elapsed days would take the line
+ * nearly all the way down to the low reading.
+ */
+const sparse = at([[0, 165.4], [12, 164.8], [23, 165.0], [35, 164.2], [45, 163.8], [56, 163.6], [67, 163.0], [77, 160.0]])
+const sparseTrend = T.smoothTrend(sparse, 7)
+const lastStep = sparseTrend.at(-2).trend - sparseTrend.at(-1).trend
+eq('the low last reading moves the line under 30% of the way to it',
+  lastStep / (sparseTrend.at(-2).trend - 160.0) < 0.3, true)
+eq('and the line ends well above it', sparseTrend.at(-1).trend > 162.5, true)
+
+// Noise. Alternating 2.4 kg water swings on a slow loss come out of the trend
+// as a ripple under 0.1 kg.
+const noisy = T.smoothTrend(mk(60, i => 85 - i * 0.05 + (i % 2 ? 1.2 : -1.2)), 7)
+const ripple = Math.max(...noisy.slice(30).map((p, i, a) => (i ? Math.abs(p.trend - a[i - 1].trend - -0.05) : 0)))
+eq('trend smooths alternating 2.4kg water swings', ripple < 0.1, true)
+
+// The calendar shape the tile reads: every day filled, trend carried flat.
 const gappy = T.computeTrend(mk(30, i => (i % 3 === 0 ? 80 : null)).filter(p => p.kg !== null), 7)
 eq('gaps do not invent readings', gappy.filter(p => p.kg === null).length > 0 && gappy.every(p => p.trend !== null), true)
+eq('the calendar carries the same trend', T.computeTrend(sparse, 7).at(-1).trend, sparseTrend.at(-1).trend)
+
+/**
+ * The rate is the least-squares slope of the TREND at each weigh-in, times 7,
+ * so the number and the line it sits over cannot disagree.
+ */
+eq('flat data gives ~0 per week', Math.abs(T.ratePerWeek(flat)) < 0.001, true)
+// Long enough that the EWMA has caught up with the slope before the window.
+const cut = T.smoothTrend(mk(150, i => 85 - i * 0.07142857), 7)   // exactly -0.5 kg/week
+eq('steady cut reads -0.5 kg/week', T.ratePerWeek(T.pointsIn(cut, T.rangeSpan(30, cut.at(-1).date))).toFixed(2), '-0.50')
+// Drew's bug: -0.1 lb / week under a line that fell about 2.5 lb. The fit used
+// to run over a calendar series whose carried-forward days outvoted the
+// readings. Fitted through the trend at the readings, the rate times the
+// weeks it spans lands within a quarter of how far the line actually moved.
+const sparseRate = T.ratePerWeek(sparseTrend)
+const lineMoved = sparseTrend.at(-1).trend - sparseTrend[0].trend
+eq('the sparse rate agrees with the line it describes',
+  Math.abs(sparseRate * (77 / 7) - lineMoved) < Math.abs(lineMoved) * 0.25, true)
+eq('and is not the old -0.1', sparseRate < -0.15, true)
+
+// Gates: three weigh-ins, and a fortnight between the first and last.
+eq('two weigh-ins cannot state a rate', T.ratePerWeek(T.smoothTrend(at([[0, 80], [20, 79]]), 7)), null)
+eq('three across three weeks can', T.ratePerWeek(T.smoothTrend(at([[0, 80], [10, 79.5], [20, 79]]), 7)) !== null, true)
+eq('three inside a few days cannot', T.ratePerWeek(T.smoothTrend(at([[0, 80], [2, 79.5], [4, 79]]), 7)), null)
+// Least squares will fit a line to eight days of water weight and report it to
+// a tenth of a pound. A weekly rate needs weeks.
+const short = T.smoothTrend(mk(8, i => 80 + (i % 2 ? 0.2 : -0.2)), 7)
+eq('eight days cannot state a weekly rate', T.ratePerWeek(short), null)
+// 15 daily readings, because 14 of them span 13 days — the gate is on elapsed
+// days between first and last, not on how many there are.
+eq('a fortnight can', T.ratePerWeek(T.smoothTrend(mk(15, i => 80 - i * 0.05), 7)) !== null, true)
+eq('one day short cannot', T.ratePerWeek(T.smoothTrend(mk(14, i => 80 - i * 0.05), 7)), null)
+
+/**
+ * The gap case, in the calendar shape the tile still reads. `computeTrend`
+ * carries the last value forward flat across a gap, so a window holding two
+ * real weigh-ins over an older history hands 30 non-null trend values to the
+ * fit. The rate counts readings, so it says nothing.
+ */
+const gapped = [
+  ...mk(10, i => 80 - i * 0.1),                                    // a fortnight of tracking
+  { date: D.addDays('2026-01-01', 100), kg: 78.0 },                // then a long quiet
+  { date: D.addDays('2026-01-01', 118), kg: 77.8 },                // then two weigh-ins
+]
+const gappedWindow = T.windowPoints(T.computeTrend(gapped, 7), 30)
+eq('the gap window carries a full trend', gappedWindow.filter(p => p.trend !== null).length, 30)
+eq('but holds two real readings', gappedWindow.filter(p => p.kg != null).length, 2)
+eq('so it states no weekly rate', T.ratePerWeek(gappedWindow), null)
+eq('the record itself still can', T.ratePerWeek(T.computeTrend(gapped, 7)) !== null, true)
+eq('the tile window can end at today, past the last reading',
+  T.windowPoints(T.computeTrend(gapped, 7), 30, D.addDays('2026-01-01', 130)).filter(p => p.kg != null).length, 1)
+
+// Ranges end at today, not at the last weigh-in.
+eq('30 days is today and the 29 before it', T.rangeSpan(30, '2026-10-19'), { start: '2026-09-20', end: '2026-10-19' })
+eq('All runs from the first reading', T.rangeSpan(null, '2026-10-19', '2026-03-02'), { start: '2026-03-02', end: '2026-10-19' })
+eq('All is at least a week', T.rangeSpan(null, '2026-10-19', '2026-10-19'), { start: '2026-10-13', end: '2026-10-19' })
+eq('pointsIn is inclusive', T.pointsIn(sparse, { start: sparse[1].date, end: sparse[3].date }).length, 3)
+
+// Cadence: the mean gap between readings, which the sparse note reads.
+eq('mean gap over the readings', T.meanGapDays(sparse), 11)
+eq('one reading has no cadence', T.meanGapDays(sparse.slice(0, 1)), null)
 
 // --- the chart may not overstate what it has
 // A fitted axis reports every dataset as the same amount of movement: two
@@ -93,39 +197,6 @@ eq('one repeated value still gets a full axis', spanOf([80, 80], 'kg'), 2)
 eq('the floor is centred on the data', T.axisBounds([165.0, 165.4], 'lb').min, 163.2)
 eq('real spread expands past the floor', spanOf([160, 172], 'lb'), 15.6)   // 12, +15% each side
 eq('the floor is per unit, not converted', spanOf([80, 80.2], 'kg'), 2)
-// The gridlines used to be the data's own extremes, which collapse to one
-// repeated label once the axis stops being the data's.
-const grid = (vals, unit) => { const a = T.axisBounds(vals, unit); return T.GRID_FRACTIONS.map(f => (a.min + f * (a.max - a.min)).toFixed(1)) }
-eq('a floored axis still labels three distinct values', new Set(grid([165.0, 165.4], 'lb')).size, 3)
-eq('a fitted axis keeps the data extremes as gridlines', grid([160, 172], 'lb').join(), '172.0,166.0,160.0')
-
-// Least squares will fit a line to eight days of water weight and report it to
-// a tenth of a pound. A weekly rate needs weeks.
-const short = T.computeTrend(mk(8, i => 80 + (i % 2 ? 0.2 : -0.2)), 7)
-eq('eight days cannot state a weekly rate', T.ratePerWeek(short), null)
-// 15 daily readings, because 14 of them span 13 days — the gate is on elapsed
-// days between first and last, not on how many there are.
-eq('a fortnight can', T.ratePerWeek(T.computeTrend(mk(15, i => 80 - i * 0.05), 7)) !== null, true)
-eq('one day short cannot', T.ratePerWeek(T.computeTrend(mk(14, i => 80 - i * 0.05), 7)), null)
-
-/**
- * The gap case. `computeTrend` carries the last value forward flat across a
- * gap, so a window holding two real weigh-ins over an older history hands 30
- * non-null trend values to the fit — enough points, enough elapsed days, and a
- * confident `0.0 / week` through a line the chart had already declined to draw.
- * The rate counts readings now, at the same threshold as the line.
- */
-const gapped = [
-  ...mk(10, i => 80 - i * 0.1),                                    // a month of tracking
-  { date: D.addDays('2026-01-01', 100), kg: 78.0 },                // then a long quiet
-  { date: D.addDays('2026-01-01', 118), kg: 77.8 },                // then two weigh-ins
-]
-const gappedWindow = T.windowPoints(T.computeTrend(gapped, 7), 30)
-eq('the gap window carries a full trend', gappedWindow.filter(p => p.trend !== null).length, 30)
-eq('but holds two real readings', gappedWindow.filter(p => p.kg != null).length, 2)
-eq('so it states no weekly rate', T.ratePerWeek(gappedWindow), null)
-// The same record, seen whole, still has plenty to say.
-eq('the record itself still can', T.ratePerWeek(T.computeTrend(gapped, 7)) !== null, true)
 
 /**
  * --- food names are cased for display and never for storage

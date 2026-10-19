@@ -4,7 +4,7 @@ import { tnum, macroColor, macroTextColor } from '../lib/ui.js'
 import { macroRing } from '../lib/ring.js'
 import { AVERAGES_MIN_DAYS, isPartialDay, MACRO_META } from '../lib/compute.js'
 import { kcal as fmtKcal, g } from '../lib/format.js'
-import { formatDayShort, formatDayAge, fromDateStr } from '../lib/dates.js'
+import { formatDayShort, formatDayAge, fromDateStr, todayStr } from '../lib/dates.js'
 import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
 import { openTodayWeightDialog } from '../sheets/weighIn.js'
@@ -364,10 +364,11 @@ function sparkline(points) {
  * sheet the chart page uses, so there is one way to log a weight and it is
  * reachable from the tile without leaving the grid.
  *
- * The rate and the line come with the chart's own gates: `ratePerWeek` is
- * null under seven readings or a fortnight of span, and then the chip is
- * simply absent rather than showing a dash. Under seven readings the sparkline
- * goes too and its place says how many readings there are.
+ * The rate and the line come with the chart's own gates, over the chart's own
+ * 30 days ending today: `ratePerWeek` is null under three readings or a
+ * fortnight of span, and then the chip is simply absent rather than showing a
+ * dash. Under three readings in those 30 days the sparkline goes too and its
+ * place says how many readings there are.
  */
 export const WEIGHT_VARIANTS = [SIZES.small, SIZES.medium, SIZES.large]
 
@@ -395,10 +396,13 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
 
   const unit = settings.weightUnit
   const latest = weights[weights.length - 1] || null
-  const points = windowPoints(computeTrend(weights, settings.trendWindow), SPARK_DAYS)
+  // Ending today, as the chart's range does, so this rate and the 30-day
+  // chart's are one number. Ending at the last weigh-in, a fortnight away
+  // from the scale gave the tile a different month from the page it opens.
+  const points = windowPoints(computeTrend(weights, settings.trendWindow), SPARK_DAYS, todayStr())
   const rate = ratePerWeek(points)
   const readings = points.filter((p) => p.kg != null).length
-  const enough = weights.length >= MIN_ENTRIES_FOR_TREND
+  const enough = readings >= MIN_ENTRIES_FOR_TREND
 
   /**
    * The app's small chip, the one Today uses for Full log. A filled pill on
@@ -417,7 +421,7 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
       h(
         'div',
         { class: 'flex items-center justify-between gap-[10px]' },
-        caption('No weigh-ins yet. The trend appears after seven.'),
+        caption('No weigh-ins yet. The trend appears after three.'),
         logButton,
       ),
     )
@@ -453,7 +457,7 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
         'div',
         { class: 'flex items-baseline gap-[6px]' },
         tnum(`${readings} of ${MIN_ENTRIES_FOR_TREND}`, 'text-[16px] font-semibold'),
-        caption('weigh-ins before the trend line'),
+        caption('weigh-ins in 30 days for a trend line'),
       )
 
   const row = (entry, i) =>
