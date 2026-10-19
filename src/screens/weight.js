@@ -12,12 +12,15 @@ import {
   getSettings,
 } from '../lib/db.js'
 import {
-  computeTrend,
+  smoothTrend,
   ratePerWeek,
-  windowPoints,
-  axisBounds,
+  rangeSpan,
+  pointsIn,
+  meanGapDays,
   MIN_ENTRIES_FOR_TREND,
+  SPARSE_GAP_DAYS,
 } from '../lib/trend.js'
+import { yScale, yTickLabel, xTicks, monotonePath } from '../lib/weightChart.js'
 import {
   card,
   segmentedWide,
@@ -26,7 +29,6 @@ import {
   emptyState,
   backRow,
   tnum,
-  digits,
 } from '../lib/ui.js'
 import {
   kgToUnit,
@@ -35,7 +37,7 @@ import {
   signed,
   pluralize,
 } from '../lib/format.js'
-import { formatDayAge, todayStr } from '../lib/dates.js'
+import { formatDayAge, todayStr, daysBetween, fromDateStr } from '../lib/dates.js'
 import { toast } from '../lib/toast.js'
 import { openWeighInSheet, todayWeightCard } from '../sheets/weighIn.js'
 import { navigate } from '../router.js'
@@ -52,30 +54,55 @@ import { navigate } from '../router.js'
  *
  * The chart is deliberately neutral — none of the four macros own body weight,
  * so borrowing one of their hues here would break the rule that colour means
- * macro identity. Ink for the trend, muted grey for the raw dots.
+ * macro identity. Ink for the trend, muted grey for the raw weigh-ins.
  */
 
 let range = 30 // module-level so the toggle survives a re-render
 
-const CHART_W = 340
-const CHART_H = 150
-const PAD = { top: 10, right: 6, bottom: 8, left: 6 }
+/**
+ * The chart's drawing box, in viewBox units.
+ *
+ * 322 wide because that is the card's inner width on an iPhone 17 Pro (402pt,
+ * less the page's and the card's 20px each side, measured), so on the phone it
+ * is used on one unit is one point and the 11px axis labels render at 11px.
+ * Narrower phones scale it down with the card: 0.92 at 375pt, where the labels
+ * come out at 10px. It was 340, which drew 9px labels at 8.5.
+ *
+ * The plot leaves a 4-unit inset at the left so a weigh-in on the first day of
+ * the range is a whole circle rather than half of one, and a 34-unit gutter at
+ * the right for the y labels, which Apple Health also hangs on the right: the
+ * eye reads a chart left to right and arrives at the scale where the newest
+ * reading is. The band under the plot holds the x labels.
+ */
+const CHART_W = 322
+const CHART_H = 184
+const PLOT = { top: 8, right: 288, bottom: 160, left: 4 }
+/** Horizontal gridlines run a little past the plot, toward their labels. */
+const GRID_RIGHT = 294
+const AXIS_FONT = 11
+/**
+ * Past this many weigh-ins in view the circles go and the connecting line
+ * stays. Sixty circles 3 units across in 284 units of width overlap into a
+ * bead chain that reads as a thick second line competing with the trend.
+ */
+const DENSE_POINTS = 60
 
 /**
  * How long a range switch takes to cross-fade — and why it is a cross-fade
  * rather than the chart morphing to its new axis.
  *
  * **This decision should not be re-litigated, so here is what it rests on.** The
- * y-scale is not a property the chart carries; it is `axisBounds(values, unit)`
- * baked into every coordinate at construction — `y1`/`y2` on each gridline, `y`
- * on each label, and the whole `d` string on the trend path. SVG geometry
+ * scales are not properties the chart carries; they are `yScale(values, unit)`
+ * and the range's days baked into every coordinate at construction — `y1`/`y2`
+ * on each gridline, `y` on each label, and the whole `d` string on the trend
+ * path. SVG geometry
  * attributes are not animatable properties, so there is nothing to transition
  * even in principle. `d` alone can interpolate, and only between paths whose
  * segment structure matches.
  *
  * It does not match, and that is the deeper reason. A range switch changes
- * `windowPoints(allPoints, range)`, so thirty days and ninety days hold a
- * different NUMBER of points. It is not one line rescaled onto a new axis; it is
+ * `pointsIn(series, span)`, so thirty days and ninety days hold a different
+ * NUMBER of points. It is not one line rescaled onto a new axis; it is
  * a different line. Morphing between them would have to invent intermediate
  * shapes that were never anybody's weight, which is a chart asserting data it
  * does not have — the same standard the honesty rules hold the rest of this
@@ -91,28 +118,29 @@ const PAD = { top: 10, right: 6, bottom: 8, left: 6 }
  */
 const CHART_SWAP_MS = 180
 
-// Interim: replaced by round ticks in the next change.
-const GRID_FRACTIONS = [0.885, 0.5, 0.115]
-
 /**
  * The chart's box, held when there is no chart to put in it.
  *
  * `aspect-ratio` off the chart's own constants rather than a measured height,
  * because the svg is `w-full` on a fixed viewBox — its rendered height is always
- * width × 150/340, so a fixed number would only be right at one screen width.
- * The two boxes are therefore the same box at every width, which is what lets
- * the cross-fade swap one for the other without the card changing height. It
- * was `py-[30px]` once, 96px against the chart's 130 at 375pt, and the card
+ * width × CHART_H/CHART_W, so a fixed number would only be right at one screen
+ * width. The two boxes are therefore the same box at every width, which is what
+ * lets the cross-fade swap one for the other without the card changing height.
+ * It was `py-[30px]` once, 96px against the chart's 130 at 375pt, and the card
  * jumped 34px the moment a second weigh-in landed.
+ *
+ * Only for a range with no weigh-ins in it now. One reading is a chart: a
+ * single circle on a dated axis says when it was and what it read, which is
+ * more than a sentence about needing two.
  */
-function chartPlaceholder() {
+function chartPlaceholder(range) {
   return h(
     'div',
     {
       class: 'flex items-center justify-center text-center text-[12px] text-muted',
       style: { aspectRatio: `${CHART_W} / ${CHART_H}` },
     },
-    'Two readings are needed before there is anything to draw.'
+    `No weigh-ins in the last ${range} days.`,
   )
 }
 
@@ -131,10 +159,8 @@ function chartPlaceholder() {
  * starting out; told to someone with forty readings and a gap it is nonsense,
  * because they are not short of weigh-ins, they are short of recent ones.
  *
- * Neither form asserts recency. `windowPoints` clips the last 30 days OF THE
- * RECORD, which ends at the last weigh-in rather than at today, so a range
- * ending three months ago is an ordinary state here. `This range holds` is true
- * whenever it is shown; `in the last 30 days` would not be.
+ * `This range holds` rather than `the last 30 days holds`, because the same
+ * sentence serves `All`, which is not a number of days.
  */
 function trendNotice(inWindow, total) {
   if (inWindow === total) {
@@ -154,125 +180,258 @@ function trendNotice(inWindow, total) {
 /**
  * The chart draws what the data supports and no more.
  *
- * Two rules do that, and both are about the difference between what is on the
- * screen and what is in the record:
- *
  * **The y-axis has a floor.** See `MIN_AXIS_SPAN`. Fitted to its data, this
  * chart drew every history at the same amplitude — a fortnight of water noise
  * and a real three-pound cut both filled the frame — so the shape of the line
  * carried no information at all. Below the floor the line compresses toward
- * flat, which is what a flat fortnight actually is.
+ * flat, which is what a flat fortnight actually is. The labels are round
+ * numbers from `yScale`, not the data's own extremes, so they say where the
+ * scale is rather than repeating three of the readings.
  *
- * **The trend line is gated on the weigh-ins IN THIS WINDOW.** `computeTrend`
- * already refuses to smooth under `MIN_ENTRIES_FOR_TREND` readings, but it runs
- * over the whole record before `windowPoints` clips it — so forty readings from
- * six months ago and none since still drew a confident line across the 30-day
- * view, carried forward flat from the last one. The gate has to be applied
- * where the drawing happens, against the points being drawn.
+ * **The x-axis is the range, ending today.** Not the first to the last
+ * weigh-in: a range's worth of days, so the gaps between readings are drawn
+ * as the distances they were, and the days since the last one are the empty
+ * space at the right that they are.
+ *
+ * **The trend line is gated on the weigh-ins IN THIS RANGE.** `smoothTrend`
+ * runs over the whole record, so forty readings from six months ago and none
+ * since would still hand the 30-day view a confident line. The gate has to be
+ * applied where the drawing happens, against the points being drawn, and it is
+ * the rate's gate, because the rate is this line's slope.
+ *
+ * Both lines carry on from the last reading before the range, so they enter
+ * at the left edge rather than starting abruptly at the first reading inside
+ * it. The svg clips whatever falls left of its box.
+ *
+ * Returns the svg, with `_marks` (each weigh-in in range with its position)
+ * and `_select(i)` for the scrub. Null when the range holds no weigh-ins.
  */
-function chart(points, unit) {
-  /**
-   * Two READINGS, not two points carrying a value.
-   *
-   * This counted `kg != null || trend != null`, and the second half of that is
-   * carried-forward trend — so one weigh-in landing on top of an older history
-   * produced thirty qualifying points and drew a full chart of one dot and a
-   * line the gate below then refused to draw. The placeholder is for "there is
-   * nothing to draw yet", and one reading is that, whatever the record holds.
-   */
-  const readings = points.filter((p) => p.kg != null).length
-  if (readings < 2) return null
+function chart({ series, span, unit }) {
+  const inRange = pointsIn(series, span)
+  if (!inRange.length) return null
 
-  const drawn = points.filter((p) => p.kg != null || p.trend != null)
-
-  const values = []
-  for (const p of drawn) {
-    if (p.kg != null) values.push(kgToUnit(p.kg, unit))
-    if (p.trend != null) values.push(kgToUnit(p.trend, unit))
+  let before = null
+  for (const p of series) {
+    if (p.date >= span.start) break
+    before = p
   }
-  const { min, max } = axisBounds(values, unit)
+  const drawn = before ? [before, ...inRange] : inRange
+  const withTrend = inRange.length >= MIN_ENTRIES_FOR_TREND
+  const dense = inRange.length > DENSE_POINTS
 
-  const innerW = CHART_W - PAD.left - PAD.right
-  const innerH = CHART_H - PAD.top - PAD.bottom
-  const x = (i) => PAD.left + (i / (points.length - 1 || 1)) * innerW
-  const y = (v) => PAD.top + innerH - ((v - min) / (max - min || 1)) * innerH
+  const spanDays = Math.max(1, daysBetween(span.start, span.end))
+  const x = (date) =>
+    PLOT.left + (daysBetween(span.start, date) / spanDays) * (PLOT.right - PLOT.left)
 
-  const trendPath = []
-  if (readings >= MIN_ENTRIES_FOR_TREND) {
-    points.forEach((p, i) => {
-      if (p.trend == null) return
-      const px = x(i)
-      const py = y(kgToUnit(p.trend, unit))
-      trendPath.push(`${trendPath.length ? 'L' : 'M'}${px.toFixed(1)} ${py.toFixed(1)}`)
+  const u = (kg) => kgToUnit(kg, unit)
+  const values = inRange.map((p) => u(p.kg))
+  if (withTrend) values.push(...inRange.map((p) => u(p.trend)))
+  if (before) {
+    // Where the two lines cross the left edge, so the axis has room for the
+    // part of them that enters from outside the range.
+    const first = inRange[0]
+    const f = daysBetween(before.date, span.start) / daysBetween(before.date, first.date)
+    values.push(u(before.kg + (first.kg - before.kg) * f))
+    if (withTrend) values.push(u(before.trend + (first.trend - before.trend) * f))
+  }
+  const { min, max, step, ticks } = yScale(values, unit)
+  const y = (v) => PLOT.top + ((max - v) / (max - min)) * (PLOT.bottom - PLOT.top)
+
+  const label = (props, text) =>
+    s(
+      'text',
+      { fill: 'var(--color-muted)', 'font-size': AXIS_FONT, ...props },
+      text,
+    )
+  const rule = (props) =>
+    s('line', {
+      stroke: 'var(--color-outline)',
+      'stroke-width': '1',
+      'vector-effect': 'non-scaling-stroke',
+      ...props,
     })
-  }
 
-  const gridlines = GRID_FRACTIONS.map((f) => min + f * (max - min)).map((v) =>
-    s('g', {}, [
-      s('line', {
-        x1: PAD.left,
-        x2: CHART_W - PAD.right,
-        y1: y(v).toFixed(1),
-        y2: y(v).toFixed(1),
-        stroke: 'var(--color-outline)',
-        'stroke-width': '1',
-      }),
-      s(
-        'text',
-        {
-          x: PAD.left + 2,
-          y: (y(v) - 4).toFixed(1),
-          fill: 'var(--color-muted)',
-          'font-size': '9',
-        },
-        fmtWeight(unitToKg(v, unit), unit),
+  const yAxis = ticks.map((t) =>
+    s(
+      'g',
+      {},
+      rule({ x1: 0, x2: GRID_RIGHT, y1: y(t).toFixed(1), y2: y(t).toFixed(1) }),
+      label(
+        { x: CHART_W, y: y(t).toFixed(1), 'text-anchor': 'end', 'dominant-baseline': 'central' },
+        yTickLabel(t, step),
       ),
-    ]),
+    ),
   )
 
-  return s(
+  /**
+   * Dashed, and running down through the label band with the label hung off
+   * its right side, as Apple Health draws them. Dashed so they read as a
+   * calendar behind the data rather than as part of it; the solid rules are
+   * the scale the values are read against.
+   *
+   * A label is dropped, and its line kept, only if it would run off the
+   * right edge of the box. The y gutter is empty below the plot, so a label
+   * for the last Sunday before today still fits there.
+   */
+  const xAxis = xTicks(span.start, span.end).map((t) => {
+    const tx = x(t.date)
+    const fits = tx + 3 + t.label.length * AXIS_FONT * 0.6 <= CHART_W
+    return s(
+      'g',
+      {},
+      rule({
+        x1: tx.toFixed(1),
+        x2: tx.toFixed(1),
+        y1: PLOT.top,
+        y2: CHART_H - 2,
+        'stroke-dasharray': '2 3',
+      }),
+      fits ? label({ x: (tx + 3).toFixed(1), y: CHART_H - 6 }, t.label) : null,
+    )
+  })
+
+  // The floor of the plot, which a round bottom tick is not always on.
+  const baseline = rule({ x1: 0, x2: GRID_RIGHT, y1: PLOT.bottom, y2: PLOT.bottom })
+
+  const marks = inRange.map((p) => ({ ...p, x: x(p.date), y: y(u(p.kg)) }))
+
+  /**
+   * The readings as they were: straight segments between them, light and
+   * thin, so the path the scale actually took is legible behind the trend.
+   *
+   * 0.45 with a trend over it, full strength without one. With the line gated
+   * off there is no subject for this to sit behind, and the same faintness
+   * leaves the only marks on the card looking like a rendering fault rather
+   * than like the weigh-ins they are.
+   */
+  const raw =
+    drawn.length > 1
+      ? s('polyline', {
+          points: drawn.map((p) => `${x(p.date).toFixed(1)},${y(u(p.kg)).toFixed(1)}`).join(' '),
+          fill: 'none',
+          stroke: 'var(--color-muted)',
+          'stroke-width': '1',
+          'stroke-linejoin': 'round',
+          'vector-effect': 'non-scaling-stroke',
+          opacity: withTrend ? '0.45' : '1',
+        })
+      : null
+
+  /**
+   * Hollow, filled with the card's own surface so the connecting line stops
+   * at the ring rather than running through its middle. Dropped past
+   * `DENSE_POINTS`; one reading always gets its circle, since without a line
+   * it is the whole chart.
+   */
+  const circles = dense
+    ? null
+    : marks.map((m) =>
+        s('circle', {
+          cx: m.x.toFixed(1),
+          cy: m.y.toFixed(1),
+          r: '3',
+          fill: 'var(--color-surface)',
+          stroke: 'var(--color-muted)',
+          'stroke-width': '1.5',
+          'vector-effect': 'non-scaling-stroke',
+        }),
+      )
+
+  const trend = withTrend
+    ? s('path', {
+        d: monotonePath(drawn.map((p) => [x(p.date), y(u(p.trend))])),
+        fill: 'none',
+        stroke: 'var(--color-ink)',
+        'stroke-width': '2.5',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round',
+        'vector-effect': 'non-scaling-stroke',
+      })
+    : null
+
+  // The scrub's marks, drawn last so they sit over everything and hidden
+  // until a finger is on the chart.
+  const scrubLine = rule({
+    y1: PLOT.top,
+    y2: PLOT.bottom,
+    stroke: 'var(--color-ink)',
+  })
+  const scrubDot = s('circle', {
+    r: '4.5',
+    fill: 'var(--color-ink)',
+    stroke: 'var(--color-surface)',
+    'stroke-width': '2',
+    'vector-effect': 'non-scaling-stroke',
+  })
+  const scrub = s('g', { visibility: 'hidden', 'pointer-events': 'none' }, scrubLine, scrubDot)
+
+  const svg = s(
     'svg',
     {
       viewBox: `0 0 ${CHART_W} ${CHART_H}`,
-      class: 'w-full',
+      class: 'w-full block',
       role: 'img',
-      'aria-label': 'Weight trend chart',
+      'aria-label': `Weight chart, ${formatSpan(span)}`,
     },
-    gridlines,
-    /**
-     * Raw daily readings sit behind the line and stay muted — but only while
-     * there is a line for them to sit behind.
-     *
-     * 0.55 is a weight chosen against ink at full strength: it puts the scatter
-     * far enough back that the smoothed line reads as the subject. With the
-     * line gated off there is no subject, and the same 0.55 leaves the only
-     * marks on the card looking like a rendering fault rather than like the two
-     * weigh-ins they are. Full opacity in that state, same hue and same radius
-     * — this is the mark taking the foreground it now has to itself, not a new
-     * one.
-     */
-    points.map((p, i) =>
-      p.kg == null
-        ? null
-        : s('circle', {
-            cx: x(i).toFixed(1),
-            cy: y(kgToUnit(p.kg, unit)).toFixed(1),
-            r: '2',
-            fill: 'var(--color-muted)',
-            opacity: trendPath.length > 1 ? '0.55' : '1',
-          }),
-    ),
-    trendPath.length > 1
-      ? s('path', {
-          d: trendPath.join(''),
-          fill: 'none',
-          stroke: 'var(--color-ink)',
-          'stroke-width': '2',
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          'vector-effect': 'non-scaling-stroke',
-        })
-      : null,
+    yAxis,
+    xAxis,
+    baseline,
+    raw,
+    circles,
+    trend,
+    scrub,
+  )
+
+  svg._marks = marks
+  svg._select = (i) => {
+    if (i == null) {
+      scrub.setAttribute('visibility', 'hidden')
+      return
+    }
+    const m = marks[i]
+    scrubLine.setAttribute('x1', m.x.toFixed(1))
+    scrubLine.setAttribute('x2', m.x.toFixed(1))
+    scrubDot.setAttribute('cx', m.x.toFixed(1))
+    scrubDot.setAttribute('cy', m.y.toFixed(1))
+    scrub.setAttribute('visibility', 'visible')
+  }
+  svg._withTrend = withTrend
+  return svg
+}
+
+/** `Sep 20 to Oct 19, 2026`, or with both years when the span crosses one. */
+function formatSpan({ start, end }) {
+  const a = fromDateStr(start)
+  const b = fromDateStr(end)
+  const day = { month: 'short', day: 'numeric' }
+  const full = { ...day, year: 'numeric' }
+  const sameYear = a.getFullYear() === b.getFullYear()
+  return `${a.toLocaleDateString(undefined, sameYear ? day : full)} to ${b.toLocaleDateString(undefined, full)}`
+}
+
+/** Restart `.reading-swap` on a line whose text just changed. */
+function replayReading(el) {
+  el.classList.remove('reading-swap')
+  void el.offsetWidth
+  el.classList.add('reading-swap')
+}
+
+/** What the rate is over, said after it: `last 90 days`, or `all time`. */
+const rangePhrase = (range) => (range ? `last ${range} days` : 'all time')
+
+/**
+ * Said once, quietly, under the card, when the readings in view are more than
+ * `SPARSE_GAP_DAYS` apart on average. Not a notice: nothing is missing and
+ * nothing is wrong, it is advice about the next weigh-in. Never alongside
+ * `trendNotice`, which already says the more important thing.
+ */
+function sparseNote(inRange) {
+  const gap = meanGapDays(inRange)
+  if (gap == null || gap <= SPARSE_GAP_DAYS) return null
+  return h(
+    'p',
+    { class: 'px-[20px] text-[12px] text-muted' },
+    'Weigh in a few times a week for a more accurate trend.',
   )
 }
 
@@ -307,25 +466,22 @@ export function weightScreen() {
       const today = todayStr()
       const todayEntry = await getWeight(today)
 
-      /**
-       * Always at least a full week, capped at 180 days.
-       *
-       * The floor is the fix for the empty-looking first week: the walk used to
-       * start at the first logged day, so one day tracked drew exactly one row
-       * and the screen was mostly dead space under a card about seven days. The
-       * window now has a stable shape from the start and fills in rather than
-       * growing. The cap stops a year of use building a thousand rows at once.
-       */
-      const allPoints = computeTrend(weights, settings.trendWindow)
+      // The trend at every weigh-in, over the whole record. Each range reads
+      // its slice of this rather than smoothing its own, so the line in the
+      // 30-day view is the same line as the last 30 days of the 90-day one.
+      const series = smoothTrend(weights, settings.trendWindow)
       const latest = weights[weights.length - 1] || null
-      const latestTrend = [...allPoints].reverse().find((p) => p.trend != null)?.trend ?? null
+      // The headline figure is the record's, not the range's, and takes the
+      // same three-reading floor the line does.
+      const latestTrend =
+        series.length >= MIN_ENTRIES_FOR_TREND ? series[series.length - 1].trend : null
 
       /**
        * The range switch stops rebuilding the screen and repaints its own two
        * marks instead.
        *
-       * `range` changes exactly two things — the chart, and the `± / week` line
-       * that reads off the same window. Everything else in this card is the
+       * `range` changes the chart, the `± / week` line and the date-range line,
+       * all three read off the same span. Everything else in this card is the
        * latest weigh-in and the trend figure, which do not know the range
        * exists. Routing the toggle through `rerender()` threw all of it away to
        * redraw two of them, and the visible cost was gaps item 12: the header,
@@ -340,7 +496,8 @@ export function weightScreen() {
        * nothing on screen is ever detached and reattached, and anything mid-
        * transition keeps running.
        */
-      const rateEl = h('span', { class: 'text-[12px] text-muted' })
+      const rateEl = h('span', { class: 'whitespace-nowrap text-[12px] text-muted' })
+      const spanEl = h('span', { class: 'text-[12px] text-muted' })
       const chartSlot = h('div', { class: 'chart-slot' })
       /**
        * `contents`, so the wrapper is not in the layout when it is empty.
@@ -354,25 +511,50 @@ export function weightScreen() {
        */
       const noticeSlot = h('div', { class: 'contents' })
       let swapTimer = null
+      let current = null
+      let rateText = ''
+      let shownSpan = null
 
       const drawRange = (animate) => {
-        const points = windowPoints(allPoints, range, today)
-        const rate = ratePerWeek(points)
-        const readings = points.filter((p) => p.kg != null).length
+        const span = rangeSpan(range, today, weights[0]?.date ?? today)
+        const inRange = pointsIn(series, span)
+        const rate = ratePerWeek(inRange)
+        const readings = inRange.length
 
-        // Same window, same breath. The chart, the rate and the sentence
+        // Same span, same breath. The chart, the rate and the sentence
         // explaining them are three views of one count.
         repaint(
           noticeSlot,
-          readings < MIN_ENTRIES_FOR_TREND ? trendNotice(readings, weights.length) : null,
+          readings < MIN_ENTRIES_FOR_TREND
+            ? trendNotice(readings, weights.length)
+            : sparseNote(inRange),
         )
 
-        rateEl.textContent =
-          rate == null ? ' ' : `${signed(kgToUnit(rate, unit))} ${unit} / week`
-        if (rate == null) rateEl.setAttribute('aria-hidden', 'true')
-        else rateEl.removeAttribute('aria-hidden')
+        rateText =
+          rate == null
+            ? 'Not enough data'
+            : `${signed(kgToUnit(rate, unit))} ${unit} / week, ${rangePhrase(range)}`
+        const spanText = formatSpan(span)
+        const changed = [rateEl, spanEl].filter((el, i) => el.textContent !== [rateText, spanText][i])
+        rateEl.textContent = rateText
+        spanEl.textContent = spanText
 
-        const next = chart(points, unit) || chartPlaceholder()
+        /**
+         * The same span draws the same chart, and then the chart is left alone.
+         * `All` on a history younger than ninety days covers exactly the
+         * 90-day span, and a cross-fade between two identical drawings is a
+         * repaint dressed as a change. The rate line still changes (`all time`
+         * for `last 90 days`), so it alone takes the swap.
+         */
+        const sameChart = span.start === shownSpan?.start && span.end === shownSpan?.end
+        shownSpan = span
+        if (animate && sameChart) {
+          if (!reduceMotion()) changed.forEach((el) => replayReading(el))
+          return
+        }
+
+        const next = chart({ series, span, unit }) || chartPlaceholder(range)
+        current = next
 
         if (!animate || reduceMotion()) {
           clearTimeout(swapTimer)
@@ -386,9 +568,7 @@ export function weightScreen() {
          * a forced reflow, then on — the long form of why a `requestAnimationFrame`
          * is not a substitute is at `replay` in screens/onboarding.js.
          */
-        rateEl.classList.remove('reading-swap')
-        void rateEl.offsetWidth
-        rateEl.classList.add('reading-swap')
+        changed.forEach((el) => replayReading(el))
 
         clearTimeout(swapTimer)
         // A second switch while the first is still fading finishes the first
@@ -456,6 +636,16 @@ export function weightScreen() {
         },
       })
 
+      /* ------------------------------------------------------- headline */
+
+      const latestLabel = h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Latest')
+      const latestNum = tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold')
+      // Turns into `12 days ago` once the date stops being the useful fact
+      // about it — see `formatDayAge`.
+      const latestSub = h('span', { class: 'text-[12px] text-muted' }, formatDayAge(latest.date))
+      const trendText = latestTrend == null ? '—' : fmtWeight(latestTrend, unit)
+      const trendNum = tnum(trendText, 'text-title font-semibold')
+
       // The first paint fills the slot without animating: there is nothing for
       // the chart to have crossed from, and a screen that fades in on arrival is
       // a screen that looks like it is loading.
@@ -513,75 +703,81 @@ export function weightScreen() {
                 { class: 'day-card flex flex-col gap-[20px]' },
                 h(
                   'div',
-                  { class: 'flex items-end justify-between' },
+                  { class: 'flex flex-col gap-[8px]' },
                   h(
                     'div',
-                    { class: 'flex flex-col' },
-                    /**
-                     * `Latest`, not `Current`.
-                     *
-                     * The figure is the most recent reading in the record, which
-                     * is a different claim from the weight you are now — it was
-                     * `Current` over a value from two days ago, and over one from
-                     * nine days ago it would still have said so. `Latest` is the
-                     * fact the app actually has; whether that is current is what
-                     * the date under it is for.
-                     */
-                    h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Latest'),
+                    { class: 'flex items-end justify-between gap-[10px]' },
                     h(
                       'div',
-                      { class: 'flex items-baseline gap-[10px]' },
-                      tnum(fmtWeight(latest.kg, unit), 'text-display font-semibold'),
-                      h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
-                    ),
-                    // Turns into `12 days ago` once the date stops being the
-                    // useful fact about it — see `formatDayAge`.
-                    h('span', { class: 'text-[12px] text-muted' }, formatDayAge(latest.date)),
-                  ),
-                  h(
-                    'div',
-                    { class: 'flex flex-col items-end' },
-                    h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Trend'),
-                    h(
-                      'div',
-                      { class: 'flex items-baseline gap-[10px]' },
+                      { class: 'flex flex-col' },
+                      /**
+                       * `Latest`, not `Current`.
+                       *
+                       * The figure is the most recent reading in the record, which
+                       * is a different claim from the weight you are now — it was
+                       * `Current` over a value from two days ago, and over one from
+                       * nine days ago it would still have said so. `Latest` is the
+                       * fact the app actually has; whether that is current is what
+                       * the date under it is for.
+                       */
+                      latestLabel,
                       h(
-                        'span',
-                        { class: 'tnum text-title font-semibold' },
-                        ...digits(latestTrend == null ? '—' : fmtWeight(latestTrend, unit)),
+                        'div',
+                        { class: 'flex items-baseline gap-[10px]' },
+                        latestNum,
+                        h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
                       ),
-                      h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+                      latestSub,
                     ),
                     /**
-                     * Nothing is SAID when there is no rate yet, but the line is
-                     * still held.
-                     *
-                     * No text, for the reason this has always given: the notice
-                     * below the card already says what is missing and how far
-                     * off it is, and where the trend figure above is an em-dash,
-                     * a second dash under the first states one absence twice in
-                     * the weaker of the two positions.
-                     *
-                     * The empty line box is new, and it is a layout fact rather
-                     * than a copy decision. This row is `items-end`, so the two
-                     * columns hang from a shared baseline and the right one is
-                     * three lines tall — dropping the third let the whole Trend
-                     * stack slide down by a line the moment the rate was
-                     * withheld, which now happens in an ordinary state rather
-                     * than only on a fresh install. A card that reshuffles as
-                     * data crosses a threshold reads as a rendering fault, and
-                     * the reader is being asked to notice the number, not the
-                     * furniture moving under it.
-                     *
-                     * ` ` rather than a height: it is the same line box the
-                     * real text would occupy, so it stays correct if the type
-                     * size ever changes.
+                     * `min-w-0` and a rate line that does not wrap: at 375pt
+                     * `-0.2 lb / week, last 90 days` is a pixel wider than this
+                     * column can be beside the 48px reading, and wrapping it put
+                     * `days` on a line of its own and made the card a line
+                     * taller on 30 and 90 than on All. The line it shares a row
+                     * with on the left is `12 days ago`, not the reading, so
+                     * there is room for it to run left past the column, which
+                     * `items-end` does when the column is narrower than it.
                      */
-                    // Built above and filled by `drawRange`: this line reads off
-                    // the same window the chart does, so it has to change in the
-                    // same breath rather than a frame later.
-                    rateEl,
+                    h(
+                      'div',
+                      { class: 'flex min-w-0 flex-col items-end' },
+                      h('span', { class: 'text-[12px] font-semibold text-muted' }, 'Trend'),
+                      h(
+                        'div',
+                        { class: 'flex items-baseline gap-[10px]' },
+                        trendNum,
+                        h('span', { class: 'text-[12px] font-medium text-muted' }, unit),
+                      ),
+                      /**
+                       * The rate over the selected range, or `Not enough data`
+                       * when the range cannot carry one: fewer than three
+                       * weigh-ins in it, or under a fortnight between the first
+                       * and the last. It used to say nothing at all in that
+                       * state and leave the notice below to explain, but the
+                       * subtitle names the range now, so an empty one read as a
+                       * rate that failed to load.
+                       *
+                       * The line is never empty, and that is a layout fact
+                       * rather than a copy decision. This row is `items-end`, so
+                       * the two columns hang from a shared baseline and the
+                       * right one is three lines tall — dropping the third let
+                       * the whole Trend stack slide down by a line. A card that
+                       * reshuffles as data crosses a threshold reads as a
+                       * rendering fault. The scrub holds it with a non-breaking
+                       * space for the same reason: the same line box the real
+                       * text occupies, so it stays right if the type size
+                       * changes.
+                       */
+                      // Built above and filled by `drawRange`: this line reads off
+                      // the same span the chart does, so it has to change in the
+                      // same breath rather than a frame later.
+                      rateEl,
+                    ),
                   ),
+                  // The span the chart covers, which `30 days` alone does not
+                  // say: which thirty, and that they end today.
+                  spanEl,
                 ),
 
                 // The chart's own box, filled and swapped by `drawRange`. The
