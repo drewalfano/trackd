@@ -14,7 +14,22 @@ import {
   validateImport as checkImport,
 } from './backup.js'
 
-export const DB_NAME = 'macro-tracker'
+/**
+ * The real database, unless a dev build was opened with `?db=<name>`.
+ *
+ * DEV ONLY, and the reason it exists is the data in the default one: the dev
+ * browser holds a real record that is in daily use, and a chart that needs
+ * dense, sparse, single and empty histories to be judged cannot be judged by
+ * writing those into it. `?db=fixture` opens `macro-tracker-dev-fixture`, a
+ * separate IndexedDB database the default one never sees, and everything
+ * below reads and writes there for the life of the page. `import.meta.env.DEV`
+ * is a build-time literal, so a production bundle has only the default name.
+ */
+const DEV_DB = import.meta.env?.DEV
+  ? new URLSearchParams(globalThis.location?.search ?? '').get('db')
+  : null
+export const DB_NAME =
+  DEV_DB && /^[a-z0-9-]{1,32}$/.test(DEV_DB) ? `macro-tracker-dev-${DEV_DB}` : 'macro-tracker'
 /**
  * Declared in backup.js, because it is as much the version of the export
  * format as of the database — a file is readable exactly when its version is

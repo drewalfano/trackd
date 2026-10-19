@@ -694,6 +694,16 @@ async function boot() {
     return
   }
 
+  // Dev only: `?db=fixture&fixture=sparse` loads a weight history into a
+  // separate database before anything renders. See lib/weightFixtures.js.
+  if (import.meta.env.DEV) {
+    const q = new URLSearchParams(location.search)
+    if (q.get('fixture')) {
+      const { seedWeightFixture } = await import('./lib/weightFixtures.js')
+      await seedWeightFixture(q.get('fixture'), q.get('unit') || 'lb')
+    }
+  }
+
   const settings = await getSettings()
   applyTheme(settings.theme)
   onChange((scope) => {
