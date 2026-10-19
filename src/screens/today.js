@@ -1207,7 +1207,7 @@ export function todayScreen() {
    */
   let railFoods = null
 
-  return createScreen(
+  const screen = createScreen(
     async () => {
       // The neighbours are read alongside the day itself rather than lazily on
       // the first drag. A gesture that has to wait on IndexedDB before it can
@@ -1455,4 +1455,24 @@ export function todayScreen() {
     },
     { watch: ['entries', 'settings', 'foods'] }
   )
+
+  /**
+   * The re-rank, now that leaving Today no longer throws it away.
+   *
+   * Today is kept alive between visits (Phase 4; `show` in main.js), so
+   * "navigating away and back is the re-rank" stopped being true on its own:
+   * the screen and `railFoods` with it would have lived for the whole session.
+   * So the freeze is dropped the moment Today is hidden and the rail is ranked
+   * again straight away, behind the scenes, while nothing on it can be under a
+   * thumb. By the time you come back the new order is already painted, and the
+   * rail still holds still for as long as you are looking at it.
+   */
+  return {
+    ...screen,
+    pause() {
+      screen.pause()
+      railFoods = null
+      screen.rerender()
+    },
+  }
 }

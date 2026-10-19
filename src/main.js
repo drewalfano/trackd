@@ -77,6 +77,30 @@ const VIEW_IN_MS = 200
 let enteringTimer = null
 
 /**
+ * The three tabs, kept alive between visits (Phase 4).
+ *
+ * Every navigation used to destroy the outgoing screen and build the incoming
+ * one from an IndexedDB read, then scroll to the top. For a sub-page that is
+ * right. For the tabs it made switching between them a reload: a pause while
+ * the read ran, and Trends always back at the top however far down you had
+ * been.
+ *
+ * So Today, Trends and Settings are built the first time they are visited and
+ * then kept, mounted in `#view` but `hidden`, each remembering its own
+ * `scrollTop`. Coming back to one is instant and lands where you left it.
+ * Keyed by factory, because that is what a route hands `show`; `#/log` reaching
+ * for `todayScreen` therefore gets the same Today as the tab does.
+ *
+ * A hidden tab is paused (`createScreen`'s `pause`): a write marks it stale
+ * rather than re-rendering it, and showing it again renders first if it is
+ * stale, still hidden, so it never appears with yesterday's numbers. Sub-pages
+ * (`trends/weight`, `settings/data`, `foods/:id`, ...) are not kept and behave
+ * exactly as before.
+ */
+const KEPT = new Set([todayScreen, trendsScreen, settingsScreen])
+const kept = new Map()
+
+/**
  * Swap screens only once the new one has actually rendered.
  *
  * A screen's first render is async — it reads IndexedDB — so mounting it as
@@ -86,7 +110,14 @@ let enteringTimer = null
  */
 async function show(factory) {
   const token = ++showToken
-  const next = factory()
+  const keep = KEPT.has(factory)
+  const cached = keep ? kept.get(factory) : null
+
+  // Already on show: a route that resolves to the screen in front of you
+  // (`#/log` over Today, a repeated navigate) has nothing to swap.
+  if (cached && cached.screen === currentScreen) return
+
+  const next = cached ? cached.screen : factory()
   /**
    * A screen that throws while building must say so.
    *
@@ -98,20 +129,54 @@ async function show(factory) {
    * is one.
    */
   try {
-    await next.ready
+    // A kept tab's `resume` renders only if something changed while it was
+    // hidden; otherwise it resolves at once, which is the instant switch.
+    await (cached ? next.resume() : next.ready)
   } catch (err) {
     console.error('Screen failed to build', err)
     toast(`Couldn’t open this screen: ${err?.message || err}`)
-    next.destroy()
+    if (cached) next.pause()
+    else next.destroy()
     return
   }
   // A faster tap already started another navigation; this one is stale.
   if (token !== showToken) {
-    next.destroy()
+    if (cached) next.pause()
+    else next.destroy()
     return
   }
-  currentScreen?.destroy()
+
+  // The outgoing screen: a kept tab is hidden with its place remembered, any
+  // other screen is destroyed and taken out, as every screen used to be.
+  const outgoing = currentScreen && [...kept.values()].find((k) => k.screen === currentScreen)
+  if (outgoing) {
+    outgoing.scrollTop = view.scrollTop
+    currentScreen.el.hidden = true
+    currentScreen.pause()
+  } else if (currentScreen) {
+    currentScreen.destroy()
+    currentScreen.el.remove()
+  }
   currentScreen = next
+  if (keep && !cached) kept.set(factory, { screen: next, scrollTop: 0 })
+
+  clearTimeout(enteringTimer)
+  if (cached) {
+    /**
+     * Back to a tab that never left: no arrival.
+     *
+     * `data-entering` is the "this screen just arrived" fade, and this one did
+     * not arrive, it was there all along. Replaying it on every tab switch
+     * would be motion asserting a change that did not happen. Cleared rather
+     * than just not set, in case a sub-page's arrival is still running.
+     */
+    delete view.dataset.entering
+    next.el.hidden = false
+    view.scrollTop = kept.get(factory).scrollTop
+    watchContent(next.el)
+    return
+  }
+
   /**
    * Mark the arrival, since the swap itself had nothing to say it happened.
    *
@@ -122,13 +187,13 @@ async function show(factory) {
    * Cleared and re-set with a reflow between, the same idiom `syncTabs` uses on
    * the pill below: re-applying an attribute a node already carries does not
    * restart an animation, so the second navigation would be silent. Set BEFORE
-   * `mount` so the first painted frame is the new tree at its starting opacity
-   * rather than at full strength.
+   * the append so the first painted frame is the new tree at its starting
+   * opacity rather than at full strength.
    */
   delete view.dataset.entering
   void view.offsetWidth
   view.dataset.entering = 'true'
-  mount(view, next.el)
+  view.appendChild(next.el)
   // `#view` is the page's scroller now, not the window. See lib/scroller.js.
   view.scrollTop = 0
   watchContent(next.el)
@@ -146,7 +211,6 @@ async function show(factory) {
    * correctly for real navigations, so the case it was tested against looked
    * right.
    */
-  clearTimeout(enteringTimer)
   enteringTimer = setTimeout(() => {
     delete view.dataset.entering
   }, VIEW_IN_MS + 40)
