@@ -4587,6 +4587,37 @@
   animation: sheet-in var(--dur-sheet) var(--ease-glide);
 }
 /**
+ * The sheet's ground while a panel change resizes it. See `resizeTo` in
+ * lib/sheet.js for the whole move.
+ *
+ * The panel has already taken its new height, so its own background and
+ * hairline would show the new top edge on the first frame. They are switched
+ * off for the 240ms and `.sheet-surface` draws them instead, on a transform
+ * that starts at the old edge.
+ *
+ * `isolation` gives the panel its own stacking context so `z-index: -1` puts
+ * the surface behind the scroller, which is not positioned and would otherwise
+ * paint underneath a positioned sibling. Without it the -1 would drop the
+ * surface behind the scrim's dim instead.
+ */
+.sheet-panel[data-resizing='true'] {
+  background: transparent;
+  border-top-color: transparent;
+  isolation: isolate;
+}
+.sheet-surface {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--color-sheet);
+  border-top: 1px solid var(--color-outline);
+  border-top-left-radius: var(--radius-sheet);
+  border-top-right-radius: var(--radius-sheet);
+}
+
+/**
  * The dimming, as its own element inside the scrim rather than as the scrim.
  *
  * **The claim two blocks up — that the sheet's arrival has no opacity in it — was

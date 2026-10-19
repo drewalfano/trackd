@@ -612,8 +612,8 @@ export function openSheet({ title, render, footer = null, action = null }) {
     const top = panels[panels.length - 1]
     const arrival = dir ? 'panel-in' : null
     // Measured before the swap, while the outgoing panel is still setting the
-    // sheet's height. See `resizeTo`.
-    const fromHeight = arrival && panel.isConnected ? panel.offsetHeight : null
+    // sheet's height, and as painted rather than as laid out. See `resizeTo`.
+    const fromHeight = arrival && panel.isConnected ? paintedHeight() : null
     clear(body)
     if (top?.node) {
       // All three, because a panel kept in the DOM while you pushed past it
@@ -638,28 +638,80 @@ export function openSheet({ title, render, footer = null, action = null }) {
    * and no amount of tuning the slide could fix a container that was not
    * moving with it.
    *
-   * A first/last measurement rather than a CSS transition, because the height
-   * being animated from and to is `auto` at both ends — the panel is sized by
-   * whatever is in it, and `auto` does not interpolate. So: read the old height,
-   * let the new content lay out to get the new one, pin the old back, and
-   * release it on the next frame.
+   * **The height itself no longer animates.** It did, as a CSS transition on
+   * `height`, and that re-ran layout for the whole panel on every frame of the
+   * 240ms, with a `backdrop-filter` layer in the header to recomposite each
+   * time. So the panel now takes its new height on the first frame, and what
+   * moves is a set of transforms that make it LOOK as if the top edge
+   * travelled, which the compositor can run without touching layout:
    *
-   * The explicit height is removed when it lands so the panel goes back to being
-   * content-sized. A timer rather than `transitionend`, because `swipeToDismiss`
-   * writes `panel.style.transition` for its transform and would swallow the
-   * event — and if a drag DOES start mid-resize it simply wins, which is
-   * correct: the finger outranks a transition it interrupted.
+   *   - The panel's own ground and hairline are switched off (`data-resizing`
+   *     in styles.css) and drawn by `.sheet-surface`, a bottom-anchored box as
+   *     tall as the taller of the two heights. Translating it puts its top
+   *     edge, corners and hairline exactly where the old top was, then glides
+   *     it to the new one. A translate rather than a `scaleY`, because scaling
+   *     would squash the 24px corners into ellipses for the length of the move.
+   *   - The header and the scroller ride the same offset, so the title and the
+   *     first row stay on the moving edge rather than waiting at the new one.
+   *     That is what the height animation did implicitly: they were laid out
+   *     from the top of a box whose top was moving.
+   *   - The footer does not move. It is bottom-anchored, and the bottom edge
+   *     does not change in a resize.
+   *
+   * `d` is the change in height, positive when the sheet grows. Everything
+   * starts `d` lower than where layout has put it (above it, when shrinking)
+   * and arrives at rest. The surface's numbers are offset by its own extra
+   * height so its top edge lands on the same line.
+   *
+   * **A finger still wins.** The old transition was cut short when
+   * `swipeToDismiss` wrote `panel.style.transition` for its drag, which
+   * snapped the height to its end. Any pointer going down on the panel now
+   * does the same thing explicitly: the animations jump to their end and the
+   * surface is handed back to the panel, so a drag starts from a sheet at its
+   * real size.
+   *
+   * Reduced motion skips the movement entirely. The CSS transition used to be
+   * cut to 0.01ms by the global reduced-motion rule; Web Animations do not
+   * read that rule, so it has to be asked here.
    */
-  let resizeTimer = null
+  const surface = h('div', { class: 'sheet-surface', 'aria-hidden': 'true' })
+  let resizeAnims = []
+  let resizeLanding = null
+
+  function finishResize() {
+    for (const a of resizeAnims) a.cancel()
+    resizeAnims = []
+    surface.remove()
+    delete panel.dataset.resizing
+    panel.removeEventListener('pointerdown', finishResize, true)
+    resizeLanding = null
+  }
+
+  /**
+   * Where the sheet's top edge is PAINTED, as a height. A push arriving while
+   * a previous resize is still gliding has to start from where the eye sees
+   * the edge, not from the height layout already gave the panel, or the edge
+   * jumps by whatever was left of the first move.
+   *
+   * Only while the move is actually running. Between an animation ending and
+   * its `finished` callback tidying up, the surface is still in the DOM with
+   * no transform left on it, which reads as "still at the start" and made a
+   * push in that gap measure the new height as the old one and skip its
+   * resize. A finished move is at rest, and at rest the layout height is true.
+   */
+  function paintedHeight() {
+    if (!resizeLanding || resizeAnims[0]?.playState !== 'running') return panel.offsetHeight
+    const { to, tall } = resizeLanding
+    return to - (to - tall + paintedTranslate(surface).y)
+  }
+
   function resizeTo(fromHeight, node = null, dir = null) {
-    panel.style.transition = 'none'
-    panel.style.height = ''
+    finishResize()
     // Measured with the new panel's padding already applied — `syncHeader` is
     // synchronous for exactly this reason. A measurement taken before it would
     // animate to a height the sheet then corrects a frame later.
     const toHeight = panel.offsetHeight
-    if (toHeight === fromHeight) {
-      panel.style.transition = ''
+    if (Math.round(toHeight) === Math.round(fromHeight)) {
       /**
        * No resize, so the CONTENT carries the change instead.
        *
@@ -684,15 +736,36 @@ export function openSheet({ title, render, footer = null, action = null }) {
       }
       return
     }
-    panel.style.height = `${fromHeight}px`
-    void panel.offsetHeight
-    panel.style.transition = `height ${PANEL_MS}ms ${PANEL_EASE}`
-    panel.style.height = `${toHeight}px`
-    clearTimeout(resizeTimer)
-    resizeTimer = setTimeout(() => {
-      panel.style.height = ''
-      panel.style.transition = ''
-    }, PANEL_MS + 20)
+    if (reduceMotion()) return
+
+    const d = toHeight - fromHeight
+    const tall = Math.max(toHeight, fromHeight)
+    // Untransformed, the surface's top sits `toHeight - tall` from the panel's
+    // top (zero or negative). These offsets put its painted top on the old
+    // edge, then on the new one.
+    const surfaceFrom = tall - fromHeight
+    const surfaceTo = tall - toHeight
+    surface.style.height = `${tall}px`
+    panel.prepend(surface)
+    panel.dataset.resizing = 'true'
+    resizeLanding = { to: toHeight, tall }
+
+    const timing = { duration: PANEL_MS, easing: PANEL_EASE }
+    const slide = (el) =>
+      el.animate([{ transform: `translateY(${d}px)` }, { transform: 'translateY(0)' }], timing)
+    resizeAnims = [
+      surface.animate(
+        [
+          { transform: `translateY(${surfaceFrom}px)` },
+          { transform: `translateY(${surfaceTo}px)` },
+        ],
+        timing
+      ),
+      slide(header),
+      slide(body),
+    ]
+    resizeAnims[0].finished.then(finishResize, () => {})
+    panel.addEventListener('pointerdown', finishResize, true)
   }
 
   function makeCtx(entry) {
