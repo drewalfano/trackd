@@ -618,6 +618,107 @@ export function swipeToReveal(el, { width = 96, onOpen, onClose } = {}) {
 }
 
 /**
+ * Scrub across a chart with the finger: horizontal drags only.
+ *
+ * Same bones as `swipeToReveal`: `pan-y`, passive touch listeners, and one
+ * axis decision at `SWIPE_AXIS_THRESHOLD` with `SWIPE_AXIS_RATIO`. A chart sits
+ * in a scrolling page, so a thumb that lands on it on the way down the screen
+ * has to scroll the page, and does: `pan-y` hands vertical movement to the
+ * compositor from the first frame, and a gesture that reads as vertical is
+ * simply let go. Only a decidedly sideways one is claimed, and from then on
+ * every move reports where the finger is.
+ *
+ * Unlike the row, nothing here moves under the finger, so there is no origin
+ * to rebase at the claim: `onScrub` gets the finger's x on the claiming frame,
+ * the same as on every frame after it.
+ *
+ * A mouse needs no axis test, because a mouse drag cannot be a scroll; it
+ * scrubs from the press. That is what lets the desktop dev view exercise it.
+ *
+ * @param {Element} el
+ * @param {{onScrub: (clientX: number) => void, onEnd: () => void}} handlers
+ * @returns {() => void} removes the listeners
+ */
+export function horizontalScrub(el, { onScrub, onEnd }) {
+  let startX = 0
+  let startY = 0
+  let tracking = false
+  let scrubbing = false
+
+  el.style.touchAction = 'pan-y'
+
+  const end = () => {
+    tracking = false
+    if (!scrubbing) return
+    scrubbing = false
+    onEnd()
+  }
+
+  const onTouchStart = (e) => {
+    if (e.touches.length > 1) {
+      end()
+      return
+    }
+    startX = e.touches[0].clientX
+    startY = e.touches[0].clientY
+    tracking = true
+    scrubbing = false
+  }
+
+  const onTouchMove = (e) => {
+    if (!tracking) return
+    const p = e.touches[0]
+    if (!scrubbing) {
+      const dx = p.clientX - startX
+      const dy = p.clientY - startY
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_AXIS_THRESHOLD) return
+      if (Math.abs(dx) <= Math.abs(dy) * SWIPE_AXIS_RATIO) {
+        // Vertical: the page has been scrolling all along. Let it have the
+        // rest of this touch.
+        tracking = false
+        return
+      }
+      scrubbing = true
+    }
+    onScrub(p.clientX)
+  }
+
+  const onMouseDown = (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return
+    scrubbing = true
+    tracking = true
+    el.setPointerCapture?.(e.pointerId)
+    onScrub(e.clientX)
+  }
+  const onMouseMove = (e) => {
+    if (e.pointerType === 'mouse' && scrubbing) onScrub(e.clientX)
+  }
+  const onMouseUp = (e) => {
+    if (e.pointerType === 'mouse') end()
+  }
+
+  el.addEventListener('touchstart', onTouchStart, { passive: true })
+  el.addEventListener('touchmove', onTouchMove, { passive: true })
+  el.addEventListener('touchend', end)
+  el.addEventListener('touchcancel', end)
+  el.addEventListener('pointerdown', onMouseDown)
+  el.addEventListener('pointermove', onMouseMove)
+  el.addEventListener('pointerup', onMouseUp)
+  el.addEventListener('pointercancel', onMouseUp)
+
+  return () => {
+    el.removeEventListener('touchstart', onTouchStart)
+    el.removeEventListener('touchmove', onTouchMove)
+    el.removeEventListener('touchend', end)
+    el.removeEventListener('touchcancel', end)
+    el.removeEventListener('pointerdown', onMouseDown)
+    el.removeEventListener('pointermove', onMouseMove)
+    el.removeEventListener('pointerup', onMouseUp)
+    el.removeEventListener('pointercancel', onMouseUp)
+  }
+}
+
+/**
  * Page a deck sideways with the finger, one page per gesture.
  *
  * Same bones as `swipeToReveal` — `pan-y`, passive listeners, one axis

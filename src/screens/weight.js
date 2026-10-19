@@ -3,6 +3,8 @@ import {
   s,
   repaint,
   reduceMotion,
+  setTabularText,
+  horizontalScrub,
 } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import {
@@ -511,6 +513,8 @@ export function weightScreen() {
        */
       const noticeSlot = h('div', { class: 'contents' })
       let swapTimer = null
+      // The chart on show, for the scrub to read, and the rate line's text,
+      // for the scrub to put back.
       let current = null
       let rateText = ''
       let shownSpan = null
@@ -645,6 +649,62 @@ export function weightScreen() {
       const latestSub = h('span', { class: 'text-[12px] text-muted' }, formatDayAge(latest.date))
       const trendText = latestTrend == null ? '—' : fmtWeight(latestTrend, unit)
       const trendNum = tnum(trendText, 'text-title font-semibold')
+
+      /**
+       * The scrub: a finger on the chart picks the nearest weigh-in, and the
+       * headline reads that weigh-in until the finger lifts.
+       *
+       * The headline rather than a tooltip, as Apple Health does it, because a
+       * tooltip has to go somewhere and under a thumb there is nowhere it can
+       * be read. The headline is already the place the eye goes for a number,
+       * and its two columns map straight across: the reading on the left, the
+       * trend at that reading on the right, which is the point of the heavy
+       * line directly under the finger.
+       *
+       * Nearest weigh-in by x only. The trend between readings is a curve the
+       * app drew, not a value it has, so the scrub never reports one.
+       */
+      let selected = null
+      const showEntry = (i) => {
+        if (i === selected) return
+        selected = i
+        current?._select?.(i)
+        if (i == null) {
+          latestLabel.textContent = 'Latest'
+          setTabularText(latestNum, fmtWeight(latest.kg, unit))
+          latestSub.textContent = formatDayAge(latest.date)
+          setTabularText(trendNum, trendText)
+          rateEl.textContent = rateText
+          return
+        }
+        const m = current._marks[i]
+        latestLabel.textContent = 'Weigh-in'
+        setTabularText(latestNum, fmtWeight(m.kg, unit))
+        latestSub.textContent = fromDateStr(m.date).toLocaleDateString(undefined, {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+        setTabularText(trendNum, current._withTrend ? fmtWeight(m.trend, unit) : '—')
+        // Held rather than emptied, for the reason at `rateEl` below.
+        rateEl.textContent = '\u00a0'
+      }
+
+      horizontalScrub(chartSlot, {
+        onScrub: (clientX) => {
+          const marks = current?._marks
+          if (!marks?.length) return
+          const box = current.getBoundingClientRect()
+          const vx = ((clientX - box.left) / box.width) * CHART_W
+          let best = 0
+          for (let i = 1; i < marks.length; i++) {
+            if (Math.abs(marks[i].x - vx) < Math.abs(marks[best].x - vx)) best = i
+          }
+          showEntry(best)
+        },
+        onEnd: () => showEntry(null),
+      })
 
       // The first paint fills the slot without animating: there is nothing for
       // the chart to have crossed from, and a screen that fades in on arrival is
