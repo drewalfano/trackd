@@ -158,12 +158,16 @@ export function labelPhotoField() {
    * The hairline is where the clip happens. A field cut off mid-pill reads as a
    * rendering fault until there is an edge for it to be cut off BY; the same 1px
    * that would be clutter on a static screen is what makes the scroll legible.
+   *
+   * The `before:` slab is `totalsLine`'s in sheets/log.js, for the same bug:
+   * the slot parks on the header band's transparent foot, so fields that went
+   * under the photo came back out above it into the fade.
    */
   function paint() {
     slot.setAttribute(
       'class',
       file
-        ? 'sticky top-0 z-10 -mx-[20px] -mb-[20px] border-b border-outline bg-canvas px-[20px] pb-[20px]'
+        ? 'sticky top-0 z-10 -mx-[20px] -mb-[20px] border-b border-outline bg-canvas px-[20px] pb-[20px] before:absolute before:inset-x-0 before:bottom-full before:h-[50svh] before:bg-canvas'
         : ''
     )
     slot.replaceChildren(file ? strip() : button(), input)

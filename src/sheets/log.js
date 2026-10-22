@@ -163,9 +163,22 @@ function totalsLine(totals) {
        * 10 + a 20px line box + 10 is the 40 this is meant to cost, and the
        * painted gap below it is the 20 that was already between the old card
        * and Morning.
+       *
+       * **The `before:` slab is the fill ABOVE the line**, and it is there because
+       * the line parks on the header band's bottom edge, which is the band's
+       * transparent end. `.sheet-head-fade` ramps from nothing at its foot to
+       * opaque 40px up, so a period that has scrolled under the line and kept
+       * going came straight back out the top of it into that ramp — `Morning`
+       * and its `Add` chip, cut in half, hovering between the title and the
+       * totals. A row that has gone under the pinned line has gone; nothing
+       * above the line should show the list. The slab paints canvas up behind
+       * the whole band (it is under the header, which is `z-index: 1` over this
+       * scroller), so the veil fades canvas into canvas and reads as before.
+       * Tall rather than the ramp's 40, so a rise put back on the band cannot
+       * reopen the gap. At rest there is nothing above the line to hide.
        */
       class:
-        'sticky top-0 z-10 -mx-[20px] -mb-[20px] bg-canvas px-[20px] pb-[20px] pt-[10px]',
+        'sticky top-0 z-10 -mx-[20px] -mb-[20px] bg-canvas px-[20px] pb-[20px] pt-[10px] before:absolute before:inset-x-0 before:bottom-full before:h-[50svh] before:bg-canvas',
     },
     /**
      * The wrapper is what sets the line box, not `macroLine`, which takes a
