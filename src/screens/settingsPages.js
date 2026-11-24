@@ -460,10 +460,21 @@ async function openActivitySheet(data) {
   })
 }
 
-function openImportSheet(data) {
+async function openImportSheet(data) {
+  // Read before the sheet opens, as the activity sheet does, so a refused file
+  // never shows an Import button it would have to take away.
+  let refused = null
+  try {
+    await previewImport(data, 'merge')
+  } catch (err) {
+    refused = err.message || 'Import failed'
+  }
+
   return openSheet({
     title: 'Import data',
     render: (ctx) => {
+      if (refused) return h('div', { class: 'pb-[10px]' }, notice(refused, { iconName: 'alert' }))
+
       let mode = 'merge'
       const body = h('div', { class: 'flex flex-col gap-[20px]' })
 
@@ -472,6 +483,7 @@ function openImportSheet(data) {
         try {
           preview = await previewImport(data, mode)
         } catch (err) {
+          ctx.setFooter(null)
           body.replaceChildren(notice(err.message, { iconName: 'alert' }))
           return
         }

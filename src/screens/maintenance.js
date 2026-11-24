@@ -1,6 +1,6 @@
 import { h } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
-import { getSettings, listWeights } from '../lib/db.js'
+import { getSettings, listActivity, listWeights } from '../lib/db.js'
 import { loadDays } from '../lib/days.js'
 import { rangeSpan, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
 import {
@@ -12,6 +12,7 @@ import {
   MAINTENANCE_DAYS,
   MIN_FULL_DAYS,
 } from '../lib/maintenance.js'
+import { windowActiveKcal } from '../lib/activityInsights.js'
 import { trendsPage } from '../lib/trendTile.js'
 import { card, tnum, macroUnit } from '../lib/ui.js'
 import { kcalGrouped, kgToUnit, pluralize, signed } from '../lib/format.js'
@@ -30,9 +31,10 @@ import { navigate } from '../router.js'
 export function maintenanceScreen() {
   return createScreen(
     async () => {
-      const [settings, weights, days] = await Promise.all([
+      const [settings, weights, activity, days] = await Promise.all([
         getSettings(),
         listWeights(),
+        listActivity(),
         loadDays(MAINTENANCE_DAYS - 1),
       ])
       const unit = settings.weightUnit
@@ -46,6 +48,7 @@ export function maintenanceScreen() {
       const enough = estimate.kcal != null
       const span = rangeSpan(MAINTENANCE_DAYS, todayStr())
       const dates = windowLabel(span)
+      const active = windowActiveKcal({ activity, span, today: todayStr() })
 
       const headline = enough
         ? h(
@@ -101,9 +104,20 @@ export function maintenanceScreen() {
         enough
           ? h('p', { class: 'text-[14px] leading-snug text-muted' }, maintenanceSentence(estimate, unit))
           : null,
+        // A card apart from the estimate's parts, because it is not one.
+        active
+          ? card([
+              row(
+                'Average active calories',
+                `${pluralize(active.days, 'day')} · ${windowLabel(active)} · not part of the estimate`,
+                tnum(kcalGrouped(active.kcal), 'text-[16px] font-semibold'),
+                macroUnit('kcal', 'text-[12px] font-semibold'),
+              ),
+            ])
+          : null,
       )
     },
-    { watch: ['entries', 'weights', 'settings'], watchDate: false },
+    { watch: ['entries', 'weights', 'settings', 'activity'], watchDate: false },
   )
 }
 

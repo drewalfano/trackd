@@ -8,6 +8,15 @@ import { formatDayShort, formatDayAge, fromDateStr, todayStr } from '../lib/date
 import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
 import { basisLabel, missingLabel, windowLabel } from '../lib/maintenance.js'
+import {
+  NO_ACTIVITY,
+  averageMissing,
+  burnBasis,
+  burnSentence,
+  latestLabel,
+  sleepBasis,
+  sleepSentence,
+} from '../lib/activityInsights.js'
 import { openTodayWeightDialog } from '../sheets/weighIn.js'
 
 /**
@@ -540,6 +549,132 @@ export function weightTile({ weights, settings, onPress, edit = {} }) {
     spark,
     variant === 'large'
       ? h('div', { class: 'flex flex-col' }, ...weights.slice(-3).reverse().map(row))
+      : null,
+  )
+}
+
+/* -------------------------------------------------------------- activity */
+
+export const ACTIVITY_VARIANTS = [SIZES.small, SIZES.medium]
+
+/**
+ * One average and the days it came from, or what it is waiting for. Shared by
+ * the tile and the page it opens, so the two cannot print different things.
+ */
+export function activityFigure(read, label, unit, qualifier = '') {
+  return h(
+    'div',
+    { class: 'flex min-w-0 flex-1 flex-col gap-[2px]' },
+    read.mean == null
+      ? h('span', { class: 'text-[16px] font-semibold leading-tight' }, label)
+      : h(
+          'div',
+          { class: 'flex items-baseline gap-[6px]' },
+          tnum(kcalGrouped(read.mean), 'text-title font-semibold'),
+          unit,
+        ),
+    caption(
+      read.mean == null
+        ? averageMissing(read)
+        : `${qualifier}${pluralize(read.days, 'day')}`,
+    ),
+  )
+}
+
+export const stepsUnit = () => h('span', { class: 'text-[14px] font-medium text-muted' }, 'steps')
+export const activeUnit = () => macroUnit('kcal', 'text-[14px] font-semibold')
+
+/**
+ * Small's version, set as small Macros sets its lines. The stacked figures
+ * were 234px against a 170px square and left a hole beside their neighbour.
+ */
+const activityLine = (read, label, unit, qualifier = null) =>
+  read.mean == null
+    ? smallBasis(`${label}: ${read.days} of ${AVERAGES_MIN_DAYS} days`)
+    : h(
+        'div',
+        { class: 'flex items-baseline gap-[4px]' },
+        tnum(kcalGrouped(read.mean), 'text-[18px] font-semibold leading-tight'),
+        unit,
+        qualifier ? smallBasis(qualifier) : null,
+      )
+const smallBasis = (text) => h('span', { class: 'text-[12px] leading-tight text-muted' }, text)
+
+/** The window, and how old the record is when nothing in it was read. */
+export function activityWindow(averages, activity) {
+  const empty = !averages.steps.days && !averages.activeKcal.days
+  return empty ? `${windowLabel(averages)} · ${latestLabel(activity)}` : windowLabel(averages)
+}
+
+/**
+ * Medium carries one insight sentence when one clears its threshold, burn
+ * before sleep. Small is the two averages alone, in a square. With nothing imported the
+ * page behind it has nothing to say either, so the tile is not a way in.
+ */
+export function activityTile({ averages, activity, burn, sleep, onPress, edit = {} }) {
+  const variant = edit.variant || 'medium'
+  const half = variant === 'small'
+  const tileOpts = {
+    id: 'activity',
+    title: 'Activity',
+    subtitle: averages ? '7-day average' : null,
+    size: half ? 'half' : 'full',
+    onPress: averages ? onPress : null,
+    variants: ACTIVITY_VARIANTS,
+    ...edit,
+    variant,
+  }
+  if (!averages) return trendTile(tileOpts, caption(NO_ACTIVITY))
+
+  const insight = burn
+    ? [burnSentence(burn), burnBasis(burn)]
+    : sleep
+      ? [sleepSentence(sleep), sleepBasis(sleep)]
+      : null
+
+  if (half) {
+    const { steps, activeKcal } = averages
+    const counted = [steps, activeKcal].filter((r) => r.mean != null).map((r) => r.days)
+    return trendTile(
+      tileOpts,
+      h(
+        'div',
+        { class: 'flex flex-col' },
+        activityLine(steps, 'Steps', h('span', { class: 'text-[12px] font-medium text-muted' }, 'steps')),
+        activityLine(activeKcal, 'Active', macroUnit('kcal', 'text-[12px] font-semibold'), 'active'),
+        // A line short of days already carries its own count.
+        counted.length
+          ? smallBasis(
+              new Set(counted).size === 1
+                ? pluralize(counted[0], 'day')
+                : `${counted.join(' and ')} days`,
+            )
+          : null,
+        smallBasis(windowLabel(averages)),
+      ),
+    )
+  }
+
+  return trendTile(
+    tileOpts,
+    h(
+      'div',
+      { class: 'flex flex-col gap-[10px]' },
+      h(
+        'div',
+        { class: 'flex gap-[10px]' },
+        activityFigure(averages.steps, 'Steps', stepsUnit()),
+        activityFigure(averages.activeKcal, 'Active calories', activeUnit(), 'active, '),
+      ),
+      caption(activityWindow(averages, activity)),
+    ),
+    insight
+      ? h(
+          'div',
+          { class: 'flex flex-col gap-[4px]' },
+          h('p', { class: 'text-[14px] leading-snug text-ink' }, insight[0]),
+          caption(insight[1]),
+        )
       : null,
   )
 }

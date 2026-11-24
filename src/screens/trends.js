@@ -2,6 +2,7 @@ import { h, s } from '../lib/dom.js'
 import { createScreen } from '../lib/screen.js'
 import {
   listWeights,
+  listActivity,
   getSettings,
   saveSettings,
   firstLoggedDate,
@@ -32,6 +33,7 @@ import {
 import { trendsGrid } from '../lib/trendTile.js'
 import { normaliseTiles } from '../lib/tileOrder.js'
 import { estimateMaintenance } from '../lib/maintenance.js'
+import { activityAverages, burnVsIntake, sleepVsIntake } from '../lib/activityInsights.js'
 import { reorderable } from '../lib/reorder.js'
 import { loadDays } from '../lib/days.js'
 import { streak, consistency } from '../lib/streak.js'
@@ -42,6 +44,7 @@ import {
   consistencyTile,
   macrosTile,
   weightTile,
+  activityTile,
 } from './trendTiles.js'
 import { openLogSheet } from '../sheets/log.js'
 import { setDate } from '../state.js'
@@ -275,8 +278,9 @@ let draft = null
 export function trendsScreen() {
   return createScreen(
     async ({ rerender }) => {
-      const [weights, settings, first] = await Promise.all([
+      const [weights, activity, settings, first] = await Promise.all([
         listWeights(),
+        listActivity(),
         getSettings(),
         firstLoggedDate(),
       ])
@@ -359,6 +363,18 @@ export function trendsScreen() {
           days && macrosTile({ week, targets: settings.targets, onPress: go('trends/macros'), edit: edit('macros') }),
         weight: () =>
           weightTile({ weights, settings, onPress: () => navigate('trends/weight'), edit: edit('weight') }),
+        // Built with nothing imported too: the tile says where to import.
+        activity: () => {
+          const read = { days: days || [], activity, targets: settings.targets, today }
+          return activityTile({
+            averages: activityAverages(read),
+            activity,
+            burn: burnVsIntake(read),
+            sleep: sleepVsIntake(read),
+            onPress: go('trends/activity'),
+            edit: edit('activity'),
+          })
+        },
       }
       const grid = trendsGrid(arranged.order.map((id) => build[id]?.()).filter(Boolean))
 
@@ -414,7 +430,7 @@ export function trendsScreen() {
       )
     },
     // can see.
-    { watch: ['weights', 'settings', 'entries'], watchDate: false },
+    { watch: ['weights', 'settings', 'entries', 'activity'], watchDate: false },
   )
 }
 

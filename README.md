@@ -25,7 +25,7 @@ path, so the URL is `http://localhost:5173/trackd/`.
 | `npm run dev` | Vite dev server |
 | `npm run build` | Generates icons, then builds to `dist/` |
 | `npm run preview` | Serves the production build |
-| `npm test` | Macro arithmetic, the Describe parser and draft, the service worker lifecycle, backup validation and import, the Apple Health activity merge |
+| `npm test` | Macro arithmetic, the Describe parser and draft, the service worker lifecycle, backup validation and import, the Apple Health activity merge, the activity insights |
 | `npm run icons` | Regenerates the PWA icons into `public/icons/` |
 
 ## Getting it onto the phone
