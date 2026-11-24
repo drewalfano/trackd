@@ -27,6 +27,9 @@ const FORMATS = ['EAN_13', 'EAN_8', 'UPC_A', 'UPC_E', 'CODE_128', 'CODE_39', 'IT
  * could only be logged, while the same food found by typing three letters could
  * also go on a plate.
  */
+/** How long a barcode lookup may take before the scan offers its way forward. */
+const LOOKUP_TIMEOUT_MS = 10000
+
 export function pushScan(ctx, { date, block, onStage }) {
   ctx.push({
     title: 'Scan',
@@ -65,8 +68,33 @@ export function pushScan(ctx, { date, block, onStage }) {
           return
         }
 
+        /**
+         * A lookup gets ten seconds, then the way forward.
+         *
+         * `fetch` has no time limit of its own, and Open Food Facts under load
+         * does not always refuse: sometimes it accepts the connection and never
+         * answers (40 seconds with no bytes, measured 2026-11-09). That left
+         * "Looking up…" on screen with nothing to tap. The same controller is
+         * aborted when the panel is disposed, so a lookup that outlives its
+         * sheet cannot push a serving panel onto one that has gone.
+         */
+        const controller = new AbortController()
+        let timedOut = false
+        let disposed = false
+        const timer = setTimeout(() => {
+          timedOut = true
+          controller.abort()
+        }, LOOKUP_TIMEOUT_MS)
+        c.onDispose(() => {
+          disposed = true
+          clearTimeout(timer)
+          controller.abort()
+        })
+
         try {
-          const result = await fetchByBarcode(code)
+          const result = await fetchByBarcode(code, { signal: controller.signal })
+          clearTimeout(timer)
+          if (disposed) return
           if (!result) {
             showNoMatch(code, 'Open Food Facts has no product with this barcode.')
             return
@@ -85,7 +113,14 @@ export function pushScan(ctx, { date, block, onStage }) {
           const food = await adoptDraft(result.draft)
           pushServing(c, { food, date, block, onStage })
         } catch {
-          showNoMatch(code, 'Could not reach Open Food Facts.')
+          clearTimeout(timer)
+          if (disposed) return
+          showNoMatch(
+            code,
+            timedOut
+              ? 'Open Food Facts took too long to answer.'
+              : 'Could not reach Open Food Facts.'
+          )
         }
       }
 
