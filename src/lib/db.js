@@ -14,6 +14,9 @@ import {
   validateImport as checkImport,
 } from './backup.js'
 import { validateActivityFile, mergeActivity } from './activity.js'
+import { sameWorkout, storedMatch } from './motra.js'
+import { importSummary, mergeWorkouts } from './motraImport.js'
+import { exerciseKey } from './muscles.js'
 
 /**
  * The real database, unless a dev build was opened with `?db=<name>`.
@@ -97,6 +100,11 @@ export const DEFAULT_SETTINGS = {
    * appears without wiping the arrangement. See screens/trends.js.
    */
   trendsTiles: { order: [], variants: {} },
+  /**
+   * Muscles the person gave for an exercise, by `exerciseKey`. Overrides the
+   * seed table in muscles.js. Two empty lists is an answer: no muscles.
+   */
+  exerciseMuscles: {},
   /** Ordered and manual. These do not re-sort themselves — that is the point. */
   favourites: [],
   firstRunSeen: false,
@@ -303,6 +311,10 @@ export function db() {
         if (oldVersion < 3) {
           // Daily Apple Health totals. Adds a store and touches no other.
           database.createObjectStore('activity', { keyPath: 'date' })
+        }
+        if (oldVersion < 4) {
+          // Pasted workouts. Adds a store and touches no other.
+          database.createObjectStore('workouts', { keyPath: 'id' })
         }
       },
       blocked() {
@@ -1061,6 +1073,102 @@ export async function importActivity(data) {
   })
   if (result.rows.length) emit('activity')
   return result
+}
+
+/* ---------------------------------------------------------------- workouts */
+
+/** Newest first. */
+export async function listWorkouts() {
+  const rows = await (await db()).getAll('workouts')
+  return rows.sort((a, b) => b.startedAt - a.startedAt)
+}
+
+/** The stored copy of a workout, by id or by its start minute and title. */
+export async function findWorkout(workout) {
+  return storedMatch(await listWorkouts(), workout)
+}
+
+/**
+ * Store a parsed workout and any muscle answers given with it, together or
+ * not at all. The id is the key, so the same workout pasted again replaces its
+ * row. A row that already matches is not written again, and neither is a
+ * workout an import already brought in under another id.
+ *
+ * `answers` is `[name, { primary, secondary }]` pairs.
+ */
+export async function saveWorkout(workout, answers = []) {
+  const d = await db()
+  const previous = await getSettings()
+  const exerciseMuscles = { ...previous.exerciseMuscles }
+  for (const [name, muscles] of answers) exerciseMuscles[exerciseKey(name)] = muscles
+  const next = derive({ ...previous, exerciseMuscles })
+
+  const changed = await write(async () => {
+    const tx = d.transaction(['workouts', 'settings'], 'readwrite')
+    const stored = storedMatch(await tx.objectStore('workouts').getAll(), workout)
+    const differs = !stored || (stored.id === workout.id && !sameWorkout(stored, workout))
+    const requests = []
+    // Awaited and aborted by hand, for the reasons given in `importAll`.
+    try {
+      if (differs) requests.push(tx.objectStore('workouts').put(workout))
+      if (answers.length) requests.push(tx.objectStore('settings').put(next, 'settings'))
+    } catch (err) {
+      try {
+        tx.abort()
+      } catch {
+        /* already aborting */
+      }
+      await Promise.allSettled([...requests, tx.done])
+      throw err
+    }
+    await Promise.all([...requests, tx.done])
+    return differs
+  })
+
+  if (answers.length) {
+    settingsCache = next
+    emit('settings')
+  }
+  if (changed) emit('workouts')
+  return changed
+}
+
+/** What an export would change. `parsed` is `parseMotraRows`'s, already checked. */
+export async function previewWorkouts(parsed) {
+  const [stored, { exerciseMuscles }] = await Promise.all([listWorkouts(), getSettings()])
+  return importSummary(parsed, stored, exerciseMuscles)
+}
+
+/** Merge an export in, whole or not at all, against the rows read in the write. */
+export async function importWorkouts(parsed) {
+  const d = await db()
+  const result = await write(async () => {
+    const tx = d.transaction('workouts', 'readwrite')
+    const merged = mergeWorkouts(await tx.store.getAll(), parsed.workouts)
+    const requests = []
+    // Awaited and aborted by hand, for the reasons given in `importAll`.
+    try {
+      for (const row of merged.rows) requests.push(tx.store.put(row))
+    } catch (err) {
+      try {
+        tx.abort()
+      } catch {
+        /* already aborting */
+      }
+      await Promise.allSettled([...requests, tx.done])
+      throw err
+    }
+    await Promise.all([...requests, tx.done])
+    return merged
+  })
+  if (result.rows.length) emit('workouts')
+  return result
+}
+
+/** One exercise's muscles, for every workout it is in, past and to come. */
+export async function saveExerciseMuscles(name, muscles) {
+  const { exerciseMuscles } = await getSettings()
+  return saveSettings({ exerciseMuscles: { ...exerciseMuscles, [exerciseKey(name)]: muscles } })
 }
 
 /* -------------------------------------------------------------- favourites */

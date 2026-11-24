@@ -72,7 +72,7 @@ eq('empty', sum({ rows: [], total: 0, start: null, end: null }), 'No days with r
 eq('duplicates', A.duplicatesLabel(1), '1 row in the file repeats an earlier date and will be counted once, keeping the later copy.')
 eq('no readings', [A.noDataLabel(1), A.noDataLabel(2)], ['1 day in the file has no readings and will not be stored.', '2 days in the file have no readings and will not be stored.'])
 
-console.log('\n--- v2 to v3 ---')
+console.log('\n--- v2 to current ---')
 {
   // The v2 schema as deployed, written out by hand so that changing db.js
   // cannot change what this starts from.
@@ -103,7 +103,7 @@ console.log('\n--- v2 to v3 ---')
   old.close()
 
   const d = await DB.db()
-  eq('opens at version 3', d.version, 3)
+  eq('opens at the current version', d.version, B.SCHEMA_VERSION)
   for (const [store, list] of Object.entries(rows)) eq(`${store} kept`, await d.getAll(store), list)
   eq('settings kept', await d.get('settings', 'settings'), { onboardingComplete: true, theme: 'dark' })
   eq('the plate kept', await DB.getPlate(), { items: [{ id: 'p' }] })

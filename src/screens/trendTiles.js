@@ -17,6 +17,15 @@ import {
   sleepBasis,
   sleepSentence,
 } from '../lib/activityInsights.js'
+import {
+  NO_WORKOUTS,
+  WEIGHTED_BASIS,
+  musclesSentence,
+  regionSets,
+  rampStep,
+  weekLabel,
+} from '../lib/training.js'
+import { bodyMap } from '../lib/bodyMap.js'
 import { openTodayWeightDialog } from '../sheets/weighIn.js'
 
 /**
@@ -676,5 +685,121 @@ export function activityTile({ averages, activity, burn, sleep, onPress, edit = 
           caption(insight[1]),
         )
       : null,
+  )
+}
+
+/* -------------------------------------------------------------- training */
+
+export const TRAINING_VARIANTS = [SIZES.small, SIZES.medium]
+
+/**
+ * The figure, whole sets and workouts this week. The figure is shaded by
+ * weighted sets, which is a different number, so Medium's sentence names them
+ * and says how they are counted. A week with nothing pasted says when the last
+ * workout was rather than printing a zero.
+ */
+export function trainingTile({ week, latest, onPress, onPaste, edit = {} }) {
+  const variant = edit.variant || 'medium'
+  const half = variant === 'small'
+  const tileOpts = {
+    id: 'training',
+    title: 'Training',
+    subtitle: latest ? (half ? 'This week' : weekLabel(week.start)) : null,
+    size: half ? 'half' : 'full',
+    onPress: latest ? onPress : null,
+    variants: TRAINING_VARIANTS,
+    ...edit,
+    variant,
+  }
+  const paste = h(
+    'button',
+    { class: `chip-sm self-start${half ? ' w-full justify-center' : ''}`, type: 'button', onclick: onPaste },
+    half ? 'Paste' : 'Paste workout',
+  )
+  if (!latest) {
+    return trendTile(
+      tileOpts,
+      half
+        ? h('div', { class: 'flex flex-col gap-[10px]' }, caption(NO_WORKOUTS), paste)
+        : h(
+            'div',
+            { class: 'flex items-center justify-between gap-[10px]' },
+            caption(NO_WORKOUTS),
+            paste,
+          ),
+    )
+  }
+
+  const worked = week.workouts.length > 0
+  const figure = bodyMap({
+    step: (groups) => rampStep(regionSets(groups, week.muscles)),
+    height: half ? 76 : 184,
+    label: worked ? 'Body map of weighted sets this week' : 'Body map, no workouts this week',
+  })
+  const count = pluralize(week.workouts.length, 'workout')
+
+  if (half) {
+    return trendTile(
+      tileOpts,
+      h(
+        'div',
+        { class: 'flex items-end justify-between gap-[6px]' },
+        worked
+          ? h(
+              'div',
+              { class: 'flex min-w-0 flex-col' },
+              h(
+                'div',
+                { class: 'flex items-baseline gap-[4px]' },
+                tnum(String(week.sets), 'text-title font-semibold leading-tight'),
+                h('span', { class: 'text-[12px] font-medium text-muted' }, week.sets === 1 ? 'set' : 'sets'),
+              ),
+              smallBasis(count),
+            )
+          : smallBasis('No workouts'),
+        figure,
+      ),
+    )
+  }
+
+  const sentence = musclesSentence(week)
+  return trendTile(
+    tileOpts,
+    h(
+      'div',
+      { class: 'flex items-center gap-[20px]' },
+      h('div', { class: 'shrink-0' }, figure),
+      h(
+        'div',
+        { class: 'flex min-w-0 flex-1 flex-col gap-[10px]' },
+        worked
+          ? h(
+              'div',
+              { class: 'flex flex-col gap-[2px]' },
+              h(
+                'div',
+                { class: 'flex items-baseline gap-[6px]' },
+                tnum(String(week.sets), 'text-title font-semibold'),
+                h('span', { class: 'text-[14px] font-medium text-muted' }, week.sets === 1 ? 'set' : 'sets'),
+              ),
+              caption(`${count} this week`),
+            )
+          : h(
+              'div',
+              { class: 'flex flex-col gap-[2px]' },
+              h('span', { class: 'text-[16px] font-semibold leading-tight' }, 'No workouts this week'),
+              caption(`Last one: ${formatDayAge(latest.date)}`),
+            ),
+        sentence
+          ? h(
+              'div',
+              { class: 'flex flex-col gap-[4px]' },
+              h('p', { class: 'text-[14px] leading-snug text-ink' }, sentence),
+              caption(WEIGHTED_BASIS),
+            )
+          : null,
+        paste,
+      ),
+    ),
   )
 }

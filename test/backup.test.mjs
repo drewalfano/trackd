@@ -88,6 +88,13 @@ const activity = (over = {}) => ({
   date: '2026-08-01', activeKcal: 612, steps: 9840, sleepMinutes: null, importedAt: 5, ...over,
 })
 
+const workout = (over = {}) => ({
+  id: 'w1', title: 'Test Workout', startedAt: 1000, date: '2026-08-01', durationMin: 56, calories: null,
+  reportedVolume: null, unit: 'lb',
+  exercises: [{ name: 'Test Exercise A', sets: [{ reps: 12, weight: 35 }, { reps: 10, weight: null }, { reps: null, weight: null, seconds: 30 }] }],
+  ...over,
+})
+
 const file = (over = {}) => ({
   format: B.EXPORT_FORMAT,
   version: B.SCHEMA_VERSION,
@@ -99,6 +106,7 @@ const file = (over = {}) => ({
   weights: [{ date: '2026-08-01', kg: 80.4, createdAt: 1 }],
   dayTargets: [{ date: '2026-08-01', targets: { kcal: 2200, protein: 160, fat: 70, carbs: 240 }, savedAt: 1 }],
   activity: [activity()],
+  workouts: [workout()],
   ...over,
 })
 
@@ -156,7 +164,7 @@ console.log('--- validation ---')
   )
   eq('duplicate ids collapse to one row', v.stores.foods.length, 1)
   eq('the later copy wins', v.stores.foods[0].name, 'Second')
-  eq('and the collapse is counted', v.duplicates, { foods: 1, entries: 0, meals: 0, weights: 1, dayTargets: 0, activity: 0 })
+  eq('and the collapse is counted', v.duplicates, { foods: 1, entries: 0, meals: 0, weights: 1, dayTargets: 0, activity: 0, workouts: 0 })
   eq('a duplicate date keeps the later weight', v.stores.weights[0].kg, 81)
 }
 
@@ -192,10 +200,44 @@ rejects('activity that is not a list', file({ activity: {} }), '"activity" data 
   const v = B.validateImport(file({ activity: [{ date: '2026-08-01', steps: 0 }] }))
   eq('a missing metric is null and a zero stays zero', v.stores.activity[0], { date: '2026-08-01', steps: 0, activeKcal: null, sleepMinutes: null, importedAt: 0 })
   for (const version of [1, 2]) {
-    const { activity: _, ...older } = file({ version })
+    const { activity: _, workouts: __, ...older } = file({ version })
     const o = B.validateImport(older)
     eq(`a v${version} backup still validates, with activity empty`, [o.version, o.stores.activity, o.stores.weights.length], [version, [], 1])
   }
+}
+for (const [label, over, message] of [
+  ['no id', { id: '' }, 'has no id'],
+  ['no title', { title: ' ' }, 'Workout 1 has no title'],
+  ['a bad date', { date: '2026-02-30' }, 'no valid date'],
+  ['a bad start', { startedAt: 'now' }, 'bad start time'],
+  ['a bad duration', { durationMin: -1 }, 'bad duration'],
+  ['bad calories', { calories: '3' }, 'bad calories'],
+  ['a bad volume', { reportedVolume: NaN }, 'bad volume'],
+  ['an unknown unit', { unit: 'stone' }, 'unknown weight unit'],
+  ['weights with no unit', { unit: null }, 'weights and no unit'],
+  ['no exercises', { exercises: [] }, 'has no exercises'],
+  ['an unnamed exercise', { exercises: [{ name: '', sets: [{ reps: 1 }] }] }, 'exercise 1, has no name'],
+  ['an exercise with no sets', { exercises: [{ name: 'X', sets: [] }] }, 'exercise 1, has no sets'],
+  ['muscles that are not groups', { exercises: [{ name: 'X', motraMuscles: ['neck'], sets: [{ reps: 1 }] }] }, 'exercise 1, has bad muscles'],
+  ['fractional reps', { exercises: [{ name: 'X', sets: [{ reps: 1.5 }] }] }, 'bad reps'],
+  ['a negative weight', { exercises: [{ name: 'X', sets: [{ reps: 1, weight: -5 }] }] }, 'bad weight'],
+  ['a set of nothing', { exercises: [{ name: 'X', sets: [{ weight: 5 }] }] }, 'no reps and no time'],
+]) rejects(`a workout with ${label}`, file({ workouts: [workout(over)] }), message)
+rejects('a workout that is not a record', file({ workouts: [null] }), 'Workout 1 is not a record')
+rejects('workouts that are not a list', file({ workouts: {} }), '"workouts" data is malformed')
+{
+  const ex = { name: 'X', motraMuscles: ['abs'], sets: [{ reps: 15, weight: 0, seconds: 63 }] }
+  eq('an imported exercise keeps its muscles and time', B.validateImport(file({ workouts: [workout({ exercises: [ex] })] })).stores.workouts[0].exercises, [ex])
+}
+for (const version of [1, 2, 3]) {
+  const { workouts: _, ...older } = file({ version })
+  const o = B.validateImport(older)
+  eq(`a v${version} backup still validates, with workouts empty`, [o.version, o.stores.workouts, o.stores.entries.length], [version, [], 1])
+}
+const answers = { 'test exercise a': { primary: ['chest'], secondary: ['triceps'] }, 'test exercise b': { primary: [], secondary: [] } }
+eq('exercise muscles are kept', B.validateImport(file({ settings: settings({ exerciseMuscles: answers }) })).settings.exerciseMuscles, answers)
+for (const bad of [[], { x: null }, { x: { primary: ['chest'] } }, { x: { primary: ['neck'], secondary: [] } }, { ' ': { primary: [], secondary: [] } }]) {
+  rejects(`exercise muscles ${JSON.stringify(bad)}`, file({ settings: settings({ exerciseMuscles: bad }) }), 'Settings has bad')
 }
 rejects('settings that are not an object', file({ settings: [] }), 'settings in that file are malformed')
 rejects('an unknown theme', file({ settings: settings({ theme: 'blue' }) }), 'unknown theme')
@@ -303,13 +345,30 @@ eq('and it declares the format', before.format, B.EXPORT_FORMAT)
 
 {
   // A v2 backup, both ways, onto a device that already holds activity.
-  const { activity: _, ...v2 } = file({ version: 2 })
+  const { activity: _, workouts: __, ...v2 } = file({ version: 2 })
   await DB.importAll(file(), 'replace')
   eq('an export carries activity', (await DB.exportAll()).activity, [activity()])
   await DB.importAll(v2, 'merge')
   eq('merging a v2 backup keeps stored activity', await DB.listActivity(), [activity()])
   await DB.importAll(v2, 'replace')
   eq('replacing with a v2 backup brings its rows and no activity', [await count('entries'), await count('weights'), await count('activity')], [1, 1, 0])
+}
+
+{
+  // A v3 backup, and workouts with their muscle answers both ways.
+  const { workouts: _, ...v3 } = file({ version: 3 })
+  await DB.importAll(file({ settings: settings({ exerciseMuscles: answers }) }), 'replace')
+  eq('a workout and its muscles land', [await DB.listWorkouts(), (await DB.getSettings()).exerciseMuscles], [[workout()], answers])
+  const out = strip(await DB.exportAll())
+  eq('an export carries both', [out.workouts, out.settings.exerciseMuscles], [[workout()], answers])
+  await DB.importAll(v3, 'merge')
+  eq('merging a v3 backup keeps both', [await count('workouts'), (await DB.getSettings()).exerciseMuscles], [1, answers])
+  await DB.importAll(v3, 'replace')
+  eq('replacing with a v3 backup brings its rows and no workouts', [await count('entries'), await count('activity'), await count('workouts')], [1, 1, 0])
+  eq('and muscle answers go back to none', (await DB.getSettings()).exerciseMuscles, {})
+  await DB.importAll(out, 'replace')
+  const back = strip(await DB.exportAll())
+  eq('the round trip keeps them', [back.workouts, back.settings.exerciseMuscles], [out.workouts, out.settings.exerciseMuscles])
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

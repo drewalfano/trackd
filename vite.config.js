@@ -89,6 +89,23 @@ function serviceWorker() {
   }
 }
 
+/**
+ * The body map's art as a string, without its C2PA metadata block. The file in
+ * src/assets stays as supplied; the block is larger than half the drawing and
+ * is not part of it.
+ */
+function bodyArt() {
+  return {
+    name: 'trackd:body-art',
+    enforce: 'pre',
+    load(id) {
+      if (!/\/assets\/body-[a-z]+\.svg\?raw$/.test(id)) return null
+      const svg = readFileSync(id.replace(/\?raw$/, ''), 'utf8')
+      return `export default ${JSON.stringify(svg.replace(/<metadata>[\s\S]*?<\/metadata>/, ''))}`
+    },
+  }
+}
+
 const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8'))
 
 /**
@@ -118,7 +135,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
     __BUILD_ID__: JSON.stringify(buildId()),
   },
-  plugins: [tailwindcss(), serviceWorker()],
+  plugins: [tailwindcss(), bodyArt(), serviceWorker()],
   build: {
     target: 'es2022',
     // One user, one device, no code splitting worth the extra round trips.

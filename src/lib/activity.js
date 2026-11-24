@@ -87,7 +87,7 @@ export function mergeActivity(existing, days, importedAt) {
 /* ------------------------------------------------------------------- copy */
 
 /** `Oct 12 to Nov 22`, with years once the span is not all this year. */
-function spanLabel(start, end, today) {
+export function spanLabel(start, end, today) {
   const years = new Set([start, end, today].map((d) => d.slice(0, 4)))
   const label = (d) =>
     fromDateStr(d).toLocaleDateString(undefined, {

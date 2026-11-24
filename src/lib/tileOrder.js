@@ -1,5 +1,5 @@
 /** Every tile the Trends grid can show, in the order a fresh install gets. */
-export const TILE_IDS = ['calories', 'maintenance', 'streak', 'consistency', 'macros', 'weight', 'activity']
+export const TILE_IDS = ['calories', 'maintenance', 'streak', 'consistency', 'macros', 'weight', 'activity', 'training']
 
 /**
  * The stored arrangement made safe to render: unknown ids dropped, missing

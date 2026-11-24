@@ -71,9 +71,10 @@ eq('a rate that prints as 0.0 is level', M.maintenanceSentence({ intake: 2150, r
 eq('a fresh install has it after calories', normaliseTiles({ order: [], variants: {} }).order, TILE_IDS)
 eq('which is second', TILE_IDS.indexOf('maintenance'), TILE_IDS.indexOf('calories') + 1)
 const saved = { order: ['weight', 'macros', 'calories', 'streak', 'consistency'], variants: { weight: 'small' } }
-eq('an older arrangement keeps its order and gains it at the end', normaliseTiles(saved), { order: [...saved.order, 'maintenance', 'activity'], variants: { weight: 'small' } })
+eq('an older arrangement keeps its order and gains it at the end', normaliseTiles(saved), { order: [...saved.order, 'maintenance', 'activity', 'training'], variants: { weight: 'small' } })
 const phase2 = { order: ['weight', 'calories', 'maintenance', 'streak', 'consistency', 'macros'], variants: {} }
-eq('one from before activity gains it at the end', normaliseTiles(phase2).order, [...phase2.order, 'activity'])
+eq('one from before activity gains it at the end', normaliseTiles(phase2).order, [...phase2.order, 'activity', 'training'])
+eq('one from before training gains it at the end', normaliseTiles({ order: [...phase2.order, 'activity'] }).order, [...phase2.order, 'activity', 'training'])
 eq('no arrangement at all', normaliseTiles(undefined).order, TILE_IDS)
 eq('an unknown tile is dropped', normaliseTiles({ order: ['gone', 'weight'] }).order.includes('gone'), false)
 

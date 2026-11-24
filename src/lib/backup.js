@@ -1,5 +1,6 @@
 import { BLOCKS, fromDateStr, toDateStr } from './dates.js'
 import { UNITS } from './format.js'
+import { MUSCLE_GROUPS } from './muscles.js'
 
 /**
  * What a backup file has to look like before any of it is written.
@@ -37,10 +38,10 @@ export const EXPORT_FORMAT = 'macro-tracker-export'
  * heard of, and importing it would mean writing records no screen here knows
  * how to read.
  */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 /** Every store that travels in an export, in the order they are written. */
-export const DATA_STORES = ['foods', 'entries', 'meals', 'weights', 'dayTargets', 'activity']
+export const DATA_STORES = ['foods', 'entries', 'meals', 'weights', 'dayTargets', 'activity', 'workouts']
 
 const DATE_KEYED = ['weights', 'dayTargets', 'activity']
 
@@ -286,6 +287,51 @@ function checkActivity(row, i) {
   }
 }
 
+const WEIGHT_UNITS = ['lb', 'kg']
+
+/** `reps` for a counted set, `seconds` for a timed one, `weight` null for bodyweight. */
+function checkSet(set, where) {
+  if (!isObject(set)) fail(`${where} has a bad set.`)
+  if (set.reps != null && !(Number.isInteger(set.reps) && set.reps >= 0)) fail(`${where} has a bad reps value.`)
+  if (set.weight != null && !isNonNeg(set.weight)) fail(`${where} has a bad weight.`)
+  if (set.seconds != null && !isNonNeg(set.seconds)) fail(`${where} has a bad time.`)
+  if (set.reps == null && set.seconds == null) fail(`${where} has a set with no reps and no time.`)
+  return { ...set, reps: set.reps ?? null, weight: set.weight ?? null }
+}
+
+function checkWorkout(row, i) {
+  const where = handle('Workout', row, i, 'title')
+  if (!isObject(row)) fail(`Workout ${i + 1} is not a record.`)
+  if (!isText(row.id)) fail(`${where} has no id.`)
+  if (!isText(row.title)) fail(`Workout ${i + 1} has no title.`)
+  if (!isDay(row.date)) fail(`${where} has no valid date.`)
+  if (!isNonNeg(row.startedAt)) fail(`${where} has a bad start time.`)
+  for (const [field, label] of [['durationMin', 'duration'], ['calories', 'calories value'], ['reportedVolume', 'volume']]) {
+    if (row[field] != null && !isNonNeg(row[field])) fail(`${where} has a bad ${label}.`)
+  }
+  if (row.unit != null && !WEIGHT_UNITS.includes(row.unit)) fail(`${where} has an unknown weight unit.`)
+  if (!Array.isArray(row.exercises) || !row.exercises.length) fail(`${where} has no exercises.`)
+  const exercises = row.exercises.map((ex, j) => {
+    const at = `${where}, exercise ${j + 1},`
+    if (!isObject(ex) || !isText(ex.name)) fail(`${at} has no name.`)
+    if (!Array.isArray(ex.sets) || !ex.sets.length) fail(`${at} has no sets.`)
+    if (ex.motraMuscles != null && !(Array.isArray(ex.motraMuscles) && ex.motraMuscles.every((g) => MUSCLE_GROUPS.includes(g)))) {
+      fail(`${at} has bad muscles.`)
+    }
+    const sets = ex.sets.map((set) => checkSet(set, at))
+    if (row.unit == null && sets.some((set) => set.weight != null)) fail(`${where} has weights and no unit.`)
+    return { ...ex, sets }
+  })
+  return {
+    ...row,
+    durationMin: row.durationMin ?? null,
+    calories: row.calories ?? null,
+    reportedVolume: row.reportedVolume ?? null,
+    unit: row.unit ?? null,
+    exercises,
+  }
+}
+
 const CHECKS = {
   foods: checkFood,
   entries: checkEntry,
@@ -293,6 +339,7 @@ const CHECKS = {
   weights: checkWeight,
   dayTargets: checkDayTargets,
   activity: checkActivity,
+  workouts: checkWorkout,
 }
 
 /* --------------------------------------------------------------- settings */
@@ -343,6 +390,18 @@ function checkSettings(s) {
       if (!isObject(f) || !FAVOURITE_TYPES.includes(f.type) || !isKey(f.id)) fail(`${where} has a bad favourite.`)
       return { type: f.type, id: f.id }
     })
+  }
+  if (s.exerciseMuscles != null) {
+    if (!isObject(s.exerciseMuscles)) fail(`${where} has bad exercise muscles.`)
+    const groups = (v) => Array.isArray(v) && v.every((g) => MUSCLE_GROUPS.includes(g))
+    out.exerciseMuscles = Object.fromEntries(
+      Object.entries(s.exerciseMuscles).map(([name, m]) => {
+        if (!isText(name) || !isObject(m) || !groups(m.primary) || !groups(m.secondary)) {
+          fail(`${where} has bad muscles for "${name}".`)
+        }
+        return [name, { primary: m.primary, secondary: m.secondary }]
+      })
+    )
   }
   if (s.profile != null) {
     const p = s.profile

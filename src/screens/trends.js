@@ -3,6 +3,7 @@ import { createScreen } from '../lib/screen.js'
 import {
   listWeights,
   listActivity,
+  listWorkouts,
   getSettings,
   saveSettings,
   firstLoggedDate,
@@ -34,6 +35,8 @@ import { trendsGrid } from '../lib/trendTile.js'
 import { normaliseTiles } from '../lib/tileOrder.js'
 import { estimateMaintenance } from '../lib/maintenance.js'
 import { activityAverages, burnVsIntake, sleepVsIntake } from '../lib/activityInsights.js'
+import { trainingWeek, weekStart } from '../lib/training.js'
+import { pasteWorkout } from '../sheets/pasteWorkout.js'
 import { reorderable } from '../lib/reorder.js'
 import { loadDays } from '../lib/days.js'
 import { streak, consistency } from '../lib/streak.js'
@@ -45,6 +48,7 @@ import {
   macrosTile,
   weightTile,
   activityTile,
+  trainingTile,
 } from './trendTiles.js'
 import { openLogSheet } from '../sheets/log.js'
 import { setDate } from '../state.js'
@@ -278,9 +282,10 @@ let draft = null
 export function trendsScreen() {
   return createScreen(
     async ({ rerender }) => {
-      const [weights, activity, settings, first] = await Promise.all([
+      const [weights, activity, workouts, settings, first] = await Promise.all([
         listWeights(),
         listActivity(),
+        listWorkouts(),
         getSettings(),
         firstLoggedDate(),
       ])
@@ -375,6 +380,15 @@ export function trendsScreen() {
             edit: edit('activity'),
           })
         },
+        // Built with nothing pasted too: the tile is where pasting starts.
+        training: () =>
+          trainingTile({
+            week: trainingWeek(workouts, weekStart(today), settings.exerciseMuscles),
+            latest: workouts[0] ?? null,
+            onPress: go('trends/training'),
+            onPaste: () => pasteWorkout(),
+            edit: edit('training'),
+          }),
       }
       const grid = trendsGrid(arranged.order.map((id) => build[id]?.()).filter(Boolean))
 
@@ -430,7 +444,7 @@ export function trendsScreen() {
       )
     },
     // can see.
-    { watch: ['weights', 'settings', 'entries', 'activity'], watchDate: false },
+    { watch: ['weights', 'settings', 'entries', 'activity', 'workouts'], watchDate: false },
   )
 }
 

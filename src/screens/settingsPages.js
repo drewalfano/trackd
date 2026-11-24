@@ -1,3 +1,4 @@
+import { pickWorkouts } from '../sheets/importWorkouts.js'
 import { h, repaint } from '../lib/dom.js'
 import { icon } from '../lib/icons.js'
 import { createScreen } from '../lib/screen.js'
@@ -634,6 +635,12 @@ export function dataScreen() {
             subtitle: 'Daily totals from a Shortcut, with a preview first',
             leading: icon('upload', { size: 19, class: 'text-muted' }),
             onclick: () => pickJson(openActivitySheet),
+          }),
+          listRow({
+            title: 'Import Motra workouts',
+            subtitle: 'Excel export, with a preview first',
+            leading: icon('upload', { size: 19, class: 'text-muted' }),
+            onclick: pickWorkouts,
           }),
           listRow({
             title: 'Clear all data',
