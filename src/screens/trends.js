@@ -30,11 +30,14 @@ import {
   daysBetween,
 } from '../lib/dates.js'
 import { trendsGrid } from '../lib/trendTile.js'
+import { normaliseTiles } from '../lib/tileOrder.js'
+import { estimateMaintenance } from '../lib/maintenance.js'
 import { reorderable } from '../lib/reorder.js'
 import { loadDays } from '../lib/days.js'
 import { streak, consistency } from '../lib/streak.js'
 import {
   caloriesTile,
+  maintenanceTile,
   streakTile,
   consistencyTile,
   macrosTile,
@@ -262,20 +265,6 @@ function dayRow(day, targets) {
   )
 }
 
-/** Every tile the grid can show, in the order a fresh install gets. */
-const TILE_IDS = ['calories', 'streak', 'consistency', 'macros', 'weight']
-
-/**
- * The stored arrangement made safe to render: unknown ids dropped, missing
- * ones appended, so a tile added in a later version shows up at the end
- * without wiping what was arranged.
- */
-function normaliseTiles(stored) {
-  const known = (stored?.order || []).filter((id) => TILE_IDS.includes(id))
-  const order = [...known, ...TILE_IDS.filter((id) => !known.includes(id))]
-  return { order, variants: { ...(stored?.variants || {}) } }
-}
-
 /**
  * The arrangement being edited, or null when not editing. Module scope so
  * a re-render mid-edit (a weigh-in saved from the tile) keeps the mode and
@@ -345,6 +334,19 @@ export function trendsScreen() {
         calories: () =>
           days &&
           caloriesTile({ days, week, targets: settings.targets, onPress: go('trends/calories'), edit: edit('calories') }),
+        // Built with no history too: the tile says what it is waiting on.
+        maintenance: () =>
+          maintenanceTile({
+            est: estimateMaintenance({
+              days: days || [],
+              weights,
+              targets: settings.targets,
+              unit: settings.weightUnit,
+              trendWindow: settings.trendWindow,
+            }),
+            onPress: go('trends/maintenance'),
+            edit: edit('maintenance'),
+          }),
         streak: () =>
           days &&
           // A streak is one number with nothing behind it; the calendar is

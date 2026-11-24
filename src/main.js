@@ -26,6 +26,7 @@ import { trendsScreen } from './screens/trends.js'
 import { weightScreen } from './screens/weight.js'
 import { consistencyScreen } from './screens/consistency.js'
 import { caloriesScreen } from './screens/calories.js'
+import { maintenanceScreen } from './screens/maintenance.js'
 import { macrosScreen } from './screens/macros.js'
 import { settingsScreen } from './screens/settings.js'
 import { suggestTargetScreen } from './screens/suggestTarget.js'
@@ -485,6 +486,7 @@ function defineRoutes() {
   route('trends/weight', () => show(weightScreen))
   route('trends/consistency', () => show(consistencyScreen))
   route('trends/calories', () => show(caloriesScreen))
+  route('trends/maintenance', () => show(maintenanceScreen))
   route('trends/macros', () => show(macrosScreen))
   route('weight', () => navigate('trends/weight', { replace: true }))
   route('history', () => navigate('trends', { replace: true }))

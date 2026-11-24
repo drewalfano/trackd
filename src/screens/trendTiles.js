@@ -1,12 +1,13 @@
 import { h, s } from '../lib/dom.js'
 import { trendTile } from '../lib/trendTile.js'
-import { tnum, macroColor, macroTextColor } from '../lib/ui.js'
+import { tnum, macroColor, macroTextColor, macroUnit } from '../lib/ui.js'
 import { macroRing } from '../lib/ring.js'
 import { AVERAGES_MIN_DAYS, isPartialDay, MACRO_META } from '../lib/compute.js'
-import { kcal as fmtKcal, g } from '../lib/format.js'
+import { kcal as fmtKcal, kcalGrouped, g, pluralize } from '../lib/format.js'
 import { formatDayShort, formatDayAge, fromDateStr, todayStr } from '../lib/dates.js'
 import { kgToUnit, weight as fmtWeight, signed } from '../lib/format.js'
 import { computeTrend, ratePerWeek, windowPoints, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
+import { basisLabel, missingLabel, windowLabel } from '../lib/maintenance.js'
 import { openTodayWeightDialog } from '../sheets/weighIn.js'
 
 /**
@@ -178,6 +179,54 @@ export function caloriesTile({ days, week, targets, onPress, edit = {} }) {
     },
     headline,
     chart ? caloriesChart(recent, targets, week.kcal) : null,
+  )
+}
+
+/* ----------------------------------------------------------- maintenance */
+
+export const MAINTENANCE_VARIANTS = [SIZES.small, SIZES.medium]
+
+/**
+ * Medium by default, so the pair of squares after it stays a pair. Small says
+ * the same basis on two lines; a square has no room for it as one sentence.
+ * Without an estimate both sizes say what is missing and show no number.
+ */
+export function maintenanceTile({ est, onPress, edit = {} }) {
+  const variant = edit.variant || 'medium'
+  const half = variant === 'small'
+  const basis =
+    est.kcal == null
+      ? null
+      : half
+        ? [
+            caption(`${pluralize(est.fullDays, 'day')}, ${pluralize(est.weighIns, 'weigh-in')}`),
+            caption(windowLabel(est)),
+          ]
+        : [caption(basisLabel(est)), caption(windowLabel(est))]
+
+  return trendTile(
+    {
+      id: 'maintenance',
+      title: 'Est. maintenance',
+      size: half ? 'half' : 'full',
+      onPress,
+      variants: MAINTENANCE_VARIANTS,
+      ...edit,
+      variant,
+    },
+    est.kcal == null
+      ? caption(missingLabel(est))
+      : h(
+          'div',
+          { class: 'flex flex-col gap-[2px]' },
+          h(
+            'div',
+            { class: 'flex items-baseline gap-[6px]' },
+            tnum(kcalGrouped(est.kcal), 'text-title font-semibold'),
+            macroUnit('kcal', 'text-[14px] font-semibold'),
+          ),
+          ...basis,
+        ),
   )
 }
 

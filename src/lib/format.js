@@ -11,6 +11,9 @@ export const g = (n) => String(Math.round(Number(n) || 0))
 /** Calories: whole numbers. */
 export const kcal = (n) => String(Math.round(Number(n) || 0))
 
+/** `2,480`. The maintenance estimate's form, on its tile and its page. */
+export const kcalGrouped = (n) => Math.round(Number(n) || 0).toLocaleString('en-US')
+
 /** Quantities: up to one decimal, but no trailing ".0". */
 export const qty = (n) => {
   const v = round(n, 1)

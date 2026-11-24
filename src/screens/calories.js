@@ -20,9 +20,8 @@ let range = 30 // module-level so the switch survives a re-render
  * "this week"; this answers "is it a pattern", and the weekday table is
  * where the pattern usually is.
  *
- * No energy-balance estimate. Expected loss from a deficit needs a
- * maintenance figure the app does not have, and a chart drawn on a guess
- * would be asserting more than the data supports.
+ * No energy-balance chart. The maintenance estimate has its own page at
+ * `trends/maintenance`, where its basis is stated beside it.
  */
 export function caloriesScreen() {
   return createScreen(
