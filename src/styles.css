@@ -5470,3 +5470,180 @@ body:has(.sheet-scrim) .toast-host {
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-ink) 60%, transparent);
   }
 }
+
+/* ------------------------------------------------- width: compact and regular */
+
+/**
+ * Two layouts, chosen by how much width there is, not by which device it is.
+ *
+ * This is Apple's rule for iPhone Duo (HIG, "Designing for iPhone Duo", and the
+ * two Tech Talks): the outer display is compact width, the inner display is
+ * regular width, and an app targets those two rather than a layout per pose.
+ * "Avoid fixed widths and display-specific dependencies."
+ *
+ * What Apple publishes is pixels: outer 1398 x 2034 at 460ppi, inner
+ * 1878 x 2670 at 430ppi. It does not publish points. The outer display is
+ * 466 x 678 at 3x; the inner is reported as 626 x 890 by some and 669 x 951 by
+ * others, and nobody has a published figure for what an installed web app's
+ * viewport is on either. NOTHING HERE HAS BEEN MEASURED ON A DUO. So no rule
+ * below names any of those numbers, and each has to hold on both candidates.
+ *
+ * **The one threshold is 600px, and it comes from the content.** Two panels
+ * and three 20px gutters at 600 leaves 270 a panel, which is the narrowest the
+ * dashboard card's three rings were checked at. Every phone, the Duo's outer
+ * display, and either half of the inner display in Split View land below it
+ * and get the phone layout. The inner display lands above it either way round.
+ */
+
+/**
+ * Compact: the column fills the screen.
+ *
+ * `.screen` capped at 430 because no phone was wider. The Duo's outer display
+ * is, by 36pt, and a capped column there floats 18pt in from each edge with
+ * the day deck's peek stranded short of the glass.
+ *
+ * The side insets are added per side and never assumed equal: the Duo puts
+ * the camera and status strip down ONE edge, so left and right differ. Both
+ * are 0 on every other iPhone in portrait, where this changes nothing.
+ */
+.screen {
+  max-width: 600px;
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
+}
+nav.screen-floor {
+  padding-left: calc(20px + env(safe-area-inset-left, 0px));
+  padding-right: calc(20px + env(safe-area-inset-right, 0px));
+}
+
+/**
+ * Today's log preview stops at eight rows on a phone. The 9 is
+ * `LOG_PREVIEW_MAX + 1` in screens/today.js; the rows are all in the DOM so
+ * that the regular layout can show them the moment the phone opens.
+ */
+@media (max-width: 599.98px) {
+  [data-today-log] > :nth-child(n + 9) {
+    display: none;
+  }
+}
+
+@media (min-width: 600px) {
+  /**
+   * Regular: wide enough for both orientations of the inner display, capped
+   * so a desktop window does not run the panels out to unreadable widths.
+   */
+  .screen {
+    max-width: 1000px;
+  }
+
+  /**
+   * A page that has not opted into panels keeps the phone's measure, centred.
+   * Settings' sub-pages are forms; a 600pt-wide text field is the stretched
+   * phone layout the guideline warns about, not more content.
+   */
+  .screen > div:not(:has(.panels)) {
+    max-width: 430px;
+    margin-inline: auto;
+  }
+
+  /**
+   * Two panels. The last child is the second panel and everything before it
+   * stacks in the first.
+   *
+   * Two, because the HIG asks for an even column count on a screen that
+   * folds: the gutter between them is the centre line, so nothing tappable
+   * sits on the crease in either orientation.
+   *
+   * The first panel's spacing is margins rather than `row-gap`: the second
+   * panel spans every row, and a gap would be paid once per row including
+   * the empty ones. Slots that are `empty:hidden` drop out and take their
+   * margin with them. The trailing `1fr` row is where the second panel's
+   * extra height goes, so a long log does not spread the first panel apart.
+   */
+  .panels {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(3, auto) 1fr;
+    column-gap: 20px;
+    row-gap: 0;
+    align-items: start;
+  }
+  .panels > * {
+    grid-column: 1;
+    min-width: 0;
+    margin-bottom: 20px;
+  }
+  /* `self-center` is the cross axis, which is the column's in a flex stack and
+     the row's here. */
+  .panels > .self-center {
+    justify-self: center;
+  }
+  .panels > :last-child {
+    grid-column: 2;
+    grid-row: 1 / -1;
+    margin-bottom: 0;
+  }
+
+  /**
+   * The deck and the rail bleed 20px each side to reach the glass. In a panel
+   * the right-hand 20px is the gutter, and the neighbouring day's card would
+   * peek into the middle of the screen, on the fold. So neither bleeds here:
+   * the deck clips at its own card and the rail scrolls inside its panel.
+   */
+  .panels > .day-deck,
+  .panels .food-rail {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+
+  /**
+   * Sheets keep a phone's width and sit centred, as system sheets do on the
+   * inner display. `inset-x-0` is already on the panel, so a max-width with
+   * auto margins is all centring takes.
+   */
+  .sheet-panel {
+    max-width: 560px;
+    margin-inline: auto;
+  }
+}
+
+/**
+ * Trends in a NARROW panel: regular width, but each panel under 335, which is
+ * the narrowest phone column these two things were drawn for.
+ *
+ * Measured at a 669 viewport (305 a panel): a History row spends 240 on
+ * padding, gaps, rings, calories and chevron, leaving 65 for a date that
+ * needs up to about 95, so "Thu, Nov 5" truncated. The 34px below (12 from
+ * the padding, 6 from the gaps, 8 from the ring spacing, 8 from the calorie
+ * column, which was 70 for a 62 number) gives it 99. At a 626 viewport that
+ * is 77, where the longest dates still truncate; that width is one of the two
+ * unconfirmed candidates for the inner display, see the note above.
+ *
+ * The half tiles give up their square and take their row's height instead, so
+ * the one whose subtitle wraps beside its chevron does not stand taller than
+ * its neighbour. The ratio has to go rather than sit under the stretch: with
+ * both, the stretched height drove the WIDTH and the two tiles overlapped.
+ */
+@media (min-width: 600px) and (max-width: 729.98px) {
+  .panels:has(> .trends-grid) > section:last-child .row {
+    padding-inline: 14px;
+    gap: 8px;
+  }
+  .panels:has(> .trends-grid) > section:last-child .row > div.shrink-0 {
+    gap: 6px;
+  }
+  .panels:has(> .trends-grid) > section:last-child .row > span.shrink-0 {
+    width: 62px;
+  }
+  .panels .trends-grid > [data-size='half'] {
+    aspect-ratio: auto;
+    align-self: stretch;
+  }
+  /* A half tile has 97 to 107 inside here, and `100%` at 48px is 120. */
+  .panels .trends-grid > [data-size='half'] .text-display {
+    font-size: 36px;
+  }
+  .panels .trends-grid > [data-tile='training'][data-size='half'] .body-map {
+    height: 84px !important;
+  }
+}

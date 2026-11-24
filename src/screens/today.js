@@ -1125,7 +1125,16 @@ export function todayScreen() {
   const railSlot = slot()
   const logSlot = slot()
   const installSlot = slot()
-  const column = h('div', { class: 'flex flex-col gap-[20px]' }, deck, installSlot, railSlot, logSlot)
+  // `panels`: one column closed, two on a regular-width screen, with the last
+  // child (the log) as the second panel. See `.panels` in styles.css.
+  const column = h(
+    'div',
+    { class: 'panels flex flex-col gap-[20px]' },
+    deck,
+    installSlot,
+    railSlot,
+    logSlot
+  )
   /**
    * The header is a sibling of the column, not a member of it.
    *
@@ -1417,9 +1426,13 @@ export function todayScreen() {
                 // appearing for the first time.
                 logCard(
                   state.date,
+                  // Every row is rendered and the cap is CSS's: rows past
+                  // `LOG_PREVIEW_MAX` are hidden at compact width and shown
+                  // in the second panel at regular width, so opening the
+                  // phone reveals them without a re-render. The 9 in
+                  // `[data-today-log]`'s rule is this constant plus one.
                   [...entries]
                     .reverse()
-                    .slice(0, LOG_PREVIEW_MAX)
                     .map((entry) =>
                       entryRow(entry, {
                         settings,

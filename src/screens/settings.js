@@ -270,7 +270,7 @@ export function settingsScreen() {
            * 10 inside a group, 20 between groups — and three cards under three
            * headings is the same shape of thing on all three screens.
            */
-          { class: 'flex flex-col gap-[20px] pb-[20px]' },
+          { class: 'panels flex flex-col gap-[20px] pb-[20px]' },
 
           h(
             'section',

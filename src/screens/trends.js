@@ -433,7 +433,7 @@ export function trendsScreen() {
         heading(),
         h(
           'div',
-          { class: 'flex flex-col gap-[20px] pb-[20px]' },
+          { class: 'panels flex flex-col gap-[20px] pb-[20px]' },
           grid,
           editBtn,
           historySection,
