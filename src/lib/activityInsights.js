@@ -180,24 +180,24 @@ export const burnSentence = ({ high, low }) =>
   `${kcalGrouped(high.intake)} cal on average. On your ${low.days} lowest ` +
   `(avg ${kcalGrouped(low.active)}) you ate ${kcalGrouped(low.intake)}.`
 
+/** Basis lines, one to a line, so a date range is never broken across two. */
 export const burnBasis = (r) =>
   [
     `From ${r.fullDays} full days with active calories`,
     windowLabel(r),
     r.leftOut ? `${pluralize(r.leftOut, 'day')} under ${LOW_WEAR_KCAL} active cal left out` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  ].filter(Boolean)
 
 export const sleepSentence = ({ short, long }) =>
-  `On the ${short.days} days after under 6 h of sleep you ate ${kcalGrouped(short.intake)} cal on ` +
-  `average. On the ${long.days} days after 7 h or more you ate ${kcalGrouped(long.intake)}.`
+  `After nights under 6 h (${short.days} days) you ate ${kcalGrouped(short.intake)} cal on average. ` +
+  `After nights of 7 h or more (${long.days} days) you ate ${kcalGrouped(long.intake)}.`
 
-export const sleepBasis = (r) =>
-  `From ${r.fullDays} full days with sleep readings · ${windowLabel(r)}`
+export const sleepBasis = (r) => [`From ${r.fullDays} full days with sleep readings`, windowLabel(r)]
 
-export const stepsBasis = (r) =>
-  `From ${r.stepDays} days of steps and ${pluralize(r.weighIns, 'weigh-in')} · ${windowLabel(r)}`
+export const stepsBasis = (r) => [
+  `From ${r.stepDays} days of steps and ${pluralize(r.weighIns, 'weigh-in')}`,
+  windowLabel(r),
+]
 
 /** What an average is waiting for, in place of it. */
 export const averageMissing = ({ days }) => `Needs ${AVERAGES_MIN_DAYS} days (${days} so far)`

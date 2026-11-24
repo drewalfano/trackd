@@ -83,7 +83,7 @@ const insight = (sentence, basis) =>
     'div',
     { class: 'day-card flex flex-col gap-[4px]' },
     h('p', { class: 'text-[14px] leading-snug' }, sentence),
-    caption(basis),
+    ...basis.map(caption),
   )
 
 /**
@@ -155,6 +155,6 @@ function stepsTable(read, unit) {
         h('tr', {}, ...read.weeks.map((w) => cell(w.changeKg == null ? null : signed(kgToUnit(w.changeKg, unit)), w.weighIns))),
       ),
     ),
-    caption(`Weeks by start date. ${stepsBasis(read)}`),
+    h('div', { class: 'flex flex-col' }, ...['Weeks by start date', ...stepsBasis(read)].map(caption)),
   )
 }

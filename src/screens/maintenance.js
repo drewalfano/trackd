@@ -5,6 +5,8 @@ import { loadDays } from '../lib/days.js'
 import { rangeSpan, MIN_ENTRIES_FOR_TREND } from '../lib/trend.js'
 import {
   estimateMaintenance,
+  maintenanceHistory,
+  HISTORY_WEEKS,
   basisLabel,
   missingLabel,
   windowLabel,
@@ -16,7 +18,7 @@ import { windowActiveKcal } from '../lib/activityInsights.js'
 import { trendsPage } from '../lib/trendTile.js'
 import { card, tnum, macroUnit } from '../lib/ui.js'
 import { kcalGrouped, kgToUnit, pluralize, signed } from '../lib/format.js'
-import { todayStr } from '../lib/dates.js'
+import { formatDayShort, todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
 
 /**
@@ -35,16 +37,18 @@ export function maintenanceScreen() {
         getSettings(),
         listWeights(),
         listActivity(),
-        loadDays(MAINTENANCE_DAYS - 1),
+        loadDays(MAINTENANCE_DAYS - 1 + HISTORY_WEEKS * 7),
       ])
       const unit = settings.weightUnit
-      const estimate = estimateMaintenance({
+      const read = {
         days,
         weights,
         targets: settings.targets,
         trendWindow: settings.trendWindow,
         unit,
-      })
+      }
+      const estimate = estimateMaintenance(read)
+      const history = maintenanceHistory(read)
       const enough = estimate.kcal != null
       const span = rangeSpan(MAINTENANCE_DAYS, todayStr())
       const dates = windowLabel(span)
@@ -114,6 +118,28 @@ export function maintenanceScreen() {
                 macroUnit('kcal', 'text-[12px] font-semibold'),
               ),
             ])
+          : null,
+        history.length
+          ? h(
+              'section',
+              { class: 'flex flex-col gap-[10px]' },
+              h('div', { class: 'section-title' }, 'Earlier'),
+              card(
+                history.map((past) =>
+                  row(
+                    formatDayShort(past.end),
+                    `${pluralize(past.fullDays, 'full day')}, ${pluralize(past.weighIns, 'weigh-in')}`,
+                    ...(past.kcal == null
+                      ? [h('span', { class: 'text-[14px] text-muted' }, '—')]
+                      : [
+                          tnum(kcalGrouped(past.kcal), 'text-[16px] font-semibold'),
+                          macroUnit('kcal', 'text-[12px] font-semibold'),
+                        ]),
+                  ),
+                ),
+              ),
+              caption(`Each from the ${MAINTENANCE_DAYS} days ending that date.`),
+            )
           : null,
       )
     },

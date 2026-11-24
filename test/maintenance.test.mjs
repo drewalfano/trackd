@@ -58,6 +58,19 @@ eq('partial days are outside the mean', mixed.intake, 2150)
 eq('and outside the count', mixed.fullDays, 21)
 eq('days before the window are outside both', run({ days: days(60, (i) => full(i < 28 ? 2150 : 4000)) }).intake, 2150)
 
+// --- earlier weeks
+{
+  const h = M.maintenanceHistory({ days: days(63, (i) => full(i < 7 ? 3000 : 2150)), weights: daily(120, () => 80), targets: T })
+  eq('a week apart, newest first', h.slice(0, 2).map((x) => x.end), [ago(7), ago(14)])
+  eq('the week since is not in an earlier estimate', h[0].kcal, 2150)
+  eq('it equals the estimate made that day', h[1].kcal, M.estimateMaintenance({ days: days(63, () => full(2150)).slice(14), weights: daily(120, () => 80), targets: T }).kcal)
+  eq('weights after that date do not reach it', M.maintenanceHistory({ days: days(63, () => full(2150)), weights: daily(120, (d) => (d < 7 ? 95 : 80)), targets: T })[0].ratePerWeekKg, 0)
+  const gap = M.maintenanceHistory({ days: days(84, (i) => (i >= 70 ? off() : i >= 7 && i < 35 ? off() : full(2150))), weights: daily(120, () => 80), targets: T })
+  eq('a short week inside the record stays, without a number', [gap[0].kcal, gap[0].fullDays], [null, 0])
+  eq('weeks before any full day are left off', gap.at(-1).fullDays > 0, true)
+  eq('nothing logged, no history', M.maintenanceHistory({ days: days(63, off), weights: [], targets: T }), [])
+}
+
 // --- copy
 eq('basis', M.basisLabel(mixed), 'From 21 logged days and 28 weigh-ins')
 eq('missing days', M.missingLabel({ reason: 'intake', fullDays: 9, weighIns: 0 }), 'Needs 14 full days logged (9 so far)')

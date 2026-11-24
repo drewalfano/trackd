@@ -11,21 +11,15 @@ import { basisLabel, missingLabel, windowLabel } from '../lib/maintenance.js'
 import {
   NO_ACTIVITY,
   averageMissing,
-  burnBasis,
-  burnSentence,
   latestLabel,
-  sleepBasis,
-  sleepSentence,
 } from '../lib/activityInsights.js'
 import {
   NO_WORKOUTS,
-  WEIGHTED_BASIS,
-  musclesSentence,
   regionSets,
   rampStep,
   weekLabel,
 } from '../lib/training.js'
-import { bodyMap } from '../lib/bodyMap.js'
+import { BODY_VIEWS, bodyMap } from '../lib/bodyMap.js'
 import { openTodayWeightDialog } from '../sheets/weighIn.js'
 
 /**
@@ -599,7 +593,7 @@ export const activeUnit = () => macroUnit('kcal', 'text-[14px] font-semibold')
  */
 const activityLine = (read, label, unit, qualifier = null) =>
   read.mean == null
-    ? smallBasis(`${label}: ${read.days} of ${AVERAGES_MIN_DAYS} days`)
+    ? smallBasis(`${label}: ${pluralize(read.days, 'day')}, needs ${AVERAGES_MIN_DAYS}`)
     : h(
         'div',
         { class: 'flex items-baseline gap-[4px]' },
@@ -616,11 +610,10 @@ export function activityWindow(averages, activity) {
 }
 
 /**
- * Medium carries one insight sentence when one clears its threshold, burn
- * before sleep. Small is the two averages alone, in a square. With nothing imported the
- * page behind it has nothing to say either, so the tile is not a way in.
+ * The two averages; the comparisons are on the page behind it. With nothing
+ * imported that page has nothing to say either, so the tile is not a way in.
  */
-export function activityTile({ averages, activity, burn, sleep, onPress, edit = {} }) {
+export function activityTile({ averages, activity, onPress, edit = {} }) {
   const variant = edit.variant || 'medium'
   const half = variant === 'small'
   const tileOpts = {
@@ -635,15 +628,10 @@ export function activityTile({ averages, activity, burn, sleep, onPress, edit = 
   }
   if (!averages) return trendTile(tileOpts, caption(NO_ACTIVITY))
 
-  const insight = burn
-    ? [burnSentence(burn), burnBasis(burn)]
-    : sleep
-      ? [sleepSentence(sleep), sleepBasis(sleep)]
-      : null
-
   if (half) {
     const { steps, activeKcal } = averages
-    const counted = [steps, activeKcal].filter((r) => r.mean != null).map((r) => r.days)
+    const shown = [['Steps', steps], ['Active', activeKcal]].filter(([, r]) => r.mean != null)
+    const counted = shown.map(([, r]) => r.days)
     return trendTile(
       tileOpts,
       h(
@@ -651,12 +639,14 @@ export function activityTile({ averages, activity, burn, sleep, onPress, edit = 
         { class: 'flex flex-col' },
         activityLine(steps, 'Steps', h('span', { class: 'text-[12px] font-medium text-muted' }, 'steps')),
         activityLine(activeKcal, 'Active', macroUnit('kcal', 'text-[12px] font-semibold'), 'active'),
-        // A line short of days already carries its own count.
+        // A line short of days carries its own count, so the other is named too.
         counted.length
           ? smallBasis(
-              new Set(counted).size === 1
-                ? pluralize(counted[0], 'day')
-                : `${counted.join(' and ')} days`,
+              counted.length === 1
+                ? `${shown[0][0]}: ${pluralize(counted[0], 'day')}`
+                : new Set(counted).size === 1
+                  ? pluralize(counted[0], 'day')
+                  : `${counted.join(' and ')} days`,
             )
           : null,
         smallBasis(windowLabel(averages)),
@@ -677,14 +667,6 @@ export function activityTile({ averages, activity, burn, sleep, onPress, edit = 
       ),
       caption(activityWindow(averages, activity)),
     ),
-    insight
-      ? h(
-          'div',
-          { class: 'flex flex-col gap-[4px]' },
-          h('p', { class: 'text-[14px] leading-snug text-ink' }, insight[0]),
-          caption(insight[1]),
-        )
-      : null,
   )
 }
 
@@ -693,10 +675,9 @@ export function activityTile({ averages, activity, burn, sleep, onPress, edit = 
 export const TRAINING_VARIANTS = [SIZES.small, SIZES.medium]
 
 /**
- * The figure, whole sets and workouts this week. The figure is shaded by
- * weighted sets, which is a different number, so Medium's sentence names them
- * and says how they are counted. A week with nothing pasted says when the last
- * workout was rather than printing a zero.
+ * Whole sets and workouts this week beside the map. The map is shaded by sets
+ * per muscle, which the page behind it lists. A week with nothing pasted says
+ * when the last workout was rather than printing a zero.
  */
 export function trainingTile({ week, latest, onPress, onPaste, edit = {} }) {
   const variant = edit.variant || 'medium'
@@ -713,7 +694,7 @@ export function trainingTile({ week, latest, onPress, onPaste, edit = {} }) {
   }
   const paste = h(
     'button',
-    { class: `chip-sm self-start${half ? ' w-full justify-center' : ''}`, type: 'button', onclick: onPaste },
+    { class: `chip-sm${half ? ' w-full justify-center' : ''}`, type: 'button', onclick: onPaste },
     half ? 'Paste' : 'Paste workout',
   )
   if (!latest) {
@@ -731,11 +712,16 @@ export function trainingTile({ week, latest, onPress, onPaste, edit = {} }) {
   }
 
   const worked = week.workouts.length > 0
-  const figure = bodyMap({
-    step: (groups) => rampStep(regionSets(groups, week.muscles)),
-    height: half ? 76 : 184,
-    label: worked ? 'Body map of weighted sets this week' : 'Body map, no workouts this week',
-  })
+  // Small's figure stands up past the title, where the header has room beside
+  // it. Editing puts the size picker there, so it steps back down.
+  const tall = half && !edit.editing
+  const figure = (view, height) =>
+    bodyMap({
+      view,
+      step: (groups) => rampStep(regionSets(groups, week.muscles)),
+      height,
+      label: `Body map, ${view.label.toLowerCase()}, ${worked ? 'sets by muscle this week' : 'no workouts this week'}`,
+    })
   const count = pluralize(week.workouts.length, 'workout')
 
   if (half) {
@@ -757,49 +743,44 @@ export function trainingTile({ week, latest, onPress, onPaste, edit = {} }) {
               smallBasis(count),
             )
           : smallBasis('No workouts'),
-        figure,
+        h(
+          'div',
+          { class: 'pointer-events-none shrink-0', style: { marginTop: tall ? '-40px' : '0' } },
+          figure(BODY_VIEWS[0], tall ? 116 : 76),
+        ),
       ),
     )
   }
 
-  const sentence = musclesSentence(week)
   return trendTile(
     tileOpts,
     h(
       'div',
-      { class: 'flex items-center gap-[20px]' },
-      h('div', { class: 'shrink-0' }, figure),
-      h(
-        'div',
-        { class: 'flex min-w-0 flex-1 flex-col gap-[10px]' },
-        worked
-          ? h(
+      { class: 'flex items-center justify-between gap-[10px]' },
+      worked
+        ? h(
+            'div',
+            { class: 'flex flex-col gap-[2px]' },
+            h(
               'div',
-              { class: 'flex flex-col gap-[2px]' },
-              h(
-                'div',
-                { class: 'flex items-baseline gap-[6px]' },
-                tnum(String(week.sets), 'text-title font-semibold'),
-                h('span', { class: 'text-[14px] font-medium text-muted' }, week.sets === 1 ? 'set' : 'sets'),
-              ),
-              caption(`${count} this week`),
-            )
-          : h(
-              'div',
-              { class: 'flex flex-col gap-[2px]' },
-              h('span', { class: 'text-[16px] font-semibold leading-tight' }, 'No workouts this week'),
-              caption(`Last one: ${formatDayAge(latest.date)}`),
+              { class: 'flex items-baseline gap-[6px]' },
+              tnum(String(week.sets), 'text-title font-semibold'),
+              h('span', { class: 'text-[14px] font-medium text-muted' }, week.sets === 1 ? 'set' : 'sets'),
             ),
-        sentence
-          ? h(
-              'div',
-              { class: 'flex flex-col gap-[4px]' },
-              h('p', { class: 'text-[14px] leading-snug text-ink' }, sentence),
-              caption(WEIGHTED_BASIS),
-            )
-          : null,
-        paste,
-      ),
+            caption(`${count} this week`),
+          )
+        : h(
+            'div',
+            { class: 'flex flex-col gap-[2px]' },
+            h('span', { class: 'text-[16px] font-semibold leading-tight' }, 'No workouts this week'),
+            caption(`Last one: ${formatDayAge(latest.date)}`),
+          ),
+      paste,
+    ),
+    h(
+      'div',
+      { class: 'flex justify-center gap-[20px]' },
+      ...BODY_VIEWS.map((view) => figure(view, 220)),
     ),
   )
 }

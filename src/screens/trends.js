@@ -34,7 +34,7 @@ import {
 import { trendsGrid } from '../lib/trendTile.js'
 import { normaliseTiles } from '../lib/tileOrder.js'
 import { estimateMaintenance } from '../lib/maintenance.js'
-import { activityAverages, burnVsIntake, sleepVsIntake } from '../lib/activityInsights.js'
+import { activityAverages } from '../lib/activityInsights.js'
 import { trainingWeek, weekStart } from '../lib/training.js'
 import { pasteWorkout } from '../sheets/pasteWorkout.js'
 import { reorderable } from '../lib/reorder.js'
@@ -370,12 +370,9 @@ export function trendsScreen() {
           weightTile({ weights, settings, onPress: () => navigate('trends/weight'), edit: edit('weight') }),
         // Built with nothing imported too: the tile says where to import.
         activity: () => {
-          const read = { days: days || [], activity, targets: settings.targets, today }
           return activityTile({
-            averages: activityAverages(read),
+            averages: activityAverages({ activity, today }),
             activity,
-            burn: burnVsIntake(read),
-            sleep: sleepVsIntake(read),
             onPress: go('trends/activity'),
             edit: edit('activity'),
           })

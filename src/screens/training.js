@@ -7,7 +7,6 @@ import { MUSCLE_GROUPS, MUSCLE_LABELS, unknownExercises } from '../lib/muscles.j
 import {
   NO_WORKOUTS,
   RAMP,
-  RAMP_BASIS,
   WEIGHTED_BASIS,
   musclesSentence,
   rampStep,
@@ -137,7 +136,7 @@ export function trainingScreen() {
           onRegion: open,
           regionLabel: (groups) =>
             worked
-              ? `${regionName(groups)}, ${setsFigure(regionSets(groups, week.muscles))} weighted sets`
+              ? `${regionName(groups)}, ${setsFigure(regionSets(groups, week.muscles))} sets`
               : `${regionName(groups)}, no workouts`,
         })),
         rampKey(),
@@ -146,7 +145,7 @@ export function trainingScreen() {
               'div',
               { class: 'flex flex-col gap-[4px]' },
               h('p', { class: 'text-[14px] leading-snug' }, sentence),
-              caption(`${WEIGHTED_BASIS} ${weekBasis(week)}`)
+              caption(WEIGHTED_BASIS)
             )
           : null
       )
@@ -161,9 +160,10 @@ export function trainingScreen() {
           : null,
         worked &&
           section(
-            'Weighted sets by muscle',
+            'Sets by muscle',
             card(
-              MUSCLE_GROUPS.map((g) =>
+              // Most first; ties keep the list's own order.
+              [...MUSCLE_GROUPS].sort((a, b) => week.muscles[b].sets - week.muscles[a].sets).map((g) =>
                 h(
                   'button',
                   { class: 'row row-single', type: 'button', onclick: () => open([g]) },
@@ -244,7 +244,6 @@ function rampKey() {
         )
       )
     ),
-    caption(RAMP_BASIS)
   )
 }
 
@@ -270,7 +269,7 @@ function regionSheet(groups, week) {
                     'div',
                     { class: 'flex items-baseline gap-[6px]' },
                     tnum(setsFigure(sets), 'text-title font-semibold'),
-                    h('span', { class: 'text-[14px] font-medium text-muted' }, 'weighted sets')
+                    h('span', { class: 'text-[14px] font-medium text-muted' }, 'sets')
                   ),
                   caption(weekBasis(week))
                 )

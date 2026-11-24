@@ -59,9 +59,9 @@ const at = (n, h) => { const d = fromDateStr(ago(n)); d.setHours(h); return d.ge
 eq('a row imported on its own date is unfinished', burn({ activity: back(24, (n) => act(n, { activeKcal: 100 * n, importedAt: n === 1 ? at(1, 12) : at(0, 9) })) }).fullDays, 23)
 
 eq('burn sentence', A.burnSentence({ high: { days: 8, active: 780.4, intake: 2340.2 }, low: { days: 8, active: 310, intake: 2010 } }), 'On your 8 highest-burn days (avg 780 active cal) you ate 2,340 cal on average. On your 8 lowest (avg 310) you ate 2,010.')
-eq('burn basis', [A.burnBasis(b).split(' · ').length, A.burnBasis(b).startsWith('From 24 full days with active calories · ')], [2, true])
-eq('burn basis names what was left out', A.burnBasis(unworn(9.6)).split(' · ')[2], '1 day under 50 active cal left out')
-eq('and says days for two', A.burnBasis({ ...b, leftOut: 2 }).split(' · ')[2], '2 days under 50 active cal left out')
+eq('burn basis', [A.burnBasis(b).length, A.burnBasis(b)[0]], [2, 'From 24 full days with active calories'])
+eq('burn basis names what was left out', A.burnBasis(unworn(9.6))[2], '1 day under 50 active cal left out')
+eq('and says days for two', A.burnBasis({ ...b, leftOut: 2 })[2], '2 days under 50 active cal left out')
 
 // --- sleep and intake
 const nights = (shorts, longs, over = {}) => {
@@ -90,7 +90,7 @@ eq('today is outside it', nights(4, 5, { days: [full(0, 9000), ...back(9, (n) =>
 eq('91 days back is outside it', nights(4, 5, { days: [...back(9, (n) => full(n, 2000)), full(91, 2000)], activity: [...back(9, (n) => act(n, { sleepMinutes: n <= 4 ? 300 : 450 })), act(91, { sleepMinutes: 300 })] }), null)
 eq('sleep on an import-day row still counts', nights(5, 5, { activity: back(10, (n) => act(n, { sleepMinutes: n <= 5 ? 300 : 450, importedAt: at(n, 12) })) })?.short.days, 5)
 eq('no sleep readings', nights(5, 5, { activity: back(10, (n) => act(n, { steps: 1 })) }), null)
-eq('sleep sentence', A.sleepSentence(nights(5, 6)), 'On the 5 days after under 6 h of sleep you ate 2,500 cal on average. On the 6 days after 7 h or more you ate 2,000.')
+eq('sleep sentence', A.sleepSentence(nights(5, 6)), 'After nights under 6 h (5 days) you ate 2,500 cal on average. After nights of 7 h or more (6 days) you ate 2,000.')
 
 // --- steps and the weight trend
 const daily = (n, kgAt) => back(n, (i) => i).reverse().map((i) => ({ date: ago(i), kg: kgAt(i) }))
@@ -132,7 +132,7 @@ eq('13 readings is not enough', ctx(back(13, (n) => act(n, { activeKcal: 600 }))
 eq('14 is', ctx(back(14, (n) => act(n, { activeKcal: 600 }))).days, 14)
 
 // --- copy rules
-const copy = [A.burnSentence(b), A.burnBasis(unworn(9.6)), A.sleepSentence(nights(5, 5)), A.sleepBasis(nights(5, 5)), A.stepsBasis(s), A.averageMissing({ days: 3 }), A.NO_ACTIVITY].join(' ')
+const copy = [A.burnSentence(b), A.burnBasis(unworn(9.6)), A.sleepSentence(nights(5, 5)), A.sleepBasis(nights(5, 5)), A.stepsBasis(s), A.averageMissing({ days: 3 }), A.NO_ACTIVITY].flat().join(' ')
 eq('nothing advises or contrasts', /\b(try|should|consider|but|despite|however)\b|—/i.test(copy), false)
 
 console.log(`\n${pass} passed, ${fail} failed`)

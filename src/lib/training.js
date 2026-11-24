@@ -130,11 +130,10 @@ export function musclesSentence({ muscles }, when = 'this week') {
     const name = i ? MUSCLE_LABELS[g].toLowerCase() : MUSCLE_LABELS[g]
     return `${name} ${setsFigure(sets)}`
   })
-  return `${list.join(', ')} weighted sets ${when}.`
+  return `${list.join(', ')} sets ${when}.`
 }
 
-export const WEIGHTED_BASIS = 'A set counts 1 for a primary muscle and 0.5 for a secondary one.'
-export const RAMP_BASIS = 'Weighted sets. A fraction stays in the lower step, and 0.5 counts in 1 to 4.'
+export const WEIGHTED_BASIS = 'A secondary muscle counts half a set.'
 
 /**
  * `12 × 35 lb`, `12 reps`, `30 s`, `15 reps, 63 s`. A weight of 0 is no weight.

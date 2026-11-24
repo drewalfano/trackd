@@ -57,7 +57,7 @@ eq('its name', T.regionName(['rearDelts', 'lats']), 'Rear delts and lats')
 eq('region names', [T.regionName(['frontDelts', 'sideDelts']), T.regionName(['lats'])], ['Front and side delts', 'Lats'])
 
 console.log('\n--- copy ---')
-eq('sentence', T.musclesSentence(w), 'Chest 4, front delts 2, biceps 2 weighted sets this week.')
+eq('sentence', T.musclesSentence(w), 'Chest 4, front delts 2, biceps 2 sets this week.')
 eq('set labels', [T.setLabel({ reps: 12, weight: 35 }, 'lb'), T.setLabel({ reps: 1, weight: null }, null), T.setLabel({ reps: null, weight: null, seconds: 30 }, null)], ['12 × 35 lb', '1 rep', '30 s'])
 eq('labels', [U.musclesLabel(null), U.musclesLabel({ primary: [], secondary: [] }), U.musclesLabel(U.musclesFor('Dumbbell Bench Press')), U.musclesLabel({ primary: [], secondary: ['abs'] })], ['Muscles not chosen yet', 'No muscles counted', 'Chest. Secondary: front delts, triceps', 'Secondary: abs'])
 

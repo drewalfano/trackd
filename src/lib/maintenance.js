@@ -63,6 +63,25 @@ export function estimateMaintenance({
   }
 }
 
+/** How far back the page goes. */
+export const HISTORY_WEEKS = 16
+
+/**
+ * The same estimate as it stood one week ago, two weeks ago and so on, newest
+ * first. Each is a full window of its own, so neighbours share three weeks of
+ * days. Weeks before the first one with any full day are left off; a short week
+ * inside the record stays, with what it was missing.
+ */
+export function maintenanceHistory({ days, weeks = HISTORY_WEEKS, ...rest }) {
+  const out = []
+  for (let w = 1; w <= weeks && w * 7 < days.length; w++) {
+    const past = days.slice(w * 7)
+    out.push({ end: past[0].date, ...estimateMaintenance({ ...rest, days: past }) })
+  }
+  while (out.length && !out.at(-1).fullDays) out.pop()
+  return out
+}
+
 /* ------------------------------------------------------------------- copy */
 
 /** `Oct 27 to Nov 23`. */
