@@ -25,7 +25,7 @@ path, so the URL is `http://localhost:5173/trackd/`.
 | `npm run dev` | Vite dev server |
 | `npm run build` | Generates icons, then builds to `dist/` |
 | `npm run preview` | Serves the production build |
-| `npm test` | Macro arithmetic, the Describe parser and draft, the service worker lifecycle, backup validation and import |
+| `npm test` | Macro arithmetic, the Describe parser and draft, the service worker lifecycle, backup validation and import, the Apple Health activity merge |
 | `npm run icons` | Regenerates the PWA icons into `public/icons/` |
 
 ## Getting it onto the phone
@@ -199,6 +199,11 @@ stores that did not exist yet are fine; a file from a newer version of the app
 is refused with a message saying so. A replace is one transaction: if a write
 fails partway, IndexedDB rolls it back and what was on the device is still
 there.
+
+Settings → Data → Import Apple Health activity reads a different file: daily
+active calories, steps and sleep written by an iOS Shortcut
+([`activity.js`](src/lib/activity.js)). It merges by date, a null never erases a
+stored value, and the days it stores travel in the export like everything else.
 
 ## Open questions, resolved
 

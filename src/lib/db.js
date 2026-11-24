@@ -13,6 +13,7 @@ import {
   keyPathFor,
   validateImport as checkImport,
 } from './backup.js'
+import { validateActivityFile, mergeActivity } from './activity.js'
 
 /**
  * The real database, unless a dev build was opened with `?db=<name>`.
@@ -272,8 +273,8 @@ export function db() {
       return Promise.reject(new StorageUnavailableError())
     }
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      // Stepped rather than unconditional: an existing v1 database runs only
-      // the v2 block, and re-creating a store that is already there throws.
+      // Stepped rather than unconditional: an existing v2 database runs only
+      // the v3 block, and re-creating a store that is already there throws.
       upgrade(database, oldVersion) {
         if (oldVersion < 1) {
           const foods = database.createObjectStore('foods', { keyPath: 'id' })
@@ -298,6 +299,10 @@ export function db() {
           // before this shipped have no record and fall back to the current
           // target, because inventing one would be worse than admitting it.
           database.createObjectStore('dayTargets', { keyPath: 'date' })
+        }
+        if (oldVersion < 3) {
+          // Daily Apple Health totals. Adds a store and touches no other.
+          database.createObjectStore('activity', { keyPath: 'date' })
         }
       },
       blocked() {
@@ -1009,6 +1014,53 @@ export async function putWeight(date, kg) {
 export async function deleteWeight(date) {
   await write(async () => (await db()).delete('weights', date))
   emit('weights')
+}
+
+/* ---------------------------------------------------------------- activity */
+
+/** Oldest first. The key is the date, so this is the store's own order. */
+export async function listActivity() {
+  return (await db()).getAll('activity')
+}
+
+/** What importing this file would change. Throws an ImportError on a bad file. */
+export async function previewActivity(data) {
+  const checked = validateActivityFile(data)
+  const { days, noData, duplicates } = checked
+  return { ...mergeActivity(await listActivity(), days, 0), noData, duplicates }
+}
+
+/**
+ * Merge a Health file in, whole or not at all.
+ *
+ * Validated before the transaction opens, and merged against the rows read
+ * inside it, so nothing can land between the read and the write. A file that
+ * changes nothing writes nothing and emits nothing.
+ */
+export async function importActivity(data) {
+  const checked = validateActivityFile(data)
+  const d = await db()
+  const result = await write(async () => {
+    const tx = d.transaction('activity', 'readwrite')
+    const merged = mergeActivity(await tx.store.getAll(), checked.days, Date.now())
+    // Awaited and aborted by hand, for the reasons given in `importAll`.
+    const requests = []
+    try {
+      for (const row of merged.rows) requests.push(tx.store.put(row))
+    } catch (err) {
+      try {
+        tx.abort()
+      } catch {
+        /* already aborting */
+      }
+      await Promise.allSettled([...requests, tx.done])
+      throw err
+    }
+    await Promise.all([...requests, tx.done])
+    return merged
+  })
+  if (result.rows.length) emit('activity')
+  return result
 }
 
 /* -------------------------------------------------------------- favourites */

@@ -1,0 +1,16 @@
+{
+  "format": "trackd-health-activity",
+  "version": 1,
+  "days": [
+    { "date": "2026-11-13", "activeKcal": 540, "steps": 8120, "sleepMinutes": 431 },
+    { "date": "2026-11-14", "activeKcal": 702.5, "steps": 11950, "sleepMinutes": null },
+    { "date": "2026-11-15", "activeKcal": null, "steps": 6210, "sleepMinutes": 455 },
+    { "date": "2026-11-16", "steps": 9034 },
+    { "date": "2026-11-17", "activeKcal": null, "steps": null, "sleepMinutes": null },
+    { "date": "2026-11-18", "activeKcal": 612, "steps": 9840, "sleepMinutes": 412 },
+    { "date": "2026-11-18", "activeKcal": 655, "steps": 10322, "sleepMinutes": null },
+    { "date": "2026-11-31", "activeKcal": 480, "steps": 7400, "sleepMinutes": 390 },
+    { "date": "2026-11-19", "activeKcal": 588, "steps": 8875, "sleepMinutes": 447 },
+    { "date": "2026-11-20", "activeKcal": 631, "steps": 10014, "sleepMinutes": 420 }
+  ]
+}

@@ -9,6 +9,8 @@ import {
   exportAll,
   importAll,
   previewImport,
+  previewActivity,
+  importActivity,
   clearAll,
   storageEstimate,
   storagePersisted,
@@ -26,6 +28,7 @@ import {
   switchRow,
 } from '../lib/ui.js'
 import { round, pluralize } from '../lib/format.js'
+import { activitySummary, duplicatesLabel, noDataLabel } from '../lib/activity.js'
 import { todayStr } from '../lib/dates.js'
 import { navigate } from '../router.js'
 import { getAiKey, setAiKey, clearAiKey, getAiMode, setAiMode } from '../lib/aiKey.js'
@@ -376,7 +379,7 @@ async function doExport() {
   toast('Export downloaded')
 }
 
-function doImport() {
+function pickJson(onData) {
   const input = h('input', {
     type: 'file',
     accept: 'application/json,.json',
@@ -391,12 +394,70 @@ function doImport() {
         toast('That file is not valid JSON.')
         return
       }
-      openImportSheet(data)
+      onData(data)
     },
   })
   document.body.appendChild(input)
   input.click()
   setTimeout(() => input.remove(), 60000)
+}
+
+/**
+ * Daily totals from the Shortcut. One line says what the file covers and what
+ * it would replace, and the button is only there when there is something to
+ * write.
+ */
+async function openActivitySheet(data) {
+  let preview = null
+  let refused = null
+  try {
+    preview = await previewActivity(data)
+  } catch (err) {
+    refused = err.message || 'Import failed'
+  }
+
+  return openSheet({
+    title: 'Apple Health activity',
+    render: (ctx) => {
+      if (refused) return h('div', { class: 'pb-[10px]' }, notice(refused, { iconName: 'alert' }))
+
+      let busy = false
+      if (preview.rows.length) {
+        ctx.setFooter(
+          h(
+            'button',
+            {
+              class: 'btn-primary',
+              onclick: async () => {
+                if (busy) return
+                busy = true
+                try {
+                  const { rows } = await importActivity(data)
+                  ctx.close()
+                  toast(`${pluralize(rows.length, 'day')} imported`)
+                } catch (err) {
+                  busy = false
+                  toast(err.message || 'Import failed')
+                }
+              },
+            },
+            'Import'
+          )
+        )
+      }
+      return h(
+        'div',
+        { class: 'flex flex-col gap-[10px] pb-[10px]' },
+        notice(activitySummary(preview)),
+        preview.duplicates
+          ? h('p', { class: 'px-0 text-[12px] text-muted' }, duplicatesLabel(preview.duplicates))
+          : null,
+        preview.noData
+          ? h('p', { class: 'px-0 text-[12px] text-muted' }, noDataLabel(preview.noData))
+          : null
+      )
+    },
+  })
 }
 
 function openImportSheet(data) {
@@ -554,7 +615,13 @@ export function dataScreen() {
             title: 'Import data',
             subtitle: 'Merge or replace, with a preview first',
             leading: icon('upload', { size: 19, class: 'text-muted' }),
-            onclick: doImport,
+            onclick: () => pickJson(openImportSheet),
+          }),
+          listRow({
+            title: 'Import Apple Health activity',
+            subtitle: 'Daily totals from a Shortcut, with a preview first',
+            leading: icon('upload', { size: 19, class: 'text-muted' }),
+            onclick: () => pickJson(openActivitySheet),
           }),
           listRow({
             title: 'Clear all data',
@@ -564,7 +631,7 @@ export function dataScreen() {
               const ok = await confirm({
                 title: 'Delete everything?',
                 message:
-                  'Every food, entry, meal and weigh-in on this device is removed. ' +
+                  'Every food, entry, meal, weigh-in and activity day on this device is removed. ' +
                   'Export first if you want a copy.',
                 confirmLabel: 'Delete everything',
                 requireText: 'DELETE',

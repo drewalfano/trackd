@@ -84,6 +84,10 @@ const settings = (over = {}) => ({
   ...over,
 })
 
+const activity = (over = {}) => ({
+  date: '2026-08-01', activeKcal: 612, steps: 9840, sleepMinutes: null, importedAt: 5, ...over,
+})
+
 const file = (over = {}) => ({
   format: B.EXPORT_FORMAT,
   version: B.SCHEMA_VERSION,
@@ -94,6 +98,7 @@ const file = (over = {}) => ({
   meals: [meal()],
   weights: [{ date: '2026-08-01', kg: 80.4, createdAt: 1 }],
   dayTargets: [{ date: '2026-08-01', targets: { kcal: 2200, protein: 160, fat: 70, carbs: 240 }, savedAt: 1 }],
+  activity: [activity()],
   ...over,
 })
 
@@ -151,7 +156,7 @@ console.log('--- validation ---')
   )
   eq('duplicate ids collapse to one row', v.stores.foods.length, 1)
   eq('the later copy wins', v.stores.foods[0].name, 'Second')
-  eq('and the collapse is counted', v.duplicates, { foods: 1, entries: 0, meals: 0, weights: 1, dayTargets: 0 })
+  eq('and the collapse is counted', v.duplicates, { foods: 1, entries: 0, meals: 0, weights: 1, dayTargets: 0, activity: 0 })
   eq('a duplicate date keeps the later weight', v.stores.weights[0].kg, 81)
 }
 
@@ -176,6 +181,22 @@ rejects('a meal with no items list', file({ meals: [meal({ items: null })] }), '
 rejects('a foodless meal item with no numbers', file({ meals: [meal({ items: [{ foodId: null, name: 'X', quantity: 1, unit: 'serving' }] })] }), 'has no nutrition')
 rejects('a weight that is not positive', file({ weights: [{ date: '2026-08-01', kg: -1 }] }), 'bad value')
 rejects('a day target with a bad date', file({ dayTargets: [{ date: 'august', targets: { kcal: 1, protein: 1, fat: 1, carbs: 1 } }] }), 'no valid date')
+rejects('an activity row that is not a record', file({ activity: [7] }), 'Activity 1 is not a record')
+rejects('an activity row with an impossible date', file({ activity: [activity({ date: '2026-02-30' })] }), 'Activity 1 has no valid date')
+rejects('negative steps', file({ activity: [activity({ steps: -1 })] }), 'Activity for 2026-08-01 has a bad steps value')
+rejects('active calories as text', file({ activity: [activity({ activeKcal: '612' })] }), 'bad active calories value')
+rejects('sleep that is not a number', file({ activity: [activity({ sleepMinutes: NaN })] }), 'bad sleep value')
+rejects('a bad imported time', file({ activity: [activity({ importedAt: 'today' })] }), 'bad imported time')
+rejects('activity that is not a list', file({ activity: {} }), '"activity" data is malformed')
+{
+  const v = B.validateImport(file({ activity: [{ date: '2026-08-01', steps: 0 }] }))
+  eq('a missing metric is null and a zero stays zero', v.stores.activity[0], { date: '2026-08-01', steps: 0, activeKcal: null, sleepMinutes: null, importedAt: 0 })
+  for (const version of [1, 2]) {
+    const { activity: _, ...older } = file({ version })
+    const o = B.validateImport(older)
+    eq(`a v${version} backup still validates, with activity empty`, [o.version, o.stores.activity, o.stores.weights.length], [version, [], 1])
+  }
+}
 rejects('settings that are not an object', file({ settings: [] }), 'settings in that file are malformed')
 rejects('an unknown theme', file({ settings: settings({ theme: 'blue' }) }), 'unknown theme')
 rejects('two block names', file({ settings: settings({ blockNames: ['a', 'b'] }) }), 'bad block names')
@@ -278,6 +299,17 @@ eq('and it declares the format', before.format, B.EXPORT_FORMAT)
   const [row] = await DB.listEntries('2026-08-01')
   eq('and the day index can find the entry', row?.id, 'le')
   eq('and its created time was filled in', typeof row?.createdAt, 'number')
+}
+
+{
+  // A v2 backup, both ways, onto a device that already holds activity.
+  const { activity: _, ...v2 } = file({ version: 2 })
+  await DB.importAll(file(), 'replace')
+  eq('an export carries activity', (await DB.exportAll()).activity, [activity()])
+  await DB.importAll(v2, 'merge')
+  eq('merging a v2 backup keeps stored activity', await DB.listActivity(), [activity()])
+  await DB.importAll(v2, 'replace')
+  eq('replacing with a v2 backup brings its rows and no activity', [await count('entries'), await count('weights'), await count('activity')], [1, 1, 0])
 }
 
 console.log(`\n${pass} passed, ${fail} failed`)

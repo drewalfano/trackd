@@ -37,13 +37,15 @@ export const EXPORT_FORMAT = 'macro-tracker-export'
  * heard of, and importing it would mean writing records no screen here knows
  * how to read.
  */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 /** Every store that travels in an export, in the order they are written. */
-export const DATA_STORES = ['foods', 'entries', 'meals', 'weights', 'dayTargets']
+export const DATA_STORES = ['foods', 'entries', 'meals', 'weights', 'dayTargets', 'activity']
 
-/** Two stores are keyed by date rather than by a generated id. */
-export const keyPathFor = (store) => (store === 'weights' || store === 'dayTargets' ? 'date' : 'id')
+const DATE_KEYED = ['weights', 'dayTargets', 'activity']
+
+/** Three stores are keyed by date rather than by a generated id. */
+export const keyPathFor = (store) => (DATE_KEYED.includes(store) ? 'date' : 'id')
 
 export class ImportError extends Error {
   constructor(message) {
@@ -63,7 +65,7 @@ const TARGET_SOURCES = ['manual', 'calculated']
 const CARD_MODES = ['consumed', 'remaining']
 const FAVOURITE_TYPES = ['food', 'meal']
 
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
+export const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v)
 const isFinite_ = (v) => typeof v === 'number' && Number.isFinite(v)
 const isNonNeg = (v) => isFinite_(v) && v >= 0
 const isText = (v) => typeof v === 'string' && v.trim().length > 0
@@ -76,7 +78,7 @@ const isKey = (v) => isText(v) || isFinite_(v)
  * pattern and is not a day, and the date index would file it between two days
  * that are; round-tripping through the local date parser catches it.
  */
-const isDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && toDateStr(fromDateStr(v)) === v
+export const isDay = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) && toDateStr(fromDateStr(v)) === v
 
 const fail = (msg) => {
   throw new ImportError(msg)
@@ -257,12 +259,40 @@ function checkDayTargets(row, i) {
   }
 }
 
+/** The daily totals an activity row carries. Any of them can be null. */
+export const ACTIVITY_METRICS = { activeKcal: 'active calories', steps: 'steps', sleepMinutes: 'sleep' }
+
+/**
+ * Every metric, present or null. Absent and null both mean no reading, which is
+ * not the same as a reading of zero and is never turned into one.
+ */
+export function checkActivityMetrics(row, where) {
+  const out = {}
+  for (const [metric, label] of Object.entries(ACTIVITY_METRICS)) {
+    if (row[metric] != null && !isNonNeg(row[metric])) fail(`${where} has a bad ${label} value.`)
+    out[metric] = row[metric] ?? null
+  }
+  return out
+}
+
+function checkActivity(row, i) {
+  if (!isObject(row)) fail(`Activity ${i + 1} is not a record.`)
+  if (!isDay(row.date)) fail(`Activity ${i + 1} has no valid date.`)
+  const where = `Activity for ${row.date}`
+  return {
+    ...row,
+    ...checkActivityMetrics(row, where),
+    importedAt: stamp(row.importedAt, where, 'imported time'),
+  }
+}
+
 const CHECKS = {
   foods: checkFood,
   entries: checkEntry,
   meals: checkMeal,
   weights: checkWeight,
   dayTargets: checkDayTargets,
+  activity: checkActivity,
 }
 
 /* --------------------------------------------------------------- settings */
