@@ -1481,24 +1481,24 @@
 
   /* ---------------------------------------------------------- body map */
 
-  /* The ramp, surface to ink in five flat steps. The fill goes on the region's
+  /* The ramp, in five flat steps on a body one shade quieter than the lowest. The fill goes on the region's
      group, and the swatches under the map read the same five. */
   .body-map [data-step='0'],
   .ramp-swatch[data-step='0'] {
-    --step: 0%;
+    --step: 17%;
   }
   .body-map [data-step='1'],
   .ramp-swatch[data-step='1'] {
-    --step: 18%;
+    --step: 36%;
   }
   .body-map [data-step='2'],
   .ramp-swatch[data-step='2'],
   .role-dot[data-step='2'] {
-    --step: 42%;
+    --step: 56%;
   }
   .body-map [data-step='3'],
   .ramp-swatch[data-step='3'] {
-    --step: 68%;
+    --step: 79%;
   }
   .body-map [data-step='4'],
   .ramp-swatch[data-step='4'],
@@ -1518,15 +1518,14 @@
   }
   .body-map [data-step] {
     fill: var(--fill);
-    stroke: color-mix(in srgb, var(--color-ink) 30%, var(--color-surface));
-    stroke-width: 0.5px;
   }
-  .body-map [data-step] path {
-    vector-effect: non-scaling-stroke;
-  }
-  /* Head, neck, hands and feet. Never shaded. */
+  /* The body under the muscles, and the parts of it that are never shaded. No
+     strokes: hairlines lighter than the fills read as haze. The body shows
+     through the spaces the drawing already leaves. */
+  .body-map [data-part='outline'] path,
   .body-map [data-part='structure'] {
-    fill: color-mix(in srgb, var(--color-ink) 8%, var(--color-surface));
+    fill: color-mix(in srgb, var(--color-ink) 10%, var(--color-surface));
+    stroke: none;
   }
   .body-map [role='button'] {
     cursor: pointer;

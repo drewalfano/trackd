@@ -27,7 +27,7 @@ function drawing(view) {
   const svg = document.importNode(parsed, true)
   const scope = `body-${++serial}-`
   for (const el of svg.querySelectorAll('[id]')) {
-    if (el.id === 'structure') el.dataset.part = 'structure'
+    if (el.id === 'structure' || el.id === 'outline') el.dataset.part = el.id
     if (UNTRAINED_REGIONS.includes(el.id)) {
       el.classList.remove('muscle')
       delete el.dataset.groups
